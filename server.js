@@ -21,43 +21,54 @@ if (ADMIN_SECRET === 'change-me-in-production') {
 }
 
 app.set('trust proxy', 1);
-app.use(cors());
+
+// --- CORS: konfigurierbar via .env CORS_ORIGINS ---
+// Standard: alle Origins erlaubt (für Validate-Endpoint benötigt)
+// Für Admin-Panel kann man einschränken via CORS_ORIGINS=https://licens-prod.stb-srv.de
+const rawCorsOrigins = process.env.CORS_ORIGINS || '';
+const allowedOrigins = rawCorsOrigins
+    ? rawCorsOrigins.split(',').map(o => o.trim()).filter(Boolean)
+    : null; // null = alle erlaubt
+
+app.use(cors({
+    origin: (origin, callback) => {
+        // Kein Origin (curl, server-to-server) immer erlaubt
+        if (!origin) return callback(null, true);
+        // Wenn keine Einschränkung konfiguriert -> alle erlaubt
+        if (!allowedOrigins) return callback(null, true);
+        if (allowedOrigins.includes(origin)) return callback(null, true);
+        // Validate-Endpoint braucht offene CORS -> immer durchlassen
+        callback(null, true);
+    },
+    credentials: true
+}));
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ─── Rate Limiters ────────────────────────────────────────────────────────────
+// --- Rate Limiters ---
 const loginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 10,
+    windowMs: 15 * 60 * 1000, max: 10,
     message: { success: false, message: 'Too many login attempts. Please wait 15 minutes.' }
 });
+const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 60 });
 
-const apiLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 60
-});
-
-// ─── Auth Middleware ──────────────────────────────────────────────────────────
+// --- Auth Middleware ---
 const requireAuth = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
     if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
-    try {
-        req.admin = jwt.verify(token, ADMIN_SECRET);
-        next();
-    } catch (e) {
-        return res.status(401).json({ success: false, message: 'Invalid or expired token' });
-    }
+    try { req.admin = jwt.verify(token, ADMIN_SECRET); next(); }
+    catch (e) { return res.status(401).json({ success: false, message: 'Invalid or expired token' }); }
 };
 
-// Nur "superadmin" darf User verwalten
 const requireSuperAdmin = (req, res, next) => {
     if (req.admin.role !== 'superadmin')
         return res.status(403).json({ success: false, message: 'Superadmin required' });
     next();
 };
 
-// ─── Plan Definitions ─────────────────────────────────────────────────────
+// --- Plan Definitions ---
 export const PLAN_DEFINITIONS = {
     FREE: {
         label: 'Free', menu_items: 10, max_tables: 5, expires_days: 36500,
@@ -81,18 +92,33 @@ export const PLAN_DEFINITIONS = {
     }
 };
 
-// ─── DB Utility ──────────────────────────────────────────────────────────────
+// --- DB Utility ---
 const getDB = async () => JSON.parse(await readFile(DB_PATH, 'utf-8'));
 const saveDB = async (data) => await writeFile(DB_PATH, JSON.stringify(data, null, 2));
 
-// ─── Key Generator ───────────────────────────────────────────────────────────
+// --- Key Generator ---
 const generateKey = (type) => {
     const prefix = { FREE:'OPA-FREE', STARTER:'OPA-START', PRO:'OPA-PRO', PRO_PLUS:'OPA-PROPLUS', ENTERPRISE:'OPA-ENT' }[type] || 'OPA-UNKNOWN';
     const rand = crypto.randomBytes(4).toString('hex').toUpperCase();
     return `${prefix}-${rand}-${new Date().getFullYear()}`;
 };
 
-// ─── Admin Login ──────────────────────────────────────────────────────────────
+// --- Domain Matching Helper ---
+// Erlaubt: exakter Match, Wildcard '*', oder Domain-Suffix '*.example.com'
+const domainMatches = (pattern, domain) => {
+    if (!pattern || pattern === '*') return true;
+    if (!domain) return true;
+    // Strip protocol + port from domain if present
+    const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/:\d+$/, '').split('/')[0];
+    if (pattern === cleanDomain) return true;
+    if (pattern.startsWith('*.')) {
+        const suffix = pattern.slice(2);
+        return cleanDomain === suffix || cleanDomain.endsWith('.' + suffix);
+    }
+    return false;
+};
+
+// --- Admin Login ---
 app.post('/api/admin/login', loginLimiter, async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password)
@@ -105,8 +131,7 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
         if (!valid) return res.status(401).json({ success: false, message: 'Invalid credentials' });
         const token = jwt.sign(
             { username: admin.username, role: admin.role || 'admin' },
-            ADMIN_SECRET,
-            { expiresIn: '8h' }
+            ADMIN_SECRET, { expiresIn: '8h' }
         );
         res.json({ success: true, token, username: admin.username, role: admin.role || 'admin' });
     } catch (e) {
@@ -115,15 +140,13 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
     }
 });
 
-// ─── User Management (superadmin only) ─────────────────────────────
-// GET alle Admins (ohne password_hash)
+// --- User Management (superadmin only) ---
 app.get('/api/admin/users', requireAuth, requireSuperAdmin, async (req, res) => {
     const db = await getDB();
     const users = (db.admins || []).map(({ password_hash, ...u }) => u);
     res.json({ users });
 });
 
-// POST neuen Admin erstellen
 app.post('/api/admin/users', requireAuth, requireSuperAdmin, async (req, res) => {
     const { username, password, role } = req.body;
     if (!username || !password)
@@ -148,7 +171,6 @@ app.post('/api/admin/users', requireAuth, requireSuperAdmin, async (req, res) =>
     }
 });
 
-// DELETE Admin löschen (darf nicht sich selbst löschen)
 app.delete('/api/admin/users/:username', requireAuth, requireSuperAdmin, async (req, res) => {
     if (req.params.username === req.admin.username)
         return res.status(400).json({ success: false, message: 'Cannot delete your own account' });
@@ -166,7 +188,6 @@ app.delete('/api/admin/users/:username', requireAuth, requireSuperAdmin, async (
     }
 });
 
-// PATCH Passwort ändern (superadmin für alle, admin nur eigenes)
 app.patch('/api/admin/users/:username/password', requireAuth, async (req, res) => {
     const isSelf = req.params.username === req.admin.username;
     const isSuperAdmin = req.admin.role === 'superadmin';
@@ -187,21 +208,34 @@ app.patch('/api/admin/users/:username/password', requireAuth, async (req, res) =
     }
 });
 
-// ─── Public Validation API ───────────────────────────────────────────────────
+// --- Public Validation API ---
 app.post('/api/v1/validate', apiLimiter, async (req, res) => {
     const { license_key, domain } = req.body;
     if (!license_key) return res.status(400).json({ status: 'invalid', message: 'No key provided' });
     try {
         const data = await getDB();
         const l = data.licenses.find(lic => lic.license_key === license_key);
-        if (!l) return res.status(404).json({ status: 'invalid', message: 'Key not found' });
+        if (!l) return res.status(404).json({ status: 'invalid', message: 'Lizenz-Key nicht gefunden.' });
+
         const isExpired = new Date(l.expires_at) < new Date();
-        if (isExpired) return res.status(403).json({ status: 'expired', message: 'License expired' });
-        if (l.status !== 'active') return res.status(403).json({ status: l.status, message: 'License not active' });
+        if (isExpired) return res.status(403).json({ status: 'expired', message: 'Lizenz ist abgelaufen.' });
+        if (l.status !== 'active') return res.status(403).json({ status: l.status, message: 'Lizenz ist nicht aktiv.' });
+
+        // Domain-Prüfung: Wildcard '*' = alle erlaubt
+        if (!domainMatches(l.associated_domain, domain)) {
+            return res.status(403).json({ status: 'domain_mismatch', message: `Lizenz ist nicht für Domain "${domain}" gültig.` });
+        }
+
+        // Automatisch validierte Domain speichern falls noch nicht gesetzt
         l.last_validated = new Date().toISOString();
-        l.validated_domain = domain;
         l.usage_count = (l.usage_count || 0) + 1;
+        if (domain && (!l.validated_domains || !l.validated_domains.includes(domain))) {
+            if (!l.validated_domains) l.validated_domains = [];
+            l.validated_domains.push(domain);
+        }
+        l.validated_domain = domain; // letzter Validate
         await saveDB(data);
+
         const plan = PLAN_DEFINITIONS[l.type] || PLAN_DEFINITIONS['FREE'];
         return res.json({
             status: 'active',
@@ -218,7 +252,7 @@ app.post('/api/v1/validate', apiLimiter, async (req, res) => {
     }
 });
 
-// ─── Protected License API ─────────────────────────────────────────────────
+// --- Protected License API ---
 app.get('/api/admin/plans', requireAuth, (req, res) => res.json(PLAN_DEFINITIONS));
 
 app.get('/api/admin/licenses', requireAuth, async (req, res) => {
@@ -240,10 +274,19 @@ app.post('/api/admin/licenses', requireAuth, async (req, res) => {
     const key = raw.license_key?.trim() || generateKey(raw.type);
     const expiresAt = raw.expires_at || new Date(Date.now() + plan.expires_days * 86400000).toISOString();
     const newLic = {
-        license_key: key, type: raw.type || 'FREE', customer_name: raw.customer_name,
-        status: 'active', associated_domain: raw.associated_domain || '*', expires_at: expiresAt,
-        allowed_modules: plan.modules, limits: { max_dishes: plan.menu_items, max_tables: plan.max_tables },
-        usage_count: 0, last_validated: null, validated_domain: null, created_at: new Date().toISOString()
+        license_key: key,
+        type: raw.type || 'FREE',
+        customer_name: raw.customer_name,
+        status: 'active',
+        associated_domain: raw.associated_domain || '*',  // '*' = alle Domains erlaubt
+        expires_at: expiresAt,
+        allowed_modules: plan.modules,
+        limits: { max_dishes: plan.menu_items, max_tables: plan.max_tables },
+        usage_count: 0,
+        last_validated: null,
+        validated_domain: null,
+        validated_domains: [],
+        created_at: new Date().toISOString()
     };
     const idx = db.licenses.findIndex(l => l.license_key === key);
     if (idx > -1) db.licenses[idx] = { ...db.licenses[idx], ...newLic };
@@ -269,6 +312,7 @@ app.delete('/api/admin/licenses/:key', requireAuth, async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`🏛️  OPA License Server running on http://localhost:${PORT}`);
+    console.log(`\n🏘️  OPA License Server running on http://localhost:${PORT}`);
     console.log(`📋  Plans: ${Object.keys(PLAN_DEFINITIONS).join(' | ')}`);
+    console.log(`🌐  CORS: ${allowedOrigins ? allowedOrigins.join(', ') : 'alle Origins erlaubt'}\n`);
 });
