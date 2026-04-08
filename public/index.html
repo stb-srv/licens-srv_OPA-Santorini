@@ -17,17 +17,65 @@
             --muted: #64748b;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Outfit', sans-serif; }
-        body { background: var(--bg); min-height: 100vh; padding: 32px; }
+        body { background: var(--bg); min-height: 100vh; }
 
+        /* ── LOGIN ───────────────────────────────────────── */
+        #login-screen {
+            display: flex; align-items: center; justify-content: center;
+            min-height: 100vh; padding: 24px;
+        }
+        .login-card {
+            background: white; border: 1px solid var(--border); border-radius: 24px;
+            padding: 48px 40px; width: 100%; max-width: 420px;
+            box-shadow: 0 20px 60px rgba(99,102,241,0.08);
+        }
+        .login-card .logo { text-align: center; margin-bottom: 32px; }
+        .login-card .logo h1 { font-size: 1.8rem; font-weight: 800; color: var(--text); }
+        .login-card .logo h1 span { color: var(--primary); }
+        .login-card .logo p { color: var(--muted); font-size: 0.9rem; margin-top: 4px; }
+        .login-card .form-group { margin-bottom: 16px; }
+        .login-card label { display: block; font-size: 0.75rem; font-weight: 700; color: var(--muted);
+            text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+        .login-card input {
+            width: 100%; padding: 13px 16px; border: 1.5px solid var(--border); border-radius: 12px;
+            font-size: 0.95rem; font-family: inherit; font-weight: 600; background: #f8fafc;
+            color: var(--text); transition: border-color 0.15s;
+        }
+        .login-card input:focus { outline: none; border-color: var(--primary); background: white; }
+        .login-btn {
+            width: 100%; padding: 14px; border: none; border-radius: 12px; background: var(--primary);
+            color: white; font-size: 1rem; font-weight: 700; cursor: pointer; margin-top: 8px;
+            transition: background 0.2s;
+        }
+        .login-btn:hover { background: var(--primary-dark); }
+        .login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .login-error {
+            background: #fef2f2; border: 1px solid #fecaca; color: #dc2626;
+            border-radius: 10px; padding: 10px 14px; font-size: 0.85rem; font-weight: 600;
+            margin-bottom: 16px; display: none;
+        }
+
+        /* ── DASHBOARD ───────────────────────────────────── */
+        #dashboard { display: none; padding: 32px; }
         .page { max-width: 1400px; margin: 0 auto; }
 
-        /* Header */
         .top-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
         .top-header h1 { font-size: 1.8rem; font-weight: 800; color: var(--text); }
         .top-header h1 span { color: var(--primary); }
         .top-header p { color: var(--muted); font-weight: 600; font-size: 0.9rem; margin-top: 2px; }
+        .header-right { display: flex; gap: 10px; align-items: center; }
+        .user-badge {
+            background: #f1f5f9; border-radius: 10px; padding: 8px 14px;
+            font-size: 0.8rem; font-weight: 700; color: var(--muted);
+            display: flex; align-items: center; gap: 6px;
+        }
+        .logout-btn {
+            background: #fef2f2; border: none; color: #ef4444; border-radius: 10px;
+            padding: 8px 14px; font-size: 0.8rem; font-weight: 700; cursor: pointer;
+            transition: background 0.2s;
+        }
+        .logout-btn:hover { background: #fee2e2; }
 
-        /* Stats */
         .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
         .stat-card {
             background: var(--panel); border: 1px solid var(--border);
@@ -39,7 +87,6 @@
         .stat-card h3 { font-size: 1.6rem; font-weight: 800; color: var(--text); }
         .stat-card p { font-size: 0.75rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
 
-        /* Plan Badges */
         .plans-row { display: flex; gap: 10px; margin-bottom: 28px; flex-wrap: wrap; }
         .plan-badge {
             padding: 8px 16px; border-radius: 20px; font-size: 0.75rem; font-weight: 800;
@@ -51,7 +98,6 @@
         .plan-PRO_PLUS   { background: #f5f3ff; color: #7c3aed; border-color: #ddd6fe; }
         .plan-ENTERPRISE { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
 
-        /* Table */
         .table-card { background: var(--panel); border: 1px solid var(--border); border-radius: 20px; overflow: hidden; }
         .table-header { padding: 20px 28px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
         .table-header h2 { font-size: 1rem; font-weight: 800; color: var(--text); }
@@ -78,7 +124,6 @@
         .ping-offline { background: #cbd5e1; }
         @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
 
-        /* Buttons */
         .btn { padding: 10px 20px; border-radius: 12px; border: none; cursor: pointer; font-weight: 700; font-size: 0.85rem; transition: all 0.2s; }
         .btn-primary { background: var(--primary); color: white; }
         .btn-primary:hover { background: var(--primary-dark); }
@@ -86,10 +131,7 @@
         .btn-ghost:hover { background: #e2e8f0; }
         .btn-danger { background: none; border: none; color: #ef4444; font-size: 1rem; cursor: pointer; padding: 6px 10px; border-radius: 8px; }
         .btn-danger:hover { background: #fef2f2; }
-        .btn-icon { background: none; border: none; color: var(--muted); cursor: pointer; padding: 6px 10px; border-radius: 8px; }
-        .btn-icon:hover { background: #f1f5f9; color: var(--text); }
 
-        /* Modal */
         .overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.4); backdrop-filter: blur(6px);
             display: none; place-items: center; z-index: 1000; }
         .overlay.open { display: grid; }
@@ -110,21 +152,55 @@
         .plan-info-box { padding: 12px 16px; border-radius: 10px; font-size: 0.8rem; font-weight: 600;
             margin-bottom: 18px; display: none; }
         .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+
+        @media (max-width: 768px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            #dashboard { padding: 16px; }
+        }
     </style>
 </head>
 <body>
+
+<!-- ── LOGIN SCREEN ─────────────────────────────────────── -->
+<div id="login-screen">
+    <div class="login-card">
+        <div class="logo">
+            <h1>OPA <span>License</span></h1>
+            <p>Server Administration</p>
+        </div>
+        <div class="login-error" id="login-error"></div>
+        <form id="login-form">
+            <div class="form-group">
+                <label>Benutzername</label>
+                <input type="text" id="inp-user" autocomplete="username" placeholder="admin" required>
+            </div>
+            <div class="form-group">
+                <label>Passwort</label>
+                <input type="password" id="inp-pass" autocomplete="current-password" placeholder="••••••••" required>
+            </div>
+            <button type="submit" class="login-btn" id="login-btn">
+                <i class="fas fa-sign-in-alt"></i> Anmelden
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- ── DASHBOARD ────────────────────────────────────────── -->
+<div id="dashboard">
 <div class="page">
 
-    <!-- Header -->
     <div class="top-header">
         <div>
             <h1>OPA <span>License Server</span></h1>
             <p>Verwaltung aller Restaurantlizenzen</p>
         </div>
-        <button class="btn btn-primary" id="btn-add"><i class="fas fa-plus"></i> Neue Lizenz</button>
+        <div class="header-right">
+            <div class="user-badge"><i class="fas fa-user-shield"></i> <span id="logged-user"></span></div>
+            <button class="logout-btn" id="btn-logout"><i class="fas fa-sign-out-alt"></i> Logout</button>
+            <button class="btn btn-primary" id="btn-add"><i class="fas fa-plus"></i> Neue Lizenz</button>
+        </div>
     </div>
 
-    <!-- Stats -->
     <div class="stats-grid">
         <div class="stat-card"><div class="stat-icon"><i class="fas fa-key"></i></div><div><h3 id="s-total">-</h3><p>Lizenzen gesamt</p></div></div>
         <div class="stat-card"><div class="stat-icon"><i class="fas fa-circle-check"></i></div><div><h3 id="s-active">-</h3><p>Aktiv</p></div></div>
@@ -132,10 +208,8 @@
         <div class="stat-card"><div class="stat-icon"><i class="fas fa-chart-line"></i></div><div><h3 id="s-usage">-</h3><p>Validierungen</p></div></div>
     </div>
 
-    <!-- Plan Overview -->
     <div class="plans-row" id="plans-row"></div>
 
-    <!-- Table -->
     <div class="table-card">
         <div class="table-header">
             <h2>Alle Lizenzen</h2>
@@ -157,6 +231,7 @@
             <tbody id="lic-body"></tbody>
         </table>
     </div>
+</div>
 </div>
 
 <!-- Modal: Neue Lizenz -->
@@ -202,97 +277,183 @@
 </div>
 
 <script>
-const API = '/api/admin/licenses';
-let PLANS = {};
+    const TOKEN_KEY = 'opa_admin_token';
+    const USER_KEY  = 'opa_admin_user';
+    let PLANS = {};
+    let refreshTimer = null;
 
-async function loadPlans() {
-    const r = await fetch('/api/admin/plans');
-    PLANS = await r.json();
+    // ── Auth helpers ──────────────────────────────────────
+    const getToken = () => localStorage.getItem(TOKEN_KEY);
+    const authHeaders = () => ({
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getToken()}`
+    });
 
-    // Render plan overview badges
-    const row = document.getElementById('plans-row');
-    row.innerHTML = Object.entries(PLANS).map(([key, p]) =>
-        `<div class="plan-badge plan-${key}">
-            <i class="fas fa-circle" style="font-size:6px"></i>
-            ${p.label} — ${p.menu_items} Speisen
-        </div>`
-    ).join('');
-}
+    function showLogin() {
+        document.getElementById('login-screen').style.display = 'flex';
+        document.getElementById('dashboard').style.display = 'none';
+        if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+    }
 
-async function loadData() {
-    const r = await fetch(API);
-    const { licenses, stats } = await r.json();
+    function showDashboard(username) {
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'block';
+        document.getElementById('logged-user').textContent = username;
+        loadPlans().then(loadData);
+        refreshTimer = setInterval(loadData, 10000);
+    }
 
-    document.getElementById('s-total').textContent   = stats.total;
-    document.getElementById('s-active').textContent  = stats.active;
-    document.getElementById('s-expiring').textContent = stats.expiring;
-    document.getElementById('s-usage').textContent   = stats.total_usage || 0;
+    function logout() {
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(USER_KEY);
+        showLogin();
+    }
 
-    const now = new Date();
-    document.getElementById('lic-body').innerHTML = licenses.map(l => {
-        const isOnline = l.last_validated && (now - new Date(l.last_validated)) < 300000;
-        const exp = new Date(l.expires_at);
-        const daysLeft = Math.ceil((exp - now) / 86400000);
-        const expStr = exp.toLocaleDateString('de-DE');
-        const expColor = daysLeft < 30 ? '#ef4444' : daysLeft < 90 ? '#f59e0b' : '#22c55e';
-        const planLabel = PLANS[l.type]?.label || l.type;
-        return `<tr>
-            <td><span class="key-badge">${l.license_key}</span></td>
-            <td><strong>${l.customer_name}</strong></td>
-            <td><span class="type-pill type-${l.type}">${planLabel}</span></td>
-            <td>${l.limits?.max_dishes ?? '—'}</td>
-            <td>${l.limits?.max_tables ?? '—'}</td>
-            <td style="color:${expColor};font-weight:700;font-size:0.85rem">${expStr}<br><small style="opacity:0.6;font-weight:600">${daysLeft}d</small></td>
-            <td>
-                <span class="ping-dot ${isOnline ? 'ping-online' : 'ping-offline'}"></span>
-                <span class="${isOnline ? 'status-active' : 'status-inactive'}">${isOnline ? 'Online' : 'Idle'}</span>
-            </td>
-            <td>
-                <button class="btn-danger" title="Löschen" onclick="deleteLic('${l.license_key}')">
-                    <i class="fas fa-trash-alt"></i>
-                </button>
-            </td>
-        </tr>`;
-    }).join('');
-}
+    // ── Auto-login if token exists ────────────────────────
+    window.addEventListener('DOMContentLoaded', () => {
+        const token = getToken();
+        const user  = localStorage.getItem(USER_KEY);
+        if (token && user) {
+            showDashboard(user);
+        } else {
+            showLogin();
+        }
+    });
 
-// Plan info box on select change
-document.getElementById('plan-select').addEventListener('change', function() {
-    const p = PLANS[this.value];
-    if (!p) return;
-    const box = document.getElementById('plan-info');
-    const colors = { FREE:'#f1f5f9', STARTER:'#ecfdf5', PRO:'#eff6ff', PRO_PLUS:'#f5f3ff', ENTERPRISE:'#fff7ed' };
-    box.style.display = 'block';
-    box.style.background = colors[this.value] || '#f1f5f9';
-    const mods = Object.entries(p.modules).filter(([,v])=>v).map(([k])=>k.replace('_',' ')).join(', ');
-    box.innerHTML = `<strong>${p.label}</strong> — ${p.menu_items} Speisen, ${p.max_tables} Tische<br>
-        <span style="opacity:0.7">Module: ${mods}</span>`;
-});
-document.getElementById('plan-select').dispatchEvent(new Event('change'));
+    // ── Login form ────────────────────────────────────────
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('login-btn');
+        const errBox = document.getElementById('login-error');
+        errBox.style.display = 'none';
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Anmelden...';
 
-window.deleteLic = async (key) => {
-    if (!confirm(`Lizenz [${key}] wirklich löschen?`)) return;
-    await fetch(`${API}/${key}`, { method: 'DELETE' });
-    loadData();
-};
+        try {
+            const res = await fetch('/api/admin/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: document.getElementById('inp-user').value,
+                    password: document.getElementById('inp-pass').value
+                })
+            });
+            const data = await res.json();
+            if (res.ok && data.token) {
+                localStorage.setItem(TOKEN_KEY, data.token);
+                localStorage.setItem(USER_KEY, data.username);
+                showDashboard(data.username);
+            } else {
+                errBox.textContent = data.message || 'Ungültige Zugangsdaten';
+                errBox.style.display = 'block';
+            }
+        } catch (err) {
+            errBox.textContent = 'Server nicht erreichbar';
+            errBox.style.display = 'block';
+        }
 
-document.getElementById('btn-add').onclick    = () => document.getElementById('modal').classList.add('open');
-document.getElementById('btn-cancel').onclick  = () => document.getElementById('modal').classList.remove('open');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Anmelden';
+    });
 
-document.getElementById('lic-form').onsubmit = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const raw = Object.fromEntries(fd);
-    if (raw.expires_at) raw.expires_at = new Date(raw.expires_at).toISOString();
-    else delete raw.expires_at;
-    await fetch(API, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(raw) });
-    e.target.reset();
-    document.getElementById('modal').classList.remove('open');
-    loadData();
-};
+    document.getElementById('btn-logout').addEventListener('click', logout);
 
-loadPlans().then(loadData);
-setInterval(loadData, 10000);
+    // ── API calls with auth ───────────────────────────────
+    async function apiFetch(url, options = {}) {
+        const res = await fetch(url, {
+            ...options,
+            headers: { ...authHeaders(), ...(options.headers || {}) }
+        });
+        if (res.status === 401) { logout(); return null; }
+        return res;
+    }
+
+    async function loadPlans() {
+        const r = await apiFetch('/api/admin/plans');
+        if (!r) return;
+        PLANS = await r.json();
+        const row = document.getElementById('plans-row');
+        row.innerHTML = Object.entries(PLANS).map(([key, p]) =>
+            `<div class="plan-badge plan-${key}">
+                <i class="fas fa-circle" style="font-size:6px"></i>
+                ${p.label} — ${p.menu_items} Speisen
+            </div>`
+        ).join('');
+    }
+
+    async function loadData() {
+        const r = await apiFetch('/api/admin/licenses');
+        if (!r) return;
+        const { licenses, stats } = await r.json();
+
+        document.getElementById('s-total').textContent    = stats.total;
+        document.getElementById('s-active').textContent   = stats.active;
+        document.getElementById('s-expiring').textContent = stats.expiring;
+        document.getElementById('s-usage').textContent    = stats.total_usage || 0;
+
+        const now = new Date();
+        document.getElementById('lic-body').innerHTML = licenses.map(l => {
+            const isOnline = l.last_validated && (now - new Date(l.last_validated)) < 300000;
+            const exp = new Date(l.expires_at);
+            const daysLeft = Math.ceil((exp - now) / 86400000);
+            const expStr = exp.toLocaleDateString('de-DE');
+            const expColor = daysLeft < 30 ? '#ef4444' : daysLeft < 90 ? '#f59e0b' : '#22c55e';
+            const planLabel = PLANS[l.type]?.label || l.type;
+            return `<tr>
+                <td><span class="key-badge">${l.license_key}</span></td>
+                <td><strong>${l.customer_name}</strong></td>
+                <td><span class="type-pill type-${l.type}">${planLabel}</span></td>
+                <td>${l.limits?.max_dishes ?? '—'}</td>
+                <td>${l.limits?.max_tables ?? '—'}</td>
+                <td style="color:${expColor};font-weight:700;font-size:0.85rem">${expStr}<br><small style="opacity:0.6;font-weight:600">${daysLeft}d</small></td>
+                <td>
+                    <span class="ping-dot ${isOnline ? 'ping-online' : 'ping-offline'}"></span>
+                    <span class="${isOnline ? 'status-active' : 'status-inactive'}">${isOnline ? 'Online' : 'Idle'}</span>
+                </td>
+                <td>
+                    <button class="btn-danger" title="Löschen" onclick="deleteLic('${l.license_key}')">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    document.getElementById('plan-select').addEventListener('change', function() {
+        const p = PLANS[this.value];
+        if (!p) return;
+        const box = document.getElementById('plan-info');
+        const colors = { FREE:'#f1f5f9', STARTER:'#ecfdf5', PRO:'#eff6ff', PRO_PLUS:'#f5f3ff', ENTERPRISE:'#fff7ed' };
+        box.style.display = 'block';
+        box.style.background = colors[this.value] || '#f1f5f9';
+        const mods = Object.entries(p.modules).filter(([,v])=>v).map(([k])=>k.replace('_',' ')).join(', ');
+        box.innerHTML = `<strong>${p.label}</strong> — ${p.menu_items} Speisen, ${p.max_tables} Tische<br>
+            <span style="opacity:0.7">Module: ${mods}</span>`;
+    });
+
+    window.deleteLic = async (key) => {
+        if (!confirm(`Lizenz [${key}] wirklich löschen?`)) return;
+        await apiFetch(`/api/admin/licenses/${key}`, { method: 'DELETE' });
+        loadData();
+    };
+
+    document.getElementById('btn-add').onclick   = () => document.getElementById('modal').classList.add('open');
+    document.getElementById('btn-cancel').onclick = () => document.getElementById('modal').classList.remove('open');
+
+    document.getElementById('lic-form').onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const raw = Object.fromEntries(fd);
+        if (raw.expires_at) raw.expires_at = new Date(raw.expires_at).toISOString();
+        else delete raw.expires_at;
+        await apiFetch('/api/admin/licenses', {
+            method: 'POST',
+            body: JSON.stringify(raw)
+        });
+        e.target.reset();
+        document.getElementById('modal').classList.remove('open');
+        loadData();
+    };
 </script>
 </body>
 </html>
