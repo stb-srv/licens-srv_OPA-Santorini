@@ -4,17 +4,51 @@ import { readFile, writeFile } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import rateLimit from 'express-rate-limit';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DB_PATH = path.join(__dirname, 'db.json');
 
 const app = express();
-const PORT = 4000;
+const PORT = process.env.PORT || 4000;
+const ADMIN_SECRET = process.env.ADMIN_SECRET || 'change-me-in-production';
 
+if (ADMIN_SECRET === 'change-me-in-production') {
+    console.warn('⚠️  WARNING: ADMIN_SECRET is not set in .env! Using insecure default.');
+}
+
+app.set('trust proxy', 1);
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+// ─── Rate Limiters ────────────────────────────────────────────────────────────
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: { success: false, message: 'Too many login attempts. Please wait 15 minutes.' }
+});
+
+const apiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 60
+});
+
+// ─── Auth Middleware ──────────────────────────────────────────────────────────
+const requireAuth = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
+    try {
+        req.admin = jwt.verify(token, ADMIN_SECRET);
+        next();
+    } catch (e) {
+        return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+    }
+};
 
 // ─── Plan Definitions (Single Source of Truth) ───────────────────────────────
 export const PLAN_DEFINITIONS = {
@@ -22,7 +56,7 @@ export const PLAN_DEFINITIONS = {
         label: 'Free',
         menu_items: 10,
         max_tables: 5,
-        expires_days: 36500, // never (100 years)
+        expires_days: 36500,
         modules: {
             menu_edit: true,
             orders_kitchen: false,
@@ -108,8 +142,33 @@ const generateKey = (type) => {
     return `${prefix}-${rand}-${year}`;
 };
 
+// ─── Admin Login ──────────────────────────────────────────────────────────────
+app.post('/api/admin/login', loginLimiter, async (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password)
+        return res.status(400).json({ success: false, message: 'Username and password required' });
+    try {
+        const db = await getDB();
+        const admin = (db.admins || []).find(a => a.username === username);
+        if (!admin) return res.status(401).json({ success: false, message: 'Invalid credentials' });
+
+        const valid = await bcrypt.compare(password, admin.password_hash);
+        if (!valid) return res.status(401).json({ success: false, message: 'Invalid credentials' });
+
+        const token = jwt.sign(
+            { username: admin.username, role: admin.role || 'admin' },
+            ADMIN_SECRET,
+            { expiresIn: '8h' }
+        );
+        res.json({ success: true, token, username: admin.username });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
 // ─── Public Validation API ───────────────────────────────────────────────────
-app.post('/api/v1/validate', async (req, res) => {
+app.post('/api/v1/validate', apiLimiter, async (req, res) => {
     const { license_key, domain } = req.body;
     if (!license_key) return res.status(400).json({ status: 'invalid', message: 'No key provided' });
     try {
@@ -119,17 +178,14 @@ app.post('/api/v1/validate', async (req, res) => {
 
         const isExpired = new Date(l.expires_at) < new Date();
         if (isExpired) return res.status(403).json({ status: 'expired', message: 'License expired' });
-
         if (l.status !== 'active') return res.status(403).json({ status: l.status, message: 'License not active' });
 
-        // Track usage
         l.last_validated = new Date().toISOString();
         l.validated_domain = domain;
         l.usage_count = (l.usage_count || 0) + 1;
         await saveDB(data);
 
         const plan = PLAN_DEFINITIONS[l.type] || PLAN_DEFINITIONS['FREE'];
-
         return res.json({
             status: 'active',
             customer_name: l.customer_name,
@@ -145,12 +201,12 @@ app.post('/api/v1/validate', async (req, res) => {
     }
 });
 
-// ─── Management API ───────────────────────────────────────────────────────────
-app.get('/api/admin/plans', (req, res) => {
+// ─── Protected Management API ─────────────────────────────────────────────────
+app.get('/api/admin/plans', requireAuth, (req, res) => {
     res.json(PLAN_DEFINITIONS);
 });
 
-app.get('/api/admin/licenses', async (req, res) => {
+app.get('/api/admin/licenses', requireAuth, async (req, res) => {
     const db = await getDB();
     const now = new Date();
     const stats = {
@@ -166,17 +222,15 @@ app.get('/api/admin/licenses', async (req, res) => {
     res.json({ licenses: db.licenses, stats });
 });
 
-app.post('/api/admin/licenses', async (req, res) => {
+app.post('/api/admin/licenses', requireAuth, async (req, res) => {
     const db = await getDB();
     const raw = req.body;
     const plan = PLAN_DEFINITIONS[raw.type] || PLAN_DEFINITIONS['FREE'];
 
-    // Auto-generate key if not provided
     const key = raw.license_key && raw.license_key.trim()
         ? raw.license_key.trim()
         : generateKey(raw.type);
 
-    // Auto-set expiry based on plan
     const expiresAt = raw.expires_at
         ? raw.expires_at
         : new Date(Date.now() + plan.expires_days * 24 * 60 * 60 * 1000).toISOString();
@@ -189,10 +243,7 @@ app.post('/api/admin/licenses', async (req, res) => {
         associated_domain: raw.associated_domain || '*',
         expires_at: expiresAt,
         allowed_modules: plan.modules,
-        limits: {
-            max_dishes: plan.menu_items,
-            max_tables: plan.max_tables
-        },
+        limits: { max_dishes: plan.menu_items, max_tables: plan.max_tables },
         usage_count: 0,
         last_validated: null,
         validated_domain: null,
@@ -210,7 +261,7 @@ app.post('/api/admin/licenses', async (req, res) => {
     res.json({ success: true, license: newLic });
 });
 
-app.patch('/api/admin/licenses/:key/status', async (req, res) => {
+app.patch('/api/admin/licenses/:key/status', requireAuth, async (req, res) => {
     const db = await getDB();
     const l = db.licenses.find(x => x.license_key === req.params.key);
     if (!l) return res.status(404).json({ success: false });
@@ -219,7 +270,7 @@ app.patch('/api/admin/licenses/:key/status', async (req, res) => {
     res.json({ success: true });
 });
 
-app.delete('/api/admin/licenses/:key', async (req, res) => {
+app.delete('/api/admin/licenses/:key', requireAuth, async (req, res) => {
     const db = await getDB();
     db.licenses = db.licenses.filter(l => l.license_key !== req.params.key);
     await saveDB(db);
