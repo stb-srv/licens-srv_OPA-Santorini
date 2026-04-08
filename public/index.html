@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OPA License Server</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --bg: #f8fafc;
+            --panel: #ffffff;
+            --border: #e2e8f0;
+            --text: #1e293b;
+            --muted: #64748b;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Outfit', sans-serif; }
+        body { background: var(--bg); min-height: 100vh; padding: 32px; }
+
+        .page { max-width: 1400px; margin: 0 auto; }
+
+        /* Header */
+        .top-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
+        .top-header h1 { font-size: 1.8rem; font-weight: 800; color: var(--text); }
+        .top-header h1 span { color: var(--primary); }
+        .top-header p { color: var(--muted); font-weight: 600; font-size: 0.9rem; margin-top: 2px; }
+
+        /* Stats */
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+        .stat-card {
+            background: var(--panel); border: 1px solid var(--border);
+            border-radius: 16px; padding: 20px 24px;
+            display: flex; align-items: center; gap: 16px;
+        }
+        .stat-icon { width: 48px; height: 48px; border-radius: 12px; background: rgba(99,102,241,0.08);
+            display: flex; align-items: center; justify-content: center; color: var(--primary); font-size: 1.2rem; flex-shrink: 0; }
+        .stat-card h3 { font-size: 1.6rem; font-weight: 800; color: var(--text); }
+        .stat-card p { font-size: 0.75rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+
+        /* Plan Badges */
+        .plans-row { display: flex; gap: 10px; margin-bottom: 28px; flex-wrap: wrap; }
+        .plan-badge {
+            padding: 8px 16px; border-radius: 20px; font-size: 0.75rem; font-weight: 800;
+            display: flex; align-items: center; gap: 6px; border: 1px solid transparent;
+        }
+        .plan-FREE       { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+        .plan-STARTER    { background: #ecfdf5; color: #059669; border-color: #a7f3d0; }
+        .plan-PRO        { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
+        .plan-PRO_PLUS   { background: #f5f3ff; color: #7c3aed; border-color: #ddd6fe; }
+        .plan-ENTERPRISE { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+
+        /* Table */
+        .table-card { background: var(--panel); border: 1px solid var(--border); border-radius: 20px; overflow: hidden; }
+        .table-header { padding: 20px 28px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .table-header h2 { font-size: 1rem; font-weight: 800; color: var(--text); }
+        table { width: 100%; border-collapse: collapse; }
+        thead th { padding: 14px 20px; text-align: left; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.08em; color: var(--muted); background: #f8fafc; border-bottom: 1px solid var(--border); }
+        tbody td { padding: 16px 20px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; vertical-align: middle; }
+        tbody tr:last-child td { border-bottom: none; }
+        tbody tr:hover td { background: #fafafa; }
+
+        .key-badge { font-family: 'Courier New', monospace; font-size: 0.8rem; color: var(--text);
+            background: #f1f5f9; padding: 4px 10px; border-radius: 8px; }
+        .type-pill { font-weight: 800; font-size: 0.65rem; padding: 4px 12px; border-radius: 20px; }
+        .type-FREE       { background: #f1f5f9; color: #475569; }
+        .type-STARTER    { background: #ecfdf5; color: #059669; }
+        .type-PRO        { background: #eff6ff; color: #2563eb; }
+        .type-PRO_PLUS   { background: #f5f3ff; color: #7c3aed; }
+        .type-ENTERPRISE { background: #fff7ed; color: #c2410c; }
+
+        .status-active   { color: #22c55e; font-weight: 800; }
+        .status-inactive { color: #94a3b8; font-weight: 700; }
+        .ping-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+        .ping-online  { background: #22c55e; animation: pulse 2s infinite; }
+        .ping-offline { background: #cbd5e1; }
+        @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
+
+        /* Buttons */
+        .btn { padding: 10px 20px; border-radius: 12px; border: none; cursor: pointer; font-weight: 700; font-size: 0.85rem; transition: all 0.2s; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-ghost { background: #f1f5f9; color: var(--muted); }
+        .btn-ghost:hover { background: #e2e8f0; }
+        .btn-danger { background: none; border: none; color: #ef4444; font-size: 1rem; cursor: pointer; padding: 6px 10px; border-radius: 8px; }
+        .btn-danger:hover { background: #fef2f2; }
+        .btn-icon { background: none; border: none; color: var(--muted); cursor: pointer; padding: 6px 10px; border-radius: 8px; }
+        .btn-icon:hover { background: #f1f5f9; color: var(--text); }
+
+        /* Modal */
+        .overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.4); backdrop-filter: blur(6px);
+            display: none; place-items: center; z-index: 1000; }
+        .overlay.open { display: grid; }
+        .modal { background: white; width: 560px; max-width: 95vw; border-radius: 24px;
+            padding: 36px; box-shadow: 0 40px 80px rgba(0,0,0,0.15); }
+        .modal h2 { font-size: 1.4rem; font-weight: 800; color: var(--text); margin-bottom: 24px; }
+        .form-group { margin-bottom: 18px; }
+        .form-group label { display: block; font-size: 0.75rem; font-weight: 700; color: var(--muted);
+            text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+        .form-group input, .form-group select {
+            width: 100%; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 10px;
+            font-size: 0.9rem; font-family: inherit; font-weight: 600; background: #f8fafc; color: var(--text);
+            transition: border-color 0.15s;
+        }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); background: white; }
+        .form-row { display: flex; gap: 14px; }
+        .form-row .form-group { flex: 1; }
+        .plan-info-box { padding: 12px 16px; border-radius: 10px; font-size: 0.8rem; font-weight: 600;
+            margin-bottom: 18px; display: none; }
+        .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+    </style>
+</head>
+<body>
+<div class="page">
+
+    <!-- Header -->
+    <div class="top-header">
+        <div>
+            <h1>OPA <span>License Server</span></h1>
+            <p>Verwaltung aller Restaurantlizenzen</p>
+        </div>
+        <button class="btn btn-primary" id="btn-add"><i class="fas fa-plus"></i> Neue Lizenz</button>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+        <div class="stat-card"><div class="stat-icon"><i class="fas fa-key"></i></div><div><h3 id="s-total">-</h3><p>Lizenzen gesamt</p></div></div>
+        <div class="stat-card"><div class="stat-icon"><i class="fas fa-circle-check"></i></div><div><h3 id="s-active">-</h3><p>Aktiv</p></div></div>
+        <div class="stat-card"><div class="stat-icon"><i class="fas fa-clock"></i></div><div><h3 id="s-expiring">-</h3><p>Läuft bald ab</p></div></div>
+        <div class="stat-card"><div class="stat-icon"><i class="fas fa-chart-line"></i></div><div><h3 id="s-usage">-</h3><p>Validierungen</p></div></div>
+    </div>
+
+    <!-- Plan Overview -->
+    <div class="plans-row" id="plans-row"></div>
+
+    <!-- Table -->
+    <div class="table-card">
+        <div class="table-header">
+            <h2>Alle Lizenzen</h2>
+            <span style="font-size:0.8rem;color:var(--muted);font-weight:600;">Aktualisiert alle 10s</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Lizenzschlüssel</th>
+                    <th>Kunde</th>
+                    <th>Plan</th>
+                    <th>Speisen</th>
+                    <th>Tische</th>
+                    <th>Ablauf</th>
+                    <th>Status</th>
+                    <th>Aktionen</th>
+                </tr>
+            </thead>
+            <tbody id="lic-body"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal: Neue Lizenz -->
+<div class="overlay" id="modal">
+    <div class="modal">
+        <h2>Neue Lizenz erstellen</h2>
+        <form id="lic-form">
+            <div class="form-group">
+                <label>Plan</label>
+                <select name="type" id="plan-select" required>
+                    <option value="FREE">Free — 10 Speisen (Kostenlos)</option>
+                    <option value="STARTER">Starter — 40 Speisen</option>
+                    <option value="PRO" selected>Pro — 100 Speisen</option>
+                    <option value="PRO_PLUS">Pro+ — 200 Speisen</option>
+                    <option value="ENTERPRISE">Enterprise — 500 Speisen</option>
+                </select>
+            </div>
+            <div id="plan-info" class="plan-info-box"></div>
+            <div class="form-group">
+                <label>Restaurantname / Kunde</label>
+                <input type="text" name="customer_name" placeholder="z.B. Taverna Papadopoulos" required>
+            </div>
+            <div class="form-group">
+                <label>Lizenzschlüssel <span style="font-weight:400;opacity:0.6">(leer = automatisch generieren)</span></label>
+                <input type="text" name="license_key" placeholder="OPA-PRO-XXXX-2026" autocomplete="off">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Domain</label>
+                    <input type="text" name="associated_domain" placeholder="meinrestaurant.de" value="*">
+                </div>
+                <div class="form-group">
+                    <label>Ablaufdatum <span style="font-weight:400;opacity:0.6">(opt.)</span></label>
+                    <input type="date" name="expires_at">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" id="btn-cancel">Abbrechen</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Lizenz aktivieren</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+const API = '/api/admin/licenses';
+let PLANS = {};
+
+async function loadPlans() {
+    const r = await fetch('/api/admin/plans');
+    PLANS = await r.json();
+
+    // Render plan overview badges
+    const row = document.getElementById('plans-row');
+    row.innerHTML = Object.entries(PLANS).map(([key, p]) =>
+        `<div class="plan-badge plan-${key}">
+            <i class="fas fa-circle" style="font-size:6px"></i>
+            ${p.label} — ${p.menu_items} Speisen
+        </div>`
+    ).join('');
+}
+
+async function loadData() {
+    const r = await fetch(API);
+    const { licenses, stats } = await r.json();
+
+    document.getElementById('s-total').textContent   = stats.total;
+    document.getElementById('s-active').textContent  = stats.active;
+    document.getElementById('s-expiring').textContent = stats.expiring;
+    document.getElementById('s-usage').textContent   = stats.total_usage || 0;
+
+    const now = new Date();
+    document.getElementById('lic-body').innerHTML = licenses.map(l => {
+        const isOnline = l.last_validated && (now - new Date(l.last_validated)) < 300000;
+        const exp = new Date(l.expires_at);
+        const daysLeft = Math.ceil((exp - now) / 86400000);
+        const expStr = exp.toLocaleDateString('de-DE');
+        const expColor = daysLeft < 30 ? '#ef4444' : daysLeft < 90 ? '#f59e0b' : '#22c55e';
+        const planLabel = PLANS[l.type]?.label || l.type;
+        return `<tr>
+            <td><span class="key-badge">${l.license_key}</span></td>
+            <td><strong>${l.customer_name}</strong></td>
+            <td><span class="type-pill type-${l.type}">${planLabel}</span></td>
+            <td>${l.limits?.max_dishes ?? '—'}</td>
+            <td>${l.limits?.max_tables ?? '—'}</td>
+            <td style="color:${expColor};font-weight:700;font-size:0.85rem">${expStr}<br><small style="opacity:0.6;font-weight:600">${daysLeft}d</small></td>
+            <td>
+                <span class="ping-dot ${isOnline ? 'ping-online' : 'ping-offline'}"></span>
+                <span class="${isOnline ? 'status-active' : 'status-inactive'}">${isOnline ? 'Online' : 'Idle'}</span>
+            </td>
+            <td>
+                <button class="btn-danger" title="Löschen" onclick="deleteLic('${l.license_key}')">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+// Plan info box on select change
+document.getElementById('plan-select').addEventListener('change', function() {
+    const p = PLANS[this.value];
+    if (!p) return;
+    const box = document.getElementById('plan-info');
+    const colors = { FREE:'#f1f5f9', STARTER:'#ecfdf5', PRO:'#eff6ff', PRO_PLUS:'#f5f3ff', ENTERPRISE:'#fff7ed' };
+    box.style.display = 'block';
+    box.style.background = colors[this.value] || '#f1f5f9';
+    const mods = Object.entries(p.modules).filter(([,v])=>v).map(([k])=>k.replace('_',' ')).join(', ');
+    box.innerHTML = `<strong>${p.label}</strong> — ${p.menu_items} Speisen, ${p.max_tables} Tische<br>
+        <span style="opacity:0.7">Module: ${mods}</span>`;
+});
+document.getElementById('plan-select').dispatchEvent(new Event('change'));
+
+window.deleteLic = async (key) => {
+    if (!confirm(`Lizenz [${key}] wirklich löschen?`)) return;
+    await fetch(`${API}/${key}`, { method: 'DELETE' });
+    loadData();
+};
+
+document.getElementById('btn-add').onclick    = () => document.getElementById('modal').classList.add('open');
+document.getElementById('btn-cancel').onclick  = () => document.getElementById('modal').classList.remove('open');
+
+document.getElementById('lic-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const raw = Object.fromEntries(fd);
+    if (raw.expires_at) raw.expires_at = new Date(raw.expires_at).toISOString();
+    else delete raw.expires_at;
+    await fetch(API, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(raw) });
+    e.target.reset();
+    document.getElementById('modal').classList.remove('open');
+    loadData();
+};
+
+loadPlans().then(loadData);
+setInterval(loadData, 10000);
+</script>
+</body>
+</html>
