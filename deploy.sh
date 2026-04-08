@@ -44,7 +44,15 @@ fi
 
 # ── 3. Repo klonen oder updaten ──────────────────────────────
 echo -e "\n${YELLOW}[3/7] Repository klonen / updaten...${NC}"
+
+# Fix: safe.directory global für root setzen damit git nicht meckert
+git config --global --add safe.directory "$APP_DIR"
+
 if [ -d "$APP_DIR/.git" ]; then
+    # Ownership fix: sicherstellen dass alles dem App-User gehört
+    chown -R "$APP_USER":"$APP_USER" "$APP_DIR"
+    # safe.directory auch für den App-User setzen
+    sudo -u "$APP_USER" git config --global --add safe.directory "$APP_DIR"
     cd "$APP_DIR"
     sudo -u "$APP_USER" git pull origin main
 else
