@@ -50,77 +50,34 @@ const requireAuth = (req, res, next) => {
     }
 };
 
-// ─── Plan Definitions (Single Source of Truth) ───────────────────────────────
+// Nur "superadmin" darf User verwalten
+const requireSuperAdmin = (req, res, next) => {
+    if (req.admin.role !== 'superadmin')
+        return res.status(403).json({ success: false, message: 'Superadmin required' });
+    next();
+};
+
+// ─── Plan Definitions ─────────────────────────────────────────────────────
 export const PLAN_DEFINITIONS = {
     FREE: {
-        label: 'Free',
-        menu_items: 10,
-        max_tables: 5,
-        expires_days: 36500,
-        modules: {
-            menu_edit: true,
-            orders_kitchen: false,
-            reservations: false,
-            custom_design: false,
-            analytics: false,
-            qr_pay: false
-        }
+        label: 'Free', menu_items: 10, max_tables: 5, expires_days: 36500,
+        modules: { menu_edit: true, orders_kitchen: false, reservations: false, custom_design: false, analytics: false, qr_pay: false }
     },
     STARTER: {
-        label: 'Starter',
-        menu_items: 40,
-        max_tables: 10,
-        expires_days: 365,
-        modules: {
-            menu_edit: true,
-            orders_kitchen: true,
-            reservations: true,
-            custom_design: false,
-            analytics: false,
-            qr_pay: false
-        }
+        label: 'Starter', menu_items: 40, max_tables: 10, expires_days: 365,
+        modules: { menu_edit: true, orders_kitchen: true, reservations: true, custom_design: false, analytics: false, qr_pay: false }
     },
     PRO: {
-        label: 'Pro',
-        menu_items: 100,
-        max_tables: 25,
-        expires_days: 365,
-        modules: {
-            menu_edit: true,
-            orders_kitchen: true,
-            reservations: true,
-            custom_design: true,
-            analytics: false,
-            qr_pay: false
-        }
+        label: 'Pro', menu_items: 100, max_tables: 25, expires_days: 365,
+        modules: { menu_edit: true, orders_kitchen: true, reservations: true, custom_design: true, analytics: false, qr_pay: false }
     },
     PRO_PLUS: {
-        label: 'Pro+',
-        menu_items: 200,
-        max_tables: 50,
-        expires_days: 365,
-        modules: {
-            menu_edit: true,
-            orders_kitchen: true,
-            reservations: true,
-            custom_design: true,
-            analytics: true,
-            qr_pay: false
-        }
+        label: 'Pro+', menu_items: 200, max_tables: 50, expires_days: 365,
+        modules: { menu_edit: true, orders_kitchen: true, reservations: true, custom_design: true, analytics: true, qr_pay: false }
     },
     ENTERPRISE: {
-        label: 'Enterprise',
-        menu_items: 500,
-        max_tables: 999,
-        expires_days: 365,
-        modules: {
-            menu_edit: true,
-            orders_kitchen: true,
-            reservations: true,
-            custom_design: true,
-            analytics: true,
-            qr_pay: true
-        }
+        label: 'Enterprise', menu_items: 500, max_tables: 999, expires_days: 365,
+        modules: { menu_edit: true, orders_kitchen: true, reservations: true, custom_design: true, analytics: true, qr_pay: true }
     }
 };
 
@@ -130,16 +87,9 @@ const saveDB = async (data) => await writeFile(DB_PATH, JSON.stringify(data, nul
 
 // ─── Key Generator ───────────────────────────────────────────────────────────
 const generateKey = (type) => {
-    const prefix = {
-        FREE:       'OPA-FREE',
-        STARTER:    'OPA-START',
-        PRO:        'OPA-PRO',
-        PRO_PLUS:   'OPA-PROPLUS',
-        ENTERPRISE: 'OPA-ENT'
-    }[type] || 'OPA-UNKNOWN';
+    const prefix = { FREE:'OPA-FREE', STARTER:'OPA-START', PRO:'OPA-PRO', PRO_PLUS:'OPA-PROPLUS', ENTERPRISE:'OPA-ENT' }[type] || 'OPA-UNKNOWN';
     const rand = crypto.randomBytes(4).toString('hex').toUpperCase();
-    const year = new Date().getFullYear();
-    return `${prefix}-${rand}-${year}`;
+    return `${prefix}-${rand}-${new Date().getFullYear()}`;
 };
 
 // ─── Admin Login ──────────────────────────────────────────────────────────────
@@ -151,18 +101,88 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
         const db = await getDB();
         const admin = (db.admins || []).find(a => a.username === username);
         if (!admin) return res.status(401).json({ success: false, message: 'Invalid credentials' });
-
         const valid = await bcrypt.compare(password, admin.password_hash);
         if (!valid) return res.status(401).json({ success: false, message: 'Invalid credentials' });
-
         const token = jwt.sign(
             { username: admin.username, role: admin.role || 'admin' },
             ADMIN_SECRET,
             { expiresIn: '8h' }
         );
-        res.json({ success: true, token, username: admin.username });
+        res.json({ success: true, token, username: admin.username, role: admin.role || 'admin' });
     } catch (e) {
         console.error(e);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
+// ─── User Management (superadmin only) ─────────────────────────────
+// GET alle Admins (ohne password_hash)
+app.get('/api/admin/users', requireAuth, requireSuperAdmin, async (req, res) => {
+    const db = await getDB();
+    const users = (db.admins || []).map(({ password_hash, ...u }) => u);
+    res.json({ users });
+});
+
+// POST neuen Admin erstellen
+app.post('/api/admin/users', requireAuth, requireSuperAdmin, async (req, res) => {
+    const { username, password, role } = req.body;
+    if (!username || !password)
+        return res.status(400).json({ success: false, message: 'Username and password required' });
+    if (password.length < 8)
+        return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
+    const allowedRoles = ['admin', 'superadmin'];
+    const assignedRole = allowedRoles.includes(role) ? role : 'admin';
+    try {
+        const db = await getDB();
+        if (!db.admins) db.admins = [];
+        if (db.admins.find(a => a.username === username))
+            return res.status(409).json({ success: false, message: 'Username already exists' });
+        const hash = await bcrypt.hash(password, 12);
+        const newUser = { username, password_hash: hash, role: assignedRole, created_at: new Date().toISOString() };
+        db.admins.push(newUser);
+        await saveDB(db);
+        res.json({ success: true, user: { username, role: assignedRole, created_at: newUser.created_at } });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
+// DELETE Admin löschen (darf nicht sich selbst löschen)
+app.delete('/api/admin/users/:username', requireAuth, requireSuperAdmin, async (req, res) => {
+    if (req.params.username === req.admin.username)
+        return res.status(400).json({ success: false, message: 'Cannot delete your own account' });
+    try {
+        const db = await getDB();
+        const before = (db.admins || []).length;
+        db.admins = db.admins.filter(a => a.username !== req.params.username);
+        if (db.admins.length === before)
+            return res.status(404).json({ success: false, message: 'User not found' });
+        await saveDB(db);
+        res.json({ success: true });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
+// PATCH Passwort ändern (superadmin für alle, admin nur eigenes)
+app.patch('/api/admin/users/:username/password', requireAuth, async (req, res) => {
+    const isSelf = req.params.username === req.admin.username;
+    const isSuperAdmin = req.admin.role === 'superadmin';
+    if (!isSelf && !isSuperAdmin)
+        return res.status(403).json({ success: false, message: 'Forbidden' });
+    const { password } = req.body;
+    if (!password || password.length < 8)
+        return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
+    try {
+        const db = await getDB();
+        const user = (db.admins || []).find(a => a.username === req.params.username);
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+        user.password_hash = await bcrypt.hash(password, 12);
+        await saveDB(db);
+        res.json({ success: true });
+    } catch (e) {
         res.status(500).json({ success: false, message: 'Internal server error' });
     }
 });
@@ -175,16 +195,13 @@ app.post('/api/v1/validate', apiLimiter, async (req, res) => {
         const data = await getDB();
         const l = data.licenses.find(lic => lic.license_key === license_key);
         if (!l) return res.status(404).json({ status: 'invalid', message: 'Key not found' });
-
         const isExpired = new Date(l.expires_at) < new Date();
         if (isExpired) return res.status(403).json({ status: 'expired', message: 'License expired' });
         if (l.status !== 'active') return res.status(403).json({ status: l.status, message: 'License not active' });
-
         l.last_validated = new Date().toISOString();
         l.validated_domain = domain;
         l.usage_count = (l.usage_count || 0) + 1;
         await saveDB(data);
-
         const plan = PLAN_DEFINITIONS[l.type] || PLAN_DEFINITIONS['FREE'];
         return res.json({
             status: 'active',
@@ -201,10 +218,8 @@ app.post('/api/v1/validate', apiLimiter, async (req, res) => {
     }
 });
 
-// ─── Protected Management API ─────────────────────────────────────────────────
-app.get('/api/admin/plans', requireAuth, (req, res) => {
-    res.json(PLAN_DEFINITIONS);
-});
+// ─── Protected License API ─────────────────────────────────────────────────
+app.get('/api/admin/plans', requireAuth, (req, res) => res.json(PLAN_DEFINITIONS));
 
 app.get('/api/admin/licenses', requireAuth, async (req, res) => {
     const db = await getDB();
@@ -212,11 +227,7 @@ app.get('/api/admin/licenses', requireAuth, async (req, res) => {
     const stats = {
         total: db.licenses.length,
         active: db.licenses.filter(l => l.status === 'active' && new Date(l.expires_at) > now).length,
-        expiring: db.licenses.filter(l => {
-            const exp = new Date(l.expires_at);
-            const diff = (exp - now) / (1000 * 60 * 60 * 24);
-            return diff > 0 && diff < 30;
-        }).length,
+        expiring: db.licenses.filter(l => { const d = (new Date(l.expires_at) - now) / 86400000; return d > 0 && d < 30; }).length,
         total_usage: db.licenses.reduce((s, l) => s + (l.usage_count || 0), 0)
     };
     res.json({ licenses: db.licenses, stats });
@@ -226,37 +237,17 @@ app.post('/api/admin/licenses', requireAuth, async (req, res) => {
     const db = await getDB();
     const raw = req.body;
     const plan = PLAN_DEFINITIONS[raw.type] || PLAN_DEFINITIONS['FREE'];
-
-    const key = raw.license_key && raw.license_key.trim()
-        ? raw.license_key.trim()
-        : generateKey(raw.type);
-
-    const expiresAt = raw.expires_at
-        ? raw.expires_at
-        : new Date(Date.now() + plan.expires_days * 24 * 60 * 60 * 1000).toISOString();
-
+    const key = raw.license_key?.trim() || generateKey(raw.type);
+    const expiresAt = raw.expires_at || new Date(Date.now() + plan.expires_days * 86400000).toISOString();
     const newLic = {
-        license_key: key,
-        type: raw.type || 'FREE',
-        customer_name: raw.customer_name,
-        status: 'active',
-        associated_domain: raw.associated_domain || '*',
-        expires_at: expiresAt,
-        allowed_modules: plan.modules,
-        limits: { max_dishes: plan.menu_items, max_tables: plan.max_tables },
-        usage_count: 0,
-        last_validated: null,
-        validated_domain: null,
-        created_at: new Date().toISOString()
+        license_key: key, type: raw.type || 'FREE', customer_name: raw.customer_name,
+        status: 'active', associated_domain: raw.associated_domain || '*', expires_at: expiresAt,
+        allowed_modules: plan.modules, limits: { max_dishes: plan.menu_items, max_tables: plan.max_tables },
+        usage_count: 0, last_validated: null, validated_domain: null, created_at: new Date().toISOString()
     };
-
     const idx = db.licenses.findIndex(l => l.license_key === key);
-    if (idx > -1) {
-        db.licenses[idx] = { ...db.licenses[idx], ...newLic };
-    } else {
-        db.licenses.unshift(newLic);
-    }
-
+    if (idx > -1) db.licenses[idx] = { ...db.licenses[idx], ...newLic };
+    else db.licenses.unshift(newLic);
     await saveDB(db);
     res.json({ success: true, license: newLic });
 });

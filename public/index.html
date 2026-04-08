@@ -8,115 +8,80 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: #6366f1;
-            --primary-dark: #4f46e5;
-            --bg: #f8fafc;
-            --panel: #ffffff;
-            --border: #e2e8f0;
-            --text: #1e293b;
-            --muted: #64748b;
+            --primary: #6366f1; --primary-dark: #4f46e5;
+            --bg: #f8fafc; --panel: #ffffff; --border: #e2e8f0;
+            --text: #1e293b; --muted: #64748b;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Outfit', sans-serif; }
         body { background: var(--bg); min-height: 100vh; }
 
-        /* ── LOGIN ───────────────────────────────────────── */
-        #login-screen {
-            display: flex; align-items: center; justify-content: center;
-            min-height: 100vh; padding: 24px;
-        }
-        .login-card {
-            background: white; border: 1px solid var(--border); border-radius: 24px;
-            padding: 48px 40px; width: 100%; max-width: 420px;
-            box-shadow: 0 20px 60px rgba(99,102,241,0.08);
-        }
+        /* LOGIN */
+        #login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+        .login-card { background: white; border: 1px solid var(--border); border-radius: 24px; padding: 48px 40px; width: 100%; max-width: 420px; box-shadow: 0 20px 60px rgba(99,102,241,0.08); }
         .login-card .logo { text-align: center; margin-bottom: 32px; }
         .login-card .logo h1 { font-size: 1.8rem; font-weight: 800; color: var(--text); }
         .login-card .logo h1 span { color: var(--primary); }
         .login-card .logo p { color: var(--muted); font-size: 0.9rem; margin-top: 4px; }
-        .login-card .form-group { margin-bottom: 16px; }
-        .login-card label { display: block; font-size: 0.75rem; font-weight: 700; color: var(--muted);
-            text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
-        .login-card input {
-            width: 100%; padding: 13px 16px; border: 1.5px solid var(--border); border-radius: 12px;
-            font-size: 0.95rem; font-family: inherit; font-weight: 600; background: #f8fafc;
-            color: var(--text); transition: border-color 0.15s;
-        }
-        .login-card input:focus { outline: none; border-color: var(--primary); background: white; }
-        .login-btn {
-            width: 100%; padding: 14px; border: none; border-radius: 12px; background: var(--primary);
-            color: white; font-size: 1rem; font-weight: 700; cursor: pointer; margin-top: 8px;
-            transition: background 0.2s;
-        }
+        .login-error { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; border-radius: 10px; padding: 10px 14px; font-size: 0.85rem; font-weight: 600; margin-bottom: 16px; display: none; }
+        .login-btn { width: 100%; padding: 14px; border: none; border-radius: 12px; background: var(--primary); color: white; font-size: 1rem; font-weight: 700; cursor: pointer; margin-top: 8px; transition: background 0.2s; }
         .login-btn:hover { background: var(--primary-dark); }
         .login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-        .login-error {
-            background: #fef2f2; border: 1px solid #fecaca; color: #dc2626;
-            border-radius: 10px; padding: 10px 14px; font-size: 0.85rem; font-weight: 600;
-            margin-bottom: 16px; display: none;
-        }
 
-        /* ── DASHBOARD ───────────────────────────────────── */
-        #dashboard { display: none; padding: 32px; }
-        .page { max-width: 1400px; margin: 0 auto; }
-
-        .top-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
-        .top-header h1 { font-size: 1.8rem; font-weight: 800; color: var(--text); }
-        .top-header h1 span { color: var(--primary); }
-        .top-header p { color: var(--muted); font-weight: 600; font-size: 0.9rem; margin-top: 2px; }
-        .header-right { display: flex; gap: 10px; align-items: center; }
-        .user-badge {
-            background: #f1f5f9; border-radius: 10px; padding: 8px 14px;
-            font-size: 0.8rem; font-weight: 700; color: var(--muted);
-            display: flex; align-items: center; gap: 6px;
-        }
-        .logout-btn {
-            background: #fef2f2; border: none; color: #ef4444; border-radius: 10px;
-            padding: 8px 14px; font-size: 0.8rem; font-weight: 700; cursor: pointer;
-            transition: background 0.2s;
-        }
+        /* DASHBOARD */
+        #dashboard { display: none; }
+        .topbar { background: white; border-bottom: 1px solid var(--border); padding: 0 32px; display: flex; align-items: center; justify-content: space-between; height: 64px; position: sticky; top: 0; z-index: 100; }
+        .topbar-left { display: flex; align-items: center; gap: 32px; }
+        .topbar h1 { font-size: 1.2rem; font-weight: 800; color: var(--text); white-space: nowrap; }
+        .topbar h1 span { color: var(--primary); }
+        .nav-tabs { display: flex; gap: 4px; }
+        .nav-tab { padding: 8px 16px; border-radius: 10px; border: none; background: none; font-size: 0.85rem; font-weight: 700; color: var(--muted); cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 6px; }
+        .nav-tab:hover { background: #f1f5f9; color: var(--text); }
+        .nav-tab.active { background: rgba(99,102,241,0.1); color: var(--primary); }
+        .topbar-right { display: flex; gap: 8px; align-items: center; }
+        .user-badge { background: #f1f5f9; border-radius: 10px; padding: 7px 12px; font-size: 0.8rem; font-weight: 700; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+        .role-pill { font-size: 0.65rem; font-weight: 800; padding: 2px 8px; border-radius: 20px; }
+        .role-superadmin { background: #fef3c7; color: #d97706; }
+        .role-admin { background: #eff6ff; color: #2563eb; }
+        .logout-btn { background: #fef2f2; border: none; color: #ef4444; border-radius: 10px; padding: 7px 12px; font-size: 0.8rem; font-weight: 700; cursor: pointer; }
         .logout-btn:hover { background: #fee2e2; }
 
+        .page { max-width: 1400px; margin: 0 auto; padding: 32px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* STATS */
         .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
-        .stat-card {
-            background: var(--panel); border: 1px solid var(--border);
-            border-radius: 16px; padding: 20px 24px;
-            display: flex; align-items: center; gap: 16px;
-        }
-        .stat-icon { width: 48px; height: 48px; border-radius: 12px; background: rgba(99,102,241,0.08);
-            display: flex; align-items: center; justify-content: center; color: var(--primary); font-size: 1.2rem; flex-shrink: 0; }
+        .stat-card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 20px 24px; display: flex; align-items: center; gap: 16px; }
+        .stat-icon { width: 48px; height: 48px; border-radius: 12px; background: rgba(99,102,241,0.08); display: flex; align-items: center; justify-content: center; color: var(--primary); font-size: 1.2rem; flex-shrink: 0; }
         .stat-card h3 { font-size: 1.6rem; font-weight: 800; color: var(--text); }
         .stat-card p { font-size: 0.75rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
 
+        /* PLAN BADGES */
         .plans-row { display: flex; gap: 10px; margin-bottom: 28px; flex-wrap: wrap; }
-        .plan-badge {
-            padding: 8px 16px; border-radius: 20px; font-size: 0.75rem; font-weight: 800;
-            display: flex; align-items: center; gap: 6px; border: 1px solid transparent;
-        }
+        .plan-badge { padding: 8px 16px; border-radius: 20px; font-size: 0.75rem; font-weight: 800; display: flex; align-items: center; gap: 6px; border: 1px solid transparent; }
         .plan-FREE       { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
         .plan-STARTER    { background: #ecfdf5; color: #059669; border-color: #a7f3d0; }
         .plan-PRO        { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
         .plan-PRO_PLUS   { background: #f5f3ff; color: #7c3aed; border-color: #ddd6fe; }
         .plan-ENTERPRISE { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
 
-        .table-card { background: var(--panel); border: 1px solid var(--border); border-radius: 20px; overflow: hidden; }
-        .table-header { padding: 20px 28px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-        .table-header h2 { font-size: 1rem; font-weight: 800; color: var(--text); }
+        /* CARDS & TABLES */
+        .card { background: var(--panel); border: 1px solid var(--border); border-radius: 20px; overflow: hidden; margin-bottom: 24px; }
+        .card-header { padding: 20px 28px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .card-header h2 { font-size: 1rem; font-weight: 800; color: var(--text); }
         table { width: 100%; border-collapse: collapse; }
-        thead th { padding: 14px 20px; text-align: left; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
-            letter-spacing: 0.08em; color: var(--muted); background: #f8fafc; border-bottom: 1px solid var(--border); }
-        tbody td { padding: 16px 20px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; vertical-align: middle; }
+        thead th { padding: 12px 20px; text-align: left; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); background: #f8fafc; border-bottom: 1px solid var(--border); }
+        tbody td { padding: 15px 20px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; vertical-align: middle; }
         tbody tr:last-child td { border-bottom: none; }
         tbody tr:hover td { background: #fafafa; }
 
-        .key-badge { font-family: 'Courier New', monospace; font-size: 0.8rem; color: var(--text);
-            background: #f1f5f9; padding: 4px 10px; border-radius: 8px; }
+        .key-badge { font-family: 'Courier New', monospace; font-size: 0.8rem; color: var(--text); background: #f1f5f9; padding: 4px 10px; border-radius: 8px; }
         .type-pill { font-weight: 800; font-size: 0.65rem; padding: 4px 12px; border-radius: 20px; }
         .type-FREE       { background: #f1f5f9; color: #475569; }
         .type-STARTER    { background: #ecfdf5; color: #059669; }
         .type-PRO        { background: #eff6ff; color: #2563eb; }
         .type-PRO_PLUS   { background: #f5f3ff; color: #7c3aed; }
         .type-ENTERPRISE { background: #fff7ed; color: #c2410c; }
-
         .status-active   { color: #22c55e; font-weight: 800; }
         .status-inactive { color: #94a3b8; font-weight: 700; }
         .ping-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
@@ -124,125 +89,130 @@
         .ping-offline { background: #cbd5e1; }
         @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
 
+        /* BUTTONS */
         .btn { padding: 10px 20px; border-radius: 12px; border: none; cursor: pointer; font-weight: 700; font-size: 0.85rem; transition: all 0.2s; }
         .btn-primary { background: var(--primary); color: white; }
         .btn-primary:hover { background: var(--primary-dark); }
         .btn-ghost { background: #f1f5f9; color: var(--muted); }
         .btn-ghost:hover { background: #e2e8f0; }
-        .btn-danger { background: none; border: none; color: #ef4444; font-size: 1rem; cursor: pointer; padding: 6px 10px; border-radius: 8px; }
-        .btn-danger:hover { background: #fef2f2; }
+        .btn-sm { padding: 6px 14px; font-size: 0.8rem; }
+        .btn-danger-sm { background: none; border: none; color: #ef4444; font-size: 0.95rem; cursor: pointer; padding: 6px 10px; border-radius: 8px; }
+        .btn-danger-sm:hover { background: #fef2f2; }
 
-        .overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.4); backdrop-filter: blur(6px);
-            display: none; place-items: center; z-index: 1000; }
+        /* USER CARDS */
+        .users-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; padding: 24px; }
+        .user-card { border: 1px solid var(--border); border-radius: 16px; padding: 20px 24px; display: flex; justify-content: space-between; align-items: center; background: white; }
+        .user-card-info { display: flex; align-items: center; gap: 14px; }
+        .user-avatar { width: 44px; height: 44px; border-radius: 12px; background: rgba(99,102,241,0.1); display: flex; align-items: center; justify-content: center; color: var(--primary); font-size: 1.1rem; }
+        .user-card-name { font-weight: 800; font-size: 0.95rem; color: var(--text); }
+        .user-card-meta { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+        .user-card-actions { display: flex; gap: 6px; }
+
+        /* MODAL */
+        .overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.4); backdrop-filter: blur(6px); display: none; place-items: center; z-index: 1000; }
         .overlay.open { display: grid; }
-        .modal { background: white; width: 560px; max-width: 95vw; border-radius: 24px;
-            padding: 36px; box-shadow: 0 40px 80px rgba(0,0,0,0.15); }
-        .modal h2 { font-size: 1.4rem; font-weight: 800; color: var(--text); margin-bottom: 24px; }
-        .form-group { margin-bottom: 18px; }
-        .form-group label { display: block; font-size: 0.75rem; font-weight: 700; color: var(--muted);
-            text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
-        .form-group input, .form-group select {
-            width: 100%; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 10px;
-            font-size: 0.9rem; font-family: inherit; font-weight: 600; background: #f8fafc; color: var(--text);
-            transition: border-color 0.15s;
-        }
+        .modal { background: white; width: 520px; max-width: 95vw; border-radius: 24px; padding: 36px; box-shadow: 0 40px 80px rgba(0,0,0,0.15); }
+        .modal h2 { font-size: 1.3rem; font-weight: 800; color: var(--text); margin-bottom: 24px; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 0.75rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+        .form-group input, .form-group select { width: 100%; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 0.9rem; font-family: inherit; font-weight: 600; background: #f8fafc; color: var(--text); transition: border-color 0.15s; }
         .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); background: white; }
         .form-row { display: flex; gap: 14px; }
         .form-row .form-group { flex: 1; }
-        .plan-info-box { padding: 12px 16px; border-radius: 10px; font-size: 0.8rem; font-weight: 600;
-            margin-bottom: 18px; display: none; }
+        .plan-info-box { padding: 12px 16px; border-radius: 10px; font-size: 0.8rem; font-weight: 600; margin-bottom: 18px; display: none; }
         .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+        .modal-error { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; border-radius: 8px; padding: 8px 12px; font-size: 0.82rem; font-weight: 600; margin-bottom: 14px; display: none; }
+        .modal-success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #16a34a; border-radius: 8px; padding: 8px 12px; font-size: 0.82rem; font-weight: 600; margin-bottom: 14px; display: none; }
 
         @media (max-width: 768px) {
-            .stats-grid { grid-template-columns: repeat(2, 1fr); }
-            #dashboard { padding: 16px; }
+            .stats-grid { grid-template-columns: repeat(2,1fr); }
+            .page { padding: 16px; }
+            .topbar { padding: 0 16px; }
         }
     </style>
 </head>
 <body>
 
-<!-- ── LOGIN SCREEN ─────────────────────────────────────── -->
+<!-- LOGIN -->
 <div id="login-screen">
     <div class="login-card">
-        <div class="logo">
-            <h1>OPA <span>License</span></h1>
-            <p>Server Administration</p>
-        </div>
+        <div class="logo"><h1>OPA <span>License</span></h1><p>Server Administration</p></div>
         <div class="login-error" id="login-error"></div>
         <form id="login-form">
-            <div class="form-group">
-                <label>Benutzername</label>
-                <input type="text" id="inp-user" autocomplete="username" placeholder="admin" required>
-            </div>
-            <div class="form-group">
-                <label>Passwort</label>
-                <input type="password" id="inp-pass" autocomplete="current-password" placeholder="••••••••" required>
-            </div>
-            <button type="submit" class="login-btn" id="login-btn">
-                <i class="fas fa-sign-in-alt"></i> Anmelden
-            </button>
+            <div class="form-group"><label>Benutzername</label><input type="text" id="inp-user" autocomplete="username" placeholder="admin" required></div>
+            <div class="form-group"><label>Passwort</label><input type="password" id="inp-pass" autocomplete="current-password" placeholder="••••••••" required></div>
+            <button type="submit" class="login-btn" id="login-btn"><i class="fas fa-sign-in-alt"></i> Anmelden</button>
         </form>
     </div>
 </div>
 
-<!-- ── DASHBOARD ────────────────────────────────────────── -->
+<!-- DASHBOARD -->
 <div id="dashboard">
-<div class="page">
-
-    <div class="top-header">
-        <div>
-            <h1>OPA <span>License Server</span></h1>
-            <p>Verwaltung aller Restaurantlizenzen</p>
+    <div class="topbar">
+        <div class="topbar-left">
+            <h1>OPA <span>License</span></h1>
+            <nav class="nav-tabs">
+                <button class="nav-tab active" data-tab="licenses"><i class="fas fa-key"></i> Lizenzen</button>
+                <button class="nav-tab" data-tab="users" id="tab-users-btn" style="display:none"><i class="fas fa-users"></i> Benutzer</button>
+            </nav>
         </div>
-        <div class="header-right">
-            <div class="user-badge"><i class="fas fa-user-shield"></i> <span id="logged-user"></span></div>
+        <div class="topbar-right">
+            <div class="user-badge"><i class="fas fa-user-shield"></i> <span id="logged-user"></span> <span class="role-pill" id="logged-role"></span></div>
             <button class="logout-btn" id="btn-logout"><i class="fas fa-sign-out-alt"></i> Logout</button>
-            <button class="btn btn-primary" id="btn-add"><i class="fas fa-plus"></i> Neue Lizenz</button>
         </div>
     </div>
 
-    <div class="stats-grid">
-        <div class="stat-card"><div class="stat-icon"><i class="fas fa-key"></i></div><div><h3 id="s-total">-</h3><p>Lizenzen gesamt</p></div></div>
-        <div class="stat-card"><div class="stat-icon"><i class="fas fa-circle-check"></i></div><div><h3 id="s-active">-</h3><p>Aktiv</p></div></div>
-        <div class="stat-card"><div class="stat-icon"><i class="fas fa-clock"></i></div><div><h3 id="s-expiring">-</h3><p>Läuft bald ab</p></div></div>
-        <div class="stat-card"><div class="stat-icon"><i class="fas fa-chart-line"></i></div><div><h3 id="s-usage">-</h3><p>Validierungen</p></div></div>
-    </div>
+    <div class="page">
 
-    <div class="plans-row" id="plans-row"></div>
-
-    <div class="table-card">
-        <div class="table-header">
-            <h2>Alle Lizenzen</h2>
-            <span style="font-size:0.8rem;color:var(--muted);font-weight:600;">Aktualisiert alle 10s</span>
+        <!-- TAB: Lizenzen -->
+        <div class="tab-content active" id="tab-licenses">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;">
+                <div>
+                    <h2 style="font-size:1.5rem;font-weight:800;color:var(--text);">Lizenzverwaltung</h2>
+                    <p style="color:var(--muted);font-size:0.9rem;margin-top:2px;">Alle aktiven Restaurantlizenzen</p>
+                </div>
+                <button class="btn btn-primary" id="btn-add"><i class="fas fa-plus"></i> Neue Lizenz</button>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-icon"><i class="fas fa-key"></i></div><div><h3 id="s-total">-</h3><p>Gesamt</p></div></div>
+                <div class="stat-card"><div class="stat-icon"><i class="fas fa-circle-check"></i></div><div><h3 id="s-active">-</h3><p>Aktiv</p></div></div>
+                <div class="stat-card"><div class="stat-icon"><i class="fas fa-clock"></i></div><div><h3 id="s-expiring">-</h3><p>Läuft bald ab</p></div></div>
+                <div class="stat-card"><div class="stat-icon"><i class="fas fa-chart-line"></i></div><div><h3 id="s-usage">-</h3><p>Validierungen</p></div></div>
+            </div>
+            <div class="plans-row" id="plans-row"></div>
+            <div class="card">
+                <div class="card-header"><h2>Alle Lizenzen</h2><span style="font-size:0.8rem;color:var(--muted);font-weight:600;">Aktualisiert alle 10s</span></div>
+                <table><thead><tr>
+                    <th>Lizenzschlüssel</th><th>Kunde</th><th>Plan</th><th>Speisen</th><th>Tische</th><th>Ablauf</th><th>Status</th><th>Aktionen</th>
+                </tr></thead><tbody id="lic-body"></tbody></table>
+            </div>
         </div>
-        <table>
-            <thead>
-                <tr>
-                    <th>Lizenzschlüssel</th>
-                    <th>Kunde</th>
-                    <th>Plan</th>
-                    <th>Speisen</th>
-                    <th>Tische</th>
-                    <th>Ablauf</th>
-                    <th>Status</th>
-                    <th>Aktionen</th>
-                </tr>
-            </thead>
-            <tbody id="lic-body"></tbody>
-        </table>
+
+        <!-- TAB: Benutzer -->
+        <div class="tab-content" id="tab-users">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;">
+                <div>
+                    <h2 style="font-size:1.5rem;font-weight:800;color:var(--text);">Benutzerverwaltung</h2>
+                    <p style="color:var(--muted);font-size:0.9rem;margin-top:2px;">Admin-Accounts verwalten</p>
+                </div>
+                <button class="btn btn-primary" id="btn-add-user"><i class="fas fa-user-plus"></i> Neuer Benutzer</button>
+            </div>
+            <div class="card">
+                <div class="users-grid" id="users-grid"></div>
+            </div>
+        </div>
+
     </div>
-</div>
 </div>
 
 <!-- Modal: Neue Lizenz -->
-<div class="overlay" id="modal">
+<div class="overlay" id="modal-license">
     <div class="modal">
         <h2>Neue Lizenz erstellen</h2>
         <form id="lic-form">
-            <div class="form-group">
-                <label>Plan</label>
+            <div class="form-group"><label>Plan</label>
                 <select name="type" id="plan-select" required>
-                    <option value="FREE">Free — 10 Speisen (Kostenlos)</option>
+                    <option value="FREE">Free — 10 Speisen</option>
                     <option value="STARTER">Starter — 40 Speisen</option>
                     <option value="PRO" selected>Pro — 100 Speisen</option>
                     <option value="PRO_PLUS">Pro+ — 200 Speisen</option>
@@ -250,27 +220,40 @@
                 </select>
             </div>
             <div id="plan-info" class="plan-info-box"></div>
-            <div class="form-group">
-                <label>Restaurantname / Kunde</label>
-                <input type="text" name="customer_name" placeholder="z.B. Taverna Papadopoulos" required>
-            </div>
-            <div class="form-group">
-                <label>Lizenzschlüssel <span style="font-weight:400;opacity:0.6">(leer = automatisch generieren)</span></label>
-                <input type="text" name="license_key" placeholder="OPA-PRO-XXXX-2026" autocomplete="off">
-            </div>
+            <div class="form-group"><label>Restaurantname / Kunde</label><input type="text" name="customer_name" placeholder="z.B. Taverna Papadopoulos" required></div>
+            <div class="form-group"><label>Lizenzschlüssel <span style="font-weight:400;opacity:0.6">(leer = auto)</span></label><input type="text" name="license_key" placeholder="OPA-PRO-XXXX-2026" autocomplete="off"></div>
             <div class="form-row">
-                <div class="form-group">
-                    <label>Domain</label>
-                    <input type="text" name="associated_domain" placeholder="meinrestaurant.de" value="*">
-                </div>
-                <div class="form-group">
-                    <label>Ablaufdatum <span style="font-weight:400;opacity:0.6">(opt.)</span></label>
-                    <input type="date" name="expires_at">
-                </div>
+                <div class="form-group"><label>Domain</label><input type="text" name="associated_domain" value="*"></div>
+                <div class="form-group"><label>Ablaufdatum <span style="font-weight:400;opacity:0.6">(opt.)</span></label><input type="date" name="expires_at"></div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-ghost" id="btn-cancel">Abbrechen</button>
+                <button type="button" class="btn btn-ghost" id="btn-cancel-lic">Abbrechen</button>
                 <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Lizenz aktivieren</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Neuer Benutzer -->
+<div class="overlay" id="modal-user">
+    <div class="modal">
+        <h2 id="user-modal-title">Neuer Benutzer</h2>
+        <div class="modal-error" id="user-modal-error"></div>
+        <div class="modal-success" id="user-modal-success"></div>
+        <form id="user-form">
+            <input type="hidden" id="user-modal-mode" value="create">
+            <input type="hidden" id="user-modal-target" value="">
+            <div class="form-group" id="fg-username"><label>Benutzername</label><input type="text" id="inp-new-user" placeholder="z.B. janedoe" autocomplete="off" required></div>
+            <div class="form-group"><label id="pw-label">Passwort <span style="font-weight:400;opacity:0.6;font-size:0.75rem">(mind. 8 Zeichen)</span></label><input type="password" id="inp-new-pass" placeholder="••••••••" autocomplete="new-password"></div>
+            <div class="form-group" id="fg-role"><label>Rolle</label>
+                <select id="inp-new-role">
+                    <option value="admin">Admin — Lizenzen verwalten</option>
+                    <option value="superadmin">Superadmin — Lizenzen + Benutzer verwalten</option>
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" id="btn-cancel-user">Abbrechen</button>
+                <button type="submit" class="btn btn-primary" id="btn-user-submit"><i class="fas fa-user-plus"></i> Erstellen</button>
             </div>
         </form>
     </div>
@@ -279,15 +262,13 @@
 <script>
     const TOKEN_KEY = 'opa_admin_token';
     const USER_KEY  = 'opa_admin_user';
+    const ROLE_KEY  = 'opa_admin_role';
     let PLANS = {};
     let refreshTimer = null;
+    let currentRole = 'admin';
 
-    // ── Auth helpers ──────────────────────────────────────
     const getToken = () => localStorage.getItem(TOKEN_KEY);
-    const authHeaders = () => ({
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getToken()}`
-    });
+    const authHeaders = () => ({ 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` });
 
     function showLogin() {
         document.getElementById('login-screen').style.display = 'flex';
@@ -295,164 +276,223 @@
         if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
     }
 
-    function showDashboard(username) {
+    function showDashboard(username, role) {
+        currentRole = role || 'admin';
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('dashboard').style.display = 'block';
         document.getElementById('logged-user').textContent = username;
+        const rp = document.getElementById('logged-role');
+        rp.textContent = role === 'superadmin' ? 'Superadmin' : 'Admin';
+        rp.className = 'role-pill ' + (role === 'superadmin' ? 'role-superadmin' : 'role-admin');
+        // Benutzer-Tab nur für Superadmin sichtbar
+        document.getElementById('tab-users-btn').style.display = role === 'superadmin' ? 'flex' : 'none';
         loadPlans().then(loadData);
         refreshTimer = setInterval(loadData, 10000);
     }
 
     function logout() {
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem(USER_KEY);
+        localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); localStorage.removeItem(ROLE_KEY);
         showLogin();
     }
 
-    // ── Auto-login if token exists ────────────────────────
     window.addEventListener('DOMContentLoaded', () => {
-        const token = getToken();
-        const user  = localStorage.getItem(USER_KEY);
-        if (token && user) {
-            showDashboard(user);
-        } else {
-            showLogin();
-        }
+        const token = getToken(), user = localStorage.getItem(USER_KEY), role = localStorage.getItem(ROLE_KEY);
+        if (token && user) showDashboard(user, role); else showLogin();
     });
 
-    // ── Login form ────────────────────────────────────────
+    // Login
     document.getElementById('login-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const btn = document.getElementById('login-btn');
         const errBox = document.getElementById('login-error');
-        errBox.style.display = 'none';
-        btn.disabled = true;
+        errBox.style.display = 'none'; btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Anmelden...';
-
         try {
-            const res = await fetch('/api/admin/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    username: document.getElementById('inp-user').value,
-                    password: document.getElementById('inp-pass').value
-                })
-            });
+            const res = await fetch('/api/admin/login', { method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ username: document.getElementById('inp-user').value, password: document.getElementById('inp-pass').value }) });
             const data = await res.json();
             if (res.ok && data.token) {
                 localStorage.setItem(TOKEN_KEY, data.token);
                 localStorage.setItem(USER_KEY, data.username);
-                showDashboard(data.username);
+                localStorage.setItem(ROLE_KEY, data.role || 'admin');
+                showDashboard(data.username, data.role);
             } else {
-                errBox.textContent = data.message || 'Ungültige Zugangsdaten';
-                errBox.style.display = 'block';
+                errBox.textContent = data.message || 'Ungültige Zugangsdaten'; errBox.style.display = 'block';
             }
-        } catch (err) {
-            errBox.textContent = 'Server nicht erreichbar';
-            errBox.style.display = 'block';
-        }
-
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Anmelden';
+        } catch { errBox.textContent = 'Server nicht erreichbar'; errBox.style.display = 'block'; }
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Anmelden';
     });
 
     document.getElementById('btn-logout').addEventListener('click', logout);
 
-    // ── API calls with auth ───────────────────────────────
-    async function apiFetch(url, options = {}) {
-        const res = await fetch(url, {
-            ...options,
-            headers: { ...authHeaders(), ...(options.headers || {}) }
+    // Tab switching
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+            if (tab.dataset.tab === 'users') loadUsers();
         });
+    });
+
+    // API helper
+    async function apiFetch(url, options = {}) {
+        const res = await fetch(url, { ...options, headers: { ...authHeaders(), ...(options.headers||{}) } });
         if (res.status === 401) { logout(); return null; }
         return res;
     }
 
+    // ── LICENSES ──
     async function loadPlans() {
-        const r = await apiFetch('/api/admin/plans');
-        if (!r) return;
+        const r = await apiFetch('/api/admin/plans'); if (!r) return;
         PLANS = await r.json();
-        const row = document.getElementById('plans-row');
-        row.innerHTML = Object.entries(PLANS).map(([key, p]) =>
-            `<div class="plan-badge plan-${key}">
-                <i class="fas fa-circle" style="font-size:6px"></i>
-                ${p.label} — ${p.menu_items} Speisen
-            </div>`
+        document.getElementById('plans-row').innerHTML = Object.entries(PLANS).map(([key, p]) =>
+            `<div class="plan-badge plan-${key}"><i class="fas fa-circle" style="font-size:6px"></i> ${p.label} — ${p.menu_items} Speisen</div>`
         ).join('');
     }
 
     async function loadData() {
-        const r = await apiFetch('/api/admin/licenses');
-        if (!r) return;
+        const r = await apiFetch('/api/admin/licenses'); if (!r) return;
         const { licenses, stats } = await r.json();
-
-        document.getElementById('s-total').textContent    = stats.total;
-        document.getElementById('s-active').textContent   = stats.active;
-        document.getElementById('s-expiring').textContent = stats.expiring;
-        document.getElementById('s-usage').textContent    = stats.total_usage || 0;
-
+        document.getElementById('s-total').textContent   = stats.total;
+        document.getElementById('s-active').textContent  = stats.active;
+        document.getElementById('s-expiring').textContent= stats.expiring;
+        document.getElementById('s-usage').textContent   = stats.total_usage || 0;
         const now = new Date();
         document.getElementById('lic-body').innerHTML = licenses.map(l => {
             const isOnline = l.last_validated && (now - new Date(l.last_validated)) < 300000;
-            const exp = new Date(l.expires_at);
-            const daysLeft = Math.ceil((exp - now) / 86400000);
-            const expStr = exp.toLocaleDateString('de-DE');
+            const exp = new Date(l.expires_at), daysLeft = Math.ceil((exp-now)/86400000);
             const expColor = daysLeft < 30 ? '#ef4444' : daysLeft < 90 ? '#f59e0b' : '#22c55e';
-            const planLabel = PLANS[l.type]?.label || l.type;
             return `<tr>
                 <td><span class="key-badge">${l.license_key}</span></td>
                 <td><strong>${l.customer_name}</strong></td>
-                <td><span class="type-pill type-${l.type}">${planLabel}</span></td>
-                <td>${l.limits?.max_dishes ?? '—'}</td>
-                <td>${l.limits?.max_tables ?? '—'}</td>
-                <td style="color:${expColor};font-weight:700;font-size:0.85rem">${expStr}<br><small style="opacity:0.6;font-weight:600">${daysLeft}d</small></td>
-                <td>
-                    <span class="ping-dot ${isOnline ? 'ping-online' : 'ping-offline'}"></span>
-                    <span class="${isOnline ? 'status-active' : 'status-inactive'}">${isOnline ? 'Online' : 'Idle'}</span>
-                </td>
-                <td>
-                    <button class="btn-danger" title="Löschen" onclick="deleteLic('${l.license_key}')">
-                        <i class="fas fa-trash-alt"></i>
-                    </button>
-                </td>
+                <td><span class="type-pill type-${l.type}">${PLANS[l.type]?.label||l.type}</span></td>
+                <td>${l.limits?.max_dishes??'—'}</td><td>${l.limits?.max_tables??'—'}</td>
+                <td style="color:${expColor};font-weight:700;font-size:0.85rem">${exp.toLocaleDateString('de-DE')}<br><small style="opacity:0.6">${daysLeft}d</small></td>
+                <td><span class="ping-dot ${isOnline?'ping-online':'ping-offline'}"></span><span class="${isOnline?'status-active':'status-inactive'}">${isOnline?'Online':'Idle'}</span></td>
+                <td><button class="btn-danger-sm" onclick="deleteLic('${l.license_key}')"><i class="fas fa-trash-alt"></i></button></td>
             </tr>`;
         }).join('');
     }
 
     document.getElementById('plan-select').addEventListener('change', function() {
-        const p = PLANS[this.value];
-        if (!p) return;
+        const p = PLANS[this.value]; if (!p) return;
         const box = document.getElementById('plan-info');
-        const colors = { FREE:'#f1f5f9', STARTER:'#ecfdf5', PRO:'#eff6ff', PRO_PLUS:'#f5f3ff', ENTERPRISE:'#fff7ed' };
-        box.style.display = 'block';
-        box.style.background = colors[this.value] || '#f1f5f9';
-        const mods = Object.entries(p.modules).filter(([,v])=>v).map(([k])=>k.replace('_',' ')).join(', ');
-        box.innerHTML = `<strong>${p.label}</strong> — ${p.menu_items} Speisen, ${p.max_tables} Tische<br>
-            <span style="opacity:0.7">Module: ${mods}</span>`;
+        const colors = {FREE:'#f1f5f9',STARTER:'#ecfdf5',PRO:'#eff6ff',PRO_PLUS:'#f5f3ff',ENTERPRISE:'#fff7ed'};
+        box.style.cssText = `display:block;background:${colors[this.value]||'#f1f5f9'}`;
+        box.innerHTML = `<strong>${p.label}</strong> — ${p.menu_items} Speisen, ${p.max_tables} Tische<br><span style="opacity:0.7">Module: ${Object.entries(p.modules).filter(([,v])=>v).map(([k])=>k.replace('_',' ')).join(', ')}</span>`;
     });
 
     window.deleteLic = async (key) => {
         if (!confirm(`Lizenz [${key}] wirklich löschen?`)) return;
-        await apiFetch(`/api/admin/licenses/${key}`, { method: 'DELETE' });
-        loadData();
+        await apiFetch(`/api/admin/licenses/${key}`, { method:'DELETE' }); loadData();
     };
 
-    document.getElementById('btn-add').onclick   = () => document.getElementById('modal').classList.add('open');
-    document.getElementById('btn-cancel').onclick = () => document.getElementById('modal').classList.remove('open');
-
+    document.getElementById('btn-add').onclick       = () => document.getElementById('modal-license').classList.add('open');
+    document.getElementById('btn-cancel-lic').onclick = () => document.getElementById('modal-license').classList.remove('open');
     document.getElementById('lic-form').onsubmit = async (e) => {
         e.preventDefault();
-        const fd = new FormData(e.target);
-        const raw = Object.fromEntries(fd);
-        if (raw.expires_at) raw.expires_at = new Date(raw.expires_at).toISOString();
-        else delete raw.expires_at;
-        await apiFetch('/api/admin/licenses', {
-            method: 'POST',
-            body: JSON.stringify(raw)
-        });
-        e.target.reset();
-        document.getElementById('modal').classList.remove('open');
-        loadData();
+        const raw = Object.fromEntries(new FormData(e.target));
+        if (raw.expires_at) raw.expires_at = new Date(raw.expires_at).toISOString(); else delete raw.expires_at;
+        await apiFetch('/api/admin/licenses', { method:'POST', body:JSON.stringify(raw) });
+        e.target.reset(); document.getElementById('modal-license').classList.remove('open'); loadData();
+    };
+
+    // ── USERS ──
+    async function loadUsers() {
+        const r = await apiFetch('/api/admin/users'); if (!r) return;
+        const { users } = await r.json();
+        const self = localStorage.getItem(USER_KEY);
+        document.getElementById('users-grid').innerHTML = users.map(u => {
+            const isSelf = u.username === self;
+            const created = u.created_at ? new Date(u.created_at).toLocaleDateString('de-DE') : '—';
+            return `<div class="user-card">
+                <div class="user-card-info">
+                    <div class="user-avatar"><i class="fas fa-user"></i></div>
+                    <div>
+                        <div class="user-card-name">${u.username} ${isSelf ? '<span style="font-size:0.7rem;color:var(--muted);font-weight:600">(du)</span>' : ''}</div>
+                        <div class="user-card-meta">
+                            <span class="role-pill ${u.role==='superadmin'?'role-superadmin':'role-admin'}">${u.role==='superadmin'?'Superadmin':'Admin'}</span>
+                            &nbsp;Erstellt: ${created}
+                        </div>
+                    </div>
+                </div>
+                <div class="user-card-actions">
+                    <button class="btn btn-ghost btn-sm" onclick="openChangePw('${u.username}')"><i class="fas fa-key"></i></button>
+                    ${!isSelf ? `<button class="btn-danger-sm" onclick="deleteUser('${u.username}')"><i class="fas fa-trash-alt"></i></button>` : ''}
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    window.deleteUser = async (username) => {
+        if (!confirm(`Benutzer "${username}" wirklich löschen?`)) return;
+        const r = await apiFetch(`/api/admin/users/${username}`, { method:'DELETE' });
+        if (r) loadUsers();
+    };
+
+    window.openChangePw = (username) => {
+        document.getElementById('user-modal-mode').value = 'password';
+        document.getElementById('user-modal-target').value = username;
+        document.getElementById('user-modal-title').textContent = `Passwort ändern: ${username}`;
+        document.getElementById('fg-username').style.display = 'none';
+        document.getElementById('fg-role').style.display = 'none';
+        document.getElementById('inp-new-pass').required = true;
+        document.getElementById('pw-label').innerHTML = 'Neues Passwort <span style="font-weight:400;opacity:0.6;font-size:0.75rem">(mind. 8 Zeichen)</span>';
+        document.getElementById('btn-user-submit').innerHTML = '<i class="fas fa-save"></i> Speichern';
+        document.getElementById('user-modal-error').style.display = 'none';
+        document.getElementById('user-modal-success').style.display = 'none';
+        document.getElementById('user-form').reset();
+        document.getElementById('modal-user').classList.add('open');
+    };
+
+    document.getElementById('btn-add-user').onclick = () => {
+        document.getElementById('user-modal-mode').value = 'create';
+        document.getElementById('user-modal-title').textContent = 'Neuer Benutzer';
+        document.getElementById('fg-username').style.display = 'block';
+        document.getElementById('fg-role').style.display = 'block';
+        document.getElementById('inp-new-pass').required = true;
+        document.getElementById('pw-label').innerHTML = 'Passwort <span style="font-weight:400;opacity:0.6;font-size:0.75rem">(mind. 8 Zeichen)</span>';
+        document.getElementById('btn-user-submit').innerHTML = '<i class="fas fa-user-plus"></i> Erstellen';
+        document.getElementById('user-modal-error').style.display = 'none';
+        document.getElementById('user-modal-success').style.display = 'none';
+        document.getElementById('user-form').reset();
+        document.getElementById('modal-user').classList.add('open');
+    };
+
+    document.getElementById('btn-cancel-user').onclick = () => document.getElementById('modal-user').classList.remove('open');
+
+    document.getElementById('user-form').onsubmit = async (e) => {
+        e.preventDefault();
+        const mode = document.getElementById('user-modal-mode').value;
+        const errBox = document.getElementById('user-modal-error');
+        const sucBox = document.getElementById('user-modal-success');
+        errBox.style.display = 'none'; sucBox.style.display = 'none';
+        let r;
+        if (mode === 'create') {
+            r = await apiFetch('/api/admin/users', { method:'POST', body: JSON.stringify({
+                username: document.getElementById('inp-new-user').value,
+                password: document.getElementById('inp-new-pass').value,
+                role: document.getElementById('inp-new-role').value
+            })});
+        } else {
+            const target = document.getElementById('user-modal-target').value;
+            r = await apiFetch(`/api/admin/users/${target}/password`, { method:'PATCH', body: JSON.stringify({
+                password: document.getElementById('inp-new-pass').value
+            })});
+        }
+        if (!r) return;
+        const data = await r.json();
+        if (r.ok) {
+            sucBox.textContent = mode === 'create' ? `Benutzer erfolgreich erstellt!` : 'Passwort geändert!';
+            sucBox.style.display = 'block';
+            document.getElementById('user-form').reset();
+            loadUsers();
+            setTimeout(() => document.getElementById('modal-user').classList.remove('open'), 1200);
+        } else {
+            errBox.textContent = data.message || 'Fehler'; errBox.style.display = 'block';
+        }
     };
 </script>
 </body>
