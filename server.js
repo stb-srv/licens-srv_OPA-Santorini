@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
+import nodemailer from 'nodemailer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,6 +23,54 @@ if (ADMIN_SECRET === 'change-me-in-production') {
 }
 if (HMAC_SECRET === 'hmac-change-me-in-production') {
     console.warn('⚠️  WARNING: HMAC_SECRET is not set in .env! Using insecure default.');
+}
+
+// --- SMTP Transporter ---
+let smtpTransporter = null;
+function createSmtpTransporter(config) {
+    if (!config.host || !config.user || !config.pass) return null;
+    return nodemailer.createTransport({
+        host: config.host,
+        port: parseInt(config.port) || 587,
+        secure: config.secure === 'true' || config.secure === true,
+        auth: { user: config.user, pass: config.pass }
+    });
+}
+
+// Initialize SMTP from .env on startup
+const envSmtp = {
+    host: process.env.SMTP_HOST || '',
+    port: process.env.SMTP_PORT || '587',
+    secure: process.env.SMTP_SECURE || 'false',
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+    from: process.env.SMTP_FROM || ''
+};
+if (envSmtp.host && envSmtp.user && envSmtp.pass) {
+    smtpTransporter = createSmtpTransporter(envSmtp);
+    console.log('📧  SMTP: Konfiguriert über .env');
+}
+
+async function getSmtpConfig(db) {
+    return db.smtp_config || null;
+}
+
+async function getActiveSmtp(db) {
+    // DB config has priority over .env
+    const cfg = db.smtp_config;
+    if (cfg && cfg.host && cfg.user && cfg.pass) {
+        return { transporter: createSmtpTransporter(cfg), from: cfg.from || cfg.user };
+    }
+    if (smtpTransporter) {
+        return { transporter: smtpTransporter, from: envSmtp.from || envSmtp.user };
+    }
+    return null;
+}
+
+async function sendMail(db, to, subject, html) {
+    const smtp = await getActiveSmtp(db);
+    if (!smtp) throw new Error('SMTP nicht konfiguriert');
+    await smtp.transporter.sendMail({ from: smtp.from, to, subject, html });
 }
 
 app.set('trust proxy', 1);
@@ -141,7 +190,6 @@ const addAuditLog = async (db, action, details, actor = 'system') => {
         action,
         details
     });
-    // keep last 2000 entries
     if (db.audit_log.length > 2000) db.audit_log = db.audit_log.slice(0, 2000);
 };
 
@@ -196,7 +244,7 @@ app.post('/api/v1/validate', validateLimiter, async (req, res) => {
         // --- Replay Protection (optional nonce) ---
         if (nonce) {
             if (!data.used_nonces) data.used_nonces = [];
-            const nonceAge = 5 * 60 * 1000; // 5 min window
+            const nonceAge = 5 * 60 * 1000;
             data.used_nonces = data.used_nonces.filter(n => Date.now() - n.ts < nonceAge);
             if (data.used_nonces.find(n => n.val === nonce)) {
                 await addAuditLog(data, 'replay_attack', { license_key, nonce, ip: clientIp });
@@ -209,7 +257,7 @@ app.post('/api/v1/validate', validateLimiter, async (req, res) => {
         // --- Device Management ---
         if (device_id) {
             if (!data.devices) data.devices = [];
-            const maxDevices = l.max_devices || 0; // 0 = unlimited
+            const maxDevices = l.max_devices || 0;
             const licDevices = data.devices.filter(d => d.license_key === license_key && d.active);
             const existing = licDevices.find(d => d.device_id === device_id);
 
@@ -248,7 +296,6 @@ app.post('/api/v1/validate', validateLimiter, async (req, res) => {
                 l.analytics.features[f] = (l.analytics.features[f] || 0) + 1;
             }
         }
-        // keep only last 90 days in daily stats
         const cutoff = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
         for (const d of Object.keys(l.analytics.daily)) {
             if (d < cutoff) delete l.analytics.daily[d];
@@ -264,8 +311,6 @@ app.post('/api/v1/validate', validateLimiter, async (req, res) => {
         await saveDB(data);
 
         const plan = PLAN_DEFINITIONS[l.type] || PLAN_DEFINITIONS['FREE'];
-
-        // Find linked customer
         const customer = l.customer_id ? (data.customers || []).find(c => c.id === l.customer_id) : null;
 
         const responsePayload = {
@@ -276,11 +321,9 @@ app.post('/api/v1/validate', validateLimiter, async (req, res) => {
             expires_at: l.expires_at,
             allowed_modules: l.allowed_modules || plan.modules,
             limits: l.limits || { max_dishes: plan.menu_items, max_tables: plan.max_tables },
-            // Extended info (only if customer linked)
             ...(customer ? { account_email: customer.email, company: customer.company } : {})
         };
 
-        // Sign response if HMAC_SECRET is properly set
         if (HMAC_SECRET !== 'hmac-change-me-in-production') {
             return res.json(signResponse(responsePayload));
         }
@@ -304,11 +347,9 @@ app.post('/api/v1/offline-token', validateLimiter, async (req, res) => {
             return res.status(403).json({ success: false, message: 'License invalid or expired' });
         }
         const plan = PLAN_DEFINITIONS[l.type] || PLAN_DEFINITIONS['FREE'];
-        const hours = Math.min(duration_hours || 24, 168); // max 7 days
+        const hours = Math.min(duration_hours || 24, 168);
         const token = jwt.sign({
-            license_key,
-            domain,
-            device_id,
+            license_key, domain, device_id,
             type: l.type,
             plan_label: plan.label,
             allowed_modules: l.allowed_modules || plan.modules,
@@ -326,7 +367,7 @@ app.post('/api/v1/offline-token', validateLimiter, async (req, res) => {
     }
 });
 
-// --- Offline Token Verify (client-side helper endpoint) ---
+// --- Offline Token Verify ---
 app.post('/api/v1/verify-offline-token', (req, res) => {
     const { offline_token } = req.body;
     if (!offline_token) return res.status(400).json({ success: false });
@@ -519,15 +560,21 @@ app.get('/api/admin/customers', requireAuth, async (req, res) => {
 });
 
 app.post('/api/admin/customers', requireAuth, async (req, res) => {
-    const { name, email, company, payment_status, notes } = req.body;
+    const { name, email, phone, contact_person, company, payment_status, notes } = req.body;
     if (!name) return res.status(400).json({ success: false, message: 'Name required' });
+    if (!email) return res.status(400).json({ success: false, message: 'E-Mail ist ein Pflichtfeld' });
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) return res.status(400).json({ success: false, message: 'Ungültige E-Mail-Adresse' });
     try {
         const db = await getDB();
         if (!db.customers) db.customers = [];
         const newCustomer = {
             id: crypto.randomUUID(),
             name,
-            email: email || null,
+            email,
+            phone: phone || null,
+            contact_person: contact_person || null,
             company: company || null,
             payment_status: payment_status || 'unknown',
             notes: notes || '',
@@ -547,9 +594,16 @@ app.patch('/api/admin/customers/:id', requireAuth, async (req, res) => {
         const db = await getDB();
         const customer = (db.customers || []).find(c => c.id === req.params.id);
         if (!customer) return res.status(404).json({ success: false, message: 'Customer not found' });
-        const { name, email, company, payment_status, notes } = req.body;
+        const { name, email, phone, contact_person, company, payment_status, notes } = req.body;
         if (name) customer.name = name;
-        if (email !== undefined) customer.email = email;
+        if (email !== undefined) {
+            if (!email) return res.status(400).json({ success: false, message: 'E-Mail ist ein Pflichtfeld' });
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) return res.status(400).json({ success: false, message: 'Ungültige E-Mail-Adresse' });
+            customer.email = email;
+        }
+        if (phone !== undefined) customer.phone = phone || null;
+        if (contact_person !== undefined) customer.contact_person = contact_person || null;
         if (company !== undefined) customer.company = company;
         if (payment_status) customer.payment_status = payment_status;
         if (notes !== undefined) customer.notes = notes;
@@ -582,6 +636,73 @@ app.patch('/api/admin/licenses/:key/customer', requireAuth, async (req, res) => 
         if (!l) return res.status(404).json({ success: false });
         l.customer_id = req.body.customer_id || null;
         await addAuditLog(db, 'license_customer_linked', { license_key: req.params.key, customer_id: l.customer_id, by: req.admin.username });
+        await saveDB(db);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
+// --- SMTP Config API ---
+app.get('/api/admin/smtp', requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+        const db = await getDB();
+        const cfg = db.smtp_config || {};
+        // Never return password in plaintext
+        res.json({
+            success: true,
+            smtp: {
+                host: cfg.host || '',
+                port: cfg.port || '587',
+                secure: cfg.secure || 'false',
+                user: cfg.user || '',
+                from: cfg.from || '',
+                configured: !!(cfg.host && cfg.user && cfg.pass)
+            }
+        });
+    } catch (e) {
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
+app.post('/api/admin/smtp', requireAuth, requireSuperAdmin, async (req, res) => {
+    const { host, port, secure, user, pass, from } = req.body;
+    if (!host || !user || !pass)
+        return res.status(400).json({ success: false, message: 'Host, Benutzer und Passwort sind Pflichtfelder' });
+    try {
+        const db = await getDB();
+        db.smtp_config = { host, port: port || '587', secure: secure || 'false', user, pass, from: from || user };
+        // Test connection
+        const transporter = createSmtpTransporter(db.smtp_config);
+        await transporter.verify();
+        await addAuditLog(db, 'smtp_config_updated', { host, user, by: req.admin.username });
+        await saveDB(db);
+        res.json({ success: true, message: 'SMTP-Konfiguration gespeichert und Verbindung erfolgreich getestet.' });
+    } catch (e) {
+        res.status(400).json({ success: false, message: `SMTP-Verbindungsfehler: ${e.message}` });
+    }
+});
+
+app.post('/api/admin/smtp/test', requireAuth, requireSuperAdmin, async (req, res) => {
+    const { to } = req.body;
+    if (!to) return res.status(400).json({ success: false, message: 'Empfänger-E-Mail fehlt' });
+    try {
+        const db = await getDB();
+        await sendMail(db, to,
+            'OPA License Server — SMTP Test',
+            '<h2>✅ SMTP Test erfolgreich</h2><p>Die SMTP-Konfiguration deines OPA License Servers funktioniert korrekt.</p>'
+        );
+        res.json({ success: true, message: `Test-E-Mail an ${to} gesendet.` });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+app.delete('/api/admin/smtp', requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+        const db = await getDB();
+        delete db.smtp_config;
+        await addAuditLog(db, 'smtp_config_deleted', { by: req.admin.username });
         await saveDB(db);
         res.json({ success: true });
     } catch (e) {
@@ -638,7 +759,6 @@ app.get('/api/admin/analytics', requireAuth, async (req, res) => {
         .slice(0, 10)
         .map(l => ({ license_key: l.license_key, customer_name: l.customer_name, type: l.type, usage_count: l.usage_count || 0, last_validated: l.last_validated }));
 
-    // aggregate daily across all licenses (last 30 days)
     const daily = {};
     for (const l of licenses) {
         if (l.analytics?.daily) {
@@ -648,7 +768,6 @@ app.get('/api/admin/analytics', requireAuth, async (req, res) => {
         }
     }
 
-    // aggregate feature usage
     const features = {};
     for (const l of licenses) {
         if (l.analytics?.features) {
@@ -677,7 +796,7 @@ app.get('/api/admin/audit-log', requireAuth, async (req, res) => {
     res.json({ logs: logs.slice(0, parseInt(limit)) });
 });
 
-// --- Impersonate (generate read-only token context) ---
+// --- Impersonate ---
 app.post('/api/admin/impersonate', requireAuth, requireSuperAdmin, async (req, res) => {
     const { license_key } = req.body;
     if (!license_key) return res.status(400).json({ success: false });
@@ -699,5 +818,6 @@ app.listen(PORT, () => {
     console.log(`\n🏘️  OPA License Server running on http://localhost:${PORT}`);
     console.log(`📋  Plans: ${Object.keys(PLAN_DEFINITIONS).join(' | ')}`);
     console.log(`🌐  CORS: ${allowedOrigins ? allowedOrigins.join(', ') : 'alle Origins erlaubt'}`);
-    console.log(`🔐  HMAC Signing: ${HMAC_SECRET !== 'hmac-change-me-in-production' ? 'AKTIV' : 'INAKTIV (HMAC_SECRET nicht gesetzt)'}\n`);
+    console.log(`🔐  HMAC Signing: ${HMAC_SECRET !== 'hmac-change-me-in-production' ? 'AKTIV' : 'INAKTIV (HMAC_SECRET nicht gesetzt)'}`);
+    console.log(`📧  SMTP: ${(envSmtp.host && envSmtp.user) ? `${envSmtp.host}:${envSmtp.port}` : 'nicht konfiguriert'}\n`);
 });
