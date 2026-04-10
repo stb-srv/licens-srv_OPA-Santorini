@@ -18,6 +18,29 @@ const PORT = process.env.PORT || 4000;
 const ADMIN_SECRET = process.env.ADMIN_SECRET || 'change-me-in-production';
 const HMAC_SECRET = process.env.HMAC_SECRET || 'hmac-change-me-in-production';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// STUFE 1: RSA-256 Schlüsselpaar für signierte Lizenz-Tokens
+// Private Key: nur auf diesem Server (in .env als RSA_PRIVATE_KEY)
+// Public Key:  hardcoded im CMS – kann keine gültige Signatur fälschen ohne Private Key
+// ─────────────────────────────────────────────────────────────────────────────
+const RSA_PRIVATE_KEY = process.env.RSA_PRIVATE_KEY
+    ? process.env.RSA_PRIVATE_KEY.replace(/\\n/g, '\n')
+    : null;
+
+// Public Key hardcoded – CMS-Clients verifizieren damit die Signatur lokal
+export const RSA_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAutES8Xqif1PpLJU9ClMJ
+rGfeCoUVOOni5/WiwGFdTd5ygYyie22fBheBA2fRek6xXDfGtC/QdIg7zbqI/0eQ
+V7DCcytIGJSfPRNW4t6cb7oRUVTbo74jia5GUDyJNLJPQDsPVWDvi6rpB+/hv+Uh
+rL3UQbHYwoJi/H5R2uwPsd9JaznGoygWhmaWpueXQkxYMRlupUWD1hT+OBSYWBnI
+l7NUVsJ8pDOE2u9REwVgBnJEbdA39YnZ2NB4W/5JZPLsM8pkp1QO32THcHixFUvC
+N+xMcoOA3fRdAICdI6kI9LccR4hzr7Btf/8Wbk0erF48Xw5NjFj0CZcRIjegiq2m
+HQIDAQAB
+-----END PUBLIC KEY-----`;
+
+if (!RSA_PRIVATE_KEY) {
+    console.warn('⚠️  WARNING: RSA_PRIVATE_KEY not set in .env – signed JWT tokens disabled! Set RSA_PRIVATE_KEY for full security.');
+}
 if (ADMIN_SECRET === 'change-me-in-production') {
     console.warn('⚠️  WARNING: ADMIN_SECRET is not set in .env! Using insecure default.');
 }
@@ -25,7 +48,18 @@ if (HMAC_SECRET === 'hmac-change-me-in-production') {
     console.warn('⚠️  WARNING: HMAC_SECRET is not set in .env! Using insecure default.');
 }
 
-// --- SMTP Transporter ---
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper: signierte Lizenz-JWT erstellen (RS256)
+// Enthält domain-binding (Stufe 2) + Ablaufzeit (Stufe 3 Basis)
+// ─────────────────────────────────────────────────────────────────────────────
+const createSignedLicenseToken = (payload, expiresIn = '25h') => {
+    if (!RSA_PRIVATE_KEY) return null;
+    return jwt.sign(payload, RSA_PRIVATE_KEY, { algorithm: 'RS256', expiresIn });
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SMTP Transporter
+// ─────────────────────────────────────────────────────────────────────────────
 let smtpTransporter = null;
 function createSmtpTransporter(config) {
     if (!config.host || !config.user || !config.pass) return null;
@@ -37,7 +71,6 @@ function createSmtpTransporter(config) {
     });
 }
 
-// Initialize SMTP from .env on startup
 const envSmtp = {
     host: process.env.SMTP_HOST || '',
     port: process.env.SMTP_PORT || '587',
@@ -51,12 +84,7 @@ if (envSmtp.host && envSmtp.user && envSmtp.pass) {
     console.log('📧  SMTP: Konfiguriert über .env');
 }
 
-async function getSmtpConfig(db) {
-    return db.smtp_config || null;
-}
-
 async function getActiveSmtp(db) {
-    // DB config has priority over .env
     const cfg = db.smtp_config;
     if (cfg && cfg.host && cfg.user && cfg.pass) {
         return { transporter: createSmtpTransporter(cfg), from: cfg.from || cfg.user };
@@ -93,17 +121,22 @@ app.use(cors({
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- Rate Limiters ---
+// ─────────────────────────────────────────────────────────────────────────────
+// Rate Limiters
+// ─────────────────────────────────────────────────────────────────────────────
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, max: 10,
     message: { success: false, message: 'Too many login attempts. Please wait 15 minutes.' }
 });
 const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 60 });
-const validateLimiter = rateLimit({ windowMs: 60 * 1000, max: 30,
+const validateLimiter = rateLimit({
+    windowMs: 60 * 1000, max: 30,
     message: { status: 'rate_limited', message: 'Too many validation requests.' }
 });
 
-// --- Auth Middleware ---
+// ─────────────────────────────────────────────────────────────────────────────
+// Auth Middleware
+// ─────────────────────────────────────────────────────────────────────────────
 const requireAuth = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -118,7 +151,9 @@ const requireSuperAdmin = (req, res, next) => {
     next();
 };
 
-// --- Plan Definitions ---
+// ─────────────────────────────────────────────────────────────────────────────
+// Plan Definitions
+// ─────────────────────────────────────────────────────────────────────────────
 export const PLAN_DEFINITIONS = {
     FREE: {
         label: 'Free', menu_items: 10, max_tables: 5, expires_days: 36500,
@@ -142,7 +177,9 @@ export const PLAN_DEFINITIONS = {
     }
 };
 
-// --- DB Utility ---
+// ─────────────────────────────────────────────────────────────────────────────
+// DB Utility
+// ─────────────────────────────────────────────────────────────────────────────
 const getDB = async () => {
     const data = JSON.parse(await readFile(DB_PATH, 'utf-8'));
     if (!data.customers) data.customers = [];
@@ -153,14 +190,15 @@ const getDB = async () => {
 };
 const saveDB = async (data) => await writeFile(DB_PATH, JSON.stringify(data, null, 2));
 
-// --- Key Generator ---
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
 const generateKey = (type) => {
-    const prefix = { FREE:'OPA-FREE', STARTER:'OPA-START', PRO:'OPA-PRO', PRO_PLUS:'OPA-PROPLUS', ENTERPRISE:'OPA-ENT' }[type] || 'OPA-UNKNOWN';
+    const prefix = { FREE: 'OPA-FREE', STARTER: 'OPA-START', PRO: 'OPA-PRO', PRO_PLUS: 'OPA-PROPLUS', ENTERPRISE: 'OPA-ENT' }[type] || 'OPA-UNKNOWN';
     const rand = crypto.randomBytes(4).toString('hex').toUpperCase();
     return `${prefix}-${rand}-${new Date().getFullYear()}`;
 };
 
-// --- Domain Matching Helper ---
 const domainMatches = (pattern, domain) => {
     if (!pattern || pattern === '*') return true;
     if (!domain) return true;
@@ -173,14 +211,12 @@ const domainMatches = (pattern, domain) => {
     return false;
 };
 
-// --- HMAC Signing Helper ---
 const signResponse = (payload) => {
     const data = JSON.stringify(payload);
     const sig = crypto.createHmac('sha256', HMAC_SECRET).update(data).digest('hex');
     return { ...payload, _sig: sig, _ts: Date.now() };
 };
 
-// --- Audit Log Helper ---
 const addAuditLog = async (db, action, details, actor = 'system') => {
     if (!db.audit_log) db.audit_log = [];
     db.audit_log.unshift({
@@ -193,7 +229,6 @@ const addAuditLog = async (db, action, details, actor = 'system') => {
     if (db.audit_log.length > 2000) db.audit_log = db.audit_log.slice(0, 2000);
 };
 
-// --- Get client IP ---
 const getClientIp = (req) => {
     return req.headers['x-forwarded-for']?.split(',')[0]?.trim()
         || req.headers['x-real-ip']
@@ -201,11 +236,16 @@ const getClientIp = (req) => {
         || 'unknown';
 };
 
-// ════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
 // PUBLIC API
-// ════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
 
-// --- Public Validation API (BACKWARD COMPATIBLE) ---
+// ─────────────────────────────────────────────────────────────────────────────
+// STUFE 1+2+3: Haupt-Validate Endpoint
+// - Gibt jetzt zusätzlich einen RS256-signierten license_token zurück
+// - token enthält: domain (Stufe 2 binding), exp (Stufe 3 kurze TTL 25h)
+// - CMS muss token mit hardcoded Public Key verifizieren → DB-Edit hilft nicht
+// ─────────────────────────────────────────────────────────────────────────────
 app.post('/api/v1/validate', validateLimiter, async (req, res) => {
     const { license_key, domain, device_id, device_type, nonce, features_used } = req.body;
     if (!license_key) return res.status(400).json({ status: 'invalid', message: 'No key provided' });
@@ -235,13 +275,14 @@ app.post('/api/v1/validate', validateLimiter, async (req, res) => {
             return res.status(403).json({ status: l.status, message: 'Lizenz ist nicht aktiv.' });
         }
 
+        // STUFE 2: Domain-Binding Prüfung
         if (!domainMatches(l.associated_domain, domain)) {
             await addAuditLog(data, 'validate_failed', { license_key, reason: 'domain_mismatch', domain, ip: clientIp });
             await saveDB(data);
             return res.status(403).json({ status: 'domain_mismatch', message: `Lizenz ist nicht für Domain "${domain}" gültig.` });
         }
 
-        // --- Replay Protection (optional nonce) ---
+        // Replay Protection (optional nonce)
         if (nonce) {
             if (!data.used_nonces) data.used_nonces = [];
             const nonceAge = 5 * 60 * 1000;
@@ -254,7 +295,7 @@ app.post('/api/v1/validate', validateLimiter, async (req, res) => {
             data.used_nonces.push({ val: nonce, ts: Date.now() });
         }
 
-        // --- Device Management ---
+        // Device Management
         if (device_id) {
             if (!data.devices) data.devices = [];
             const maxDevices = l.max_devices || 0;
@@ -285,7 +326,7 @@ app.post('/api/v1/validate', validateLimiter, async (req, res) => {
             }
         }
 
-        // --- Analytics tracking ---
+        // Analytics tracking
         l.last_validated = new Date().toISOString();
         l.usage_count = (l.usage_count || 0) + 1;
         if (!l.analytics) l.analytics = { daily: {}, features: {} };
@@ -324,10 +365,33 @@ app.post('/api/v1/validate', validateLimiter, async (req, res) => {
             ...(customer ? { account_email: customer.email, company: customer.company } : {})
         };
 
-        if (HMAC_SECRET !== 'hmac-change-me-in-production') {
-            return res.json(signResponse(responsePayload));
+        // ── STUFE 1: Signiertes RS256 Token zurückgeben ──────────────────────
+        // Das CMS soll dieses token mit RSA_PUBLIC_KEY verifizieren.
+        // Enthält domain (Stufe 2 binding) + exp 25h (Stufe 3 periodische Prüfung).
+        // Wer die DB manipuliert, hat kein gültiges token – Signatur schlägt fehl.
+        const tokenPayload = {
+            license_key,
+            type: l.type,
+            plan_label: plan.label,
+            expires_at: l.expires_at,
+            allowed_modules: l.allowed_modules || plan.modules,
+            limits: l.limits || { max_dishes: plan.menu_items, max_tables: plan.max_tables },
+            domain: domain || l.associated_domain,  // STUFE 2: domain hardcoded in Signatur
+            issued_at: Math.floor(Date.now() / 1000)
+        };
+
+        const signedToken = createSignedLicenseToken(tokenPayload, '25h');
+
+        const finalResponse = { ...responsePayload };
+        if (signedToken) {
+            finalResponse.license_token = signedToken;           // RS256 signiert
+            finalResponse.license_token_public_key = RSA_PUBLIC_KEY; // CMS kann direkt verifizieren
         }
-        return res.json(responsePayload);
+
+        if (HMAC_SECRET !== 'hmac-change-me-in-production') {
+            return res.json(signResponse(finalResponse));
+        }
+        return res.json(finalResponse);
 
     } catch (e) {
         console.error(e);
@@ -335,7 +399,91 @@ app.post('/api/v1/validate', validateLimiter, async (req, res) => {
     }
 });
 
-// --- Offline Token Generation ---
+// ─────────────────────────────────────────────────────────────────────────────
+// STUFE 1: Public Key Endpoint
+// CMS kann den Public Key abrufen und gecacht lokal speichern
+// ─────────────────────────────────────────────────────────────────────────────
+app.get('/api/v1/public-key', (req, res) => {
+    res.json({ public_key: RSA_PUBLIC_KEY, algorithm: 'RS256' });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STUFE 3: Heartbeat / Periodische Online-Validierung
+// CMS pingt alle 24h an – gibt frisches signiertes token zurück
+// Schlägt 3x fehl → CMS degradiert auf FREE
+// ─────────────────────────────────────────────────────────────────────────────
+app.post('/api/v1/heartbeat', validateLimiter, async (req, res) => {
+    const { license_key, domain, license_token } = req.body;
+    if (!license_key) return res.status(400).json({ status: 'invalid', message: 'No key provided' });
+
+    const clientIp = getClientIp(req);
+
+    try {
+        const data = await getDB();
+        const l = data.licenses.find(lic => lic.license_key === license_key);
+
+        if (!l || l.status !== 'active' || new Date(l.expires_at) < new Date()) {
+            await addAuditLog(data, 'heartbeat_failed', { license_key, reason: 'invalid_or_expired', ip: clientIp });
+            await saveDB(data);
+            return res.status(403).json({ status: 'invalid', message: 'Lizenz ungültig oder abgelaufen.' });
+        }
+
+        // Domain-Check beim Heartbeat (Stufe 2)
+        if (domain && !domainMatches(l.associated_domain, domain)) {
+            await addAuditLog(data, 'heartbeat_failed', { license_key, reason: 'domain_mismatch', domain, ip: clientIp });
+            await saveDB(data);
+            return res.status(403).json({ status: 'domain_mismatch', message: 'Domain stimmt nicht überein.' });
+        }
+
+        l.last_heartbeat = new Date().toISOString();
+        await addAuditLog(data, 'heartbeat_ok', { license_key, domain, ip: clientIp });
+        await saveDB(data);
+
+        const plan = PLAN_DEFINITIONS[l.type] || PLAN_DEFINITIONS['FREE'];
+
+        // Frisches RS256 Token (25h gültig)
+        const tokenPayload = {
+            license_key,
+            type: l.type,
+            plan_label: plan.label,
+            expires_at: l.expires_at,
+            allowed_modules: l.allowed_modules || plan.modules,
+            limits: l.limits || { max_dishes: plan.menu_items, max_tables: plan.max_tables },
+            domain: domain || l.associated_domain,
+            issued_at: Math.floor(Date.now() / 1000)
+        };
+
+        const signedToken = createSignedLicenseToken(tokenPayload, '25h');
+
+        return res.json({
+            status: 'ok',
+            next_heartbeat_in_hours: 24,
+            license_token: signedToken,
+            expires_at: l.expires_at
+        });
+
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ status: 'error', message: 'Internal server error' });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STUFE 1: Token verifizieren (für CMS-seitige Verifikation via Server)
+// Alternativ: CMS verifiziert lokal mit dem hardcoded Public Key (sicherer)
+// ─────────────────────────────────────────────────────────────────────────────
+app.post('/api/v1/verify-license-token', validateLimiter, (req, res) => {
+    const { license_token } = req.body;
+    if (!license_token) return res.status(400).json({ valid: false, message: 'No token provided' });
+    try {
+        const decoded = jwt.verify(license_token, RSA_PUBLIC_KEY, { algorithms: ['RS256'] });
+        res.json({ valid: true, payload: decoded });
+    } catch (e) {
+        res.status(401).json({ valid: false, message: 'Ungültiges oder abgelaufenes Token: ' + e.message });
+    }
+});
+
+// Offline Token Generation (unverändert)
 app.post('/api/v1/offline-token', validateLimiter, async (req, res) => {
     const { license_key, domain, device_id, duration_hours } = req.body;
     if (!license_key) return res.status(400).json({ success: false, message: 'No key provided' });
@@ -367,7 +515,6 @@ app.post('/api/v1/offline-token', validateLimiter, async (req, res) => {
     }
 });
 
-// --- Offline Token Verify ---
 app.post('/api/v1/verify-offline-token', (req, res) => {
     const { offline_token } = req.body;
     if (!offline_token) return res.status(400).json({ success: false });
@@ -379,11 +526,10 @@ app.post('/api/v1/verify-offline-token', (req, res) => {
     }
 });
 
-// ════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
 // ADMIN API
-// ════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
 
-// --- Admin Login ---
 app.post('/api/admin/login', loginLimiter, async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password)
@@ -415,7 +561,6 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
     }
 });
 
-// --- User Management (superadmin only) ---
 app.get('/api/admin/users', requireAuth, requireSuperAdmin, async (req, res) => {
     const db = await getDB();
     const users = (db.admins || []).map(({ password_hash, ...u }) => u);
@@ -486,10 +631,8 @@ app.patch('/api/admin/users/:username/password', requireAuth, async (req, res) =
     }
 });
 
-// --- Plans ---
 app.get('/api/admin/plans', requireAuth, (req, res) => res.json(PLAN_DEFINITIONS));
 
-// --- Licenses ---
 app.get('/api/admin/licenses', requireAuth, async (req, res) => {
     const db = await getDB();
     const now = new Date();
@@ -521,6 +664,7 @@ app.post('/api/admin/licenses', requireAuth, async (req, res) => {
         max_devices: raw.max_devices ? parseInt(raw.max_devices) : 0,
         usage_count: 0,
         last_validated: null,
+        last_heartbeat: null,
         validated_domain: null,
         validated_domains: [],
         analytics: { daily: {}, features: {} },
@@ -553,7 +697,6 @@ app.delete('/api/admin/licenses/:key', requireAuth, async (req, res) => {
     res.json({ success: true });
 });
 
-// --- Customer API ---
 app.get('/api/admin/customers', requireAuth, async (req, res) => {
     const db = await getDB();
     res.json({ customers: db.customers || [] });
@@ -563,7 +706,6 @@ app.post('/api/admin/customers', requireAuth, async (req, res) => {
     const { name, email, phone, contact_person, company, payment_status, notes } = req.body;
     if (!name) return res.status(400).json({ success: false, message: 'Name required' });
     if (!email) return res.status(400).json({ success: false, message: 'E-Mail ist ein Pflichtfeld' });
-    // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) return res.status(400).json({ success: false, message: 'Ungültige E-Mail-Adresse' });
     try {
@@ -571,8 +713,7 @@ app.post('/api/admin/customers', requireAuth, async (req, res) => {
         if (!db.customers) db.customers = [];
         const newCustomer = {
             id: crypto.randomUUID(),
-            name,
-            email,
+            name, email,
             phone: phone || null,
             contact_person: contact_person || null,
             company: company || null,
@@ -628,7 +769,6 @@ app.delete('/api/admin/customers/:id', requireAuth, async (req, res) => {
     }
 });
 
-// Link license to customer
 app.patch('/api/admin/licenses/:key/customer', requireAuth, async (req, res) => {
     try {
         const db = await getDB();
@@ -643,12 +783,10 @@ app.patch('/api/admin/licenses/:key/customer', requireAuth, async (req, res) => 
     }
 });
 
-// --- SMTP Config API ---
 app.get('/api/admin/smtp', requireAuth, requireSuperAdmin, async (req, res) => {
     try {
         const db = await getDB();
         const cfg = db.smtp_config || {};
-        // Never return password in plaintext
         res.json({
             success: true,
             smtp: {
@@ -672,7 +810,6 @@ app.post('/api/admin/smtp', requireAuth, requireSuperAdmin, async (req, res) => 
     try {
         const db = await getDB();
         db.smtp_config = { host, port: port || '587', secure: secure || 'false', user, pass, from: from || user };
-        // Test connection
         const transporter = createSmtpTransporter(db.smtp_config);
         await transporter.verify();
         await addAuditLog(db, 'smtp_config_updated', { host, user, by: req.admin.username });
@@ -710,7 +847,6 @@ app.delete('/api/admin/smtp', requireAuth, requireSuperAdmin, async (req, res) =
     }
 });
 
-// --- Device Management API ---
 app.get('/api/admin/devices', requireAuth, async (req, res) => {
     const db = await getDB();
     const { license_key } = req.query;
@@ -748,7 +884,6 @@ app.delete('/api/admin/devices/:id', requireAuth, async (req, res) => {
     }
 });
 
-// --- Analytics API ---
 app.get('/api/admin/analytics', requireAuth, async (req, res) => {
     const db = await getDB();
     const licenses = db.licenses || [];
@@ -786,7 +921,6 @@ app.get('/api/admin/analytics', requireAuth, async (req, res) => {
     });
 });
 
-// --- Audit Log API ---
 app.get('/api/admin/audit-log', requireAuth, async (req, res) => {
     const db = await getDB();
     const { limit = 100, action, license_key } = req.query;
@@ -796,7 +930,6 @@ app.get('/api/admin/audit-log', requireAuth, async (req, res) => {
     res.json({ logs: logs.slice(0, parseInt(limit)) });
 });
 
-// --- Impersonate ---
 app.post('/api/admin/impersonate', requireAuth, requireSuperAdmin, async (req, res) => {
     const { license_key } = req.body;
     if (!license_key) return res.status(400).json({ success: false });
@@ -819,5 +952,6 @@ app.listen(PORT, () => {
     console.log(`📋  Plans: ${Object.keys(PLAN_DEFINITIONS).join(' | ')}`);
     console.log(`🌐  CORS: ${allowedOrigins ? allowedOrigins.join(', ') : 'alle Origins erlaubt'}`);
     console.log(`🔐  HMAC Signing: ${HMAC_SECRET !== 'hmac-change-me-in-production' ? 'AKTIV' : 'INAKTIV (HMAC_SECRET nicht gesetzt)'}`);
+    console.log(`🔑  RSA JWT Signing: ${RSA_PRIVATE_KEY ? 'AKTIV (RS256)' : 'INAKTIV – RSA_PRIVATE_KEY nicht gesetzt!'}`);
     console.log(`📧  SMTP: ${(envSmtp.host && envSmtp.user) ? `${envSmtp.host}:${envSmtp.port}` : 'nicht konfiguriert'}\n`);
 });
