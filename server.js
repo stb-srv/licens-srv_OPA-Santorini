@@ -163,6 +163,62 @@ export const PLAN_DEFINITIONS = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CORS – dynamisch aus DB + .env
+// Beim Erstellen einer Lizenz mit Domain werden automatisch
+// https://domain und http://domain als erlaubte Origins gespeichert.
+// ─────────────────────────────────────────────────────────────────────────────
+const rawCorsOrigins = process.env.CORS_ORIGINS || '';
+const staticAllowedOrigins = rawCorsOrigins
+    ? rawCorsOrigins.split(',').map(o => o.trim()).filter(Boolean)
+    : [];
+
+async function getDynamicAllowedOrigins() {
+    // Alle aktiven Lizenz-Domains aus DB holen und als http+https Origins bauen
+    try {
+        const [rows] = await db.query(
+            "SELECT DISTINCT associated_domain FROM licenses WHERE status = 'active' AND associated_domain IS NOT NULL AND associated_domain != '*'"
+        );
+        const dynamic = [];
+        for (const { associated_domain } of rows) {
+            const clean = associated_domain.replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^\*\./, '');
+            if (clean) {
+                dynamic.push(`https://${clean}`);
+                dynamic.push(`http://${clean}`);
+            }
+        }
+        return dynamic;
+    } catch {
+        return [];
+    }
+}
+
+app.set('trust proxy', 1);
+
+app.use(cors({
+    origin: async (origin, callback) => {
+        // Server-zu-Server oder direkte Aufrufe (kein Origin-Header) immer erlauben
+        if (!origin) return callback(null, true);
+
+        // Wenn CORS_ORIGINS leer ist → alle Origins erlaubt (Open Mode)
+        if (staticAllowedOrigins.length === 0) return callback(null, true);
+
+        // Statische Origins aus .env prüfen
+        if (staticAllowedOrigins.includes(origin)) return callback(null, true);
+
+        // Dynamische Origins aus DB prüfen (aktive Lizenz-Domains)
+        const dynamic = await getDynamicAllowedOrigins();
+        if (dynamic.includes(origin)) return callback(null, true);
+
+        console.error(`❌ CORS: Origin '${origin}' nicht erlaubt.`);
+        callback(new Error(`CORS: Origin '${origin}' nicht erlaubt.`), false);
+    },
+    credentials: true
+}));
+
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SMTP
 // ─────────────────────────────────────────────────────────────────────────────
 let smtpTransporter = null;
@@ -229,29 +285,6 @@ async function fireWebhook(event, payload) {
         }
     }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Express Setup
-// ─────────────────────────────────────────────────────────────────────────────
-app.set('trust proxy', 1);
-
-const rawCorsOrigins = process.env.CORS_ORIGINS || '';
-const allowedOrigins = rawCorsOrigins
-    ? rawCorsOrigins.split(',').map(o => o.trim()).filter(Boolean)
-    : null;
-
-app.use(cors({
-    origin: (origin, callback) => {
-        if (!origin) return callback(null, true);
-        if (!allowedOrigins || allowedOrigins.length === 0) return callback(null, true);
-        if (allowedOrigins.includes(origin)) return callback(null, true);
-        callback(new Error(`CORS: Origin ${origin} nicht erlaubt`), false);
-    },
-    credentials: true
-}));
-
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Rate Limiters
@@ -349,7 +382,7 @@ async function runExpiryCron() {
                     `⏰ OPA! Santorini Lizenz läuft in ${daysLeft} Tagen ab`,
                     `<h2>🏛️ OPA! Santorini – Lizenzablauf</h2>
                     <p>Hallo ${lic.customer_name},</p>
-                    <p>deine <strong>${lic.type}</strong>-Lizenz (<code>${lic.license_key}</code>) läuft am 
+                    <p>deine <strong>${lic.type}</strong>-Lizenz (<code>${lic.license_key}</code>) läuft am
                     <strong>${new Date(lic.expires_at).toLocaleDateString('de-DE')}</strong> ab (in ${daysLeft} Tagen).</p>
                     <p>Bitte wende dich an deinen Administrator, um die Lizenz zu verlängern.</p>
                     <p style="color:#888;font-size:12px">OPA! Santorini License Server</p>`
@@ -513,7 +546,9 @@ app.post('/api/v1/validate', validateLimiter, async (req, res) => {
         const signedToken = createSignedLicenseToken(tokenPayload, '25h');
         const finalResponse = { ...responsePayload };
         if (signedToken) {
+            // Beide Felder senden: license_token (neu) UND token (Alias für ältere CMS-Versionen)
             finalResponse.license_token = signedToken;
+            finalResponse.token = signedToken;
             finalResponse.license_token_public_key = RSA_PUBLIC_KEY;
         }
 
@@ -566,7 +601,13 @@ app.post('/api/v1/heartbeat', validateLimiter, async (req, res) => {
         };
 
         const signedToken = createSignedLicenseToken(tokenPayload, '25h');
-        return res.json({ status: 'ok', next_heartbeat_in_hours: 24, license_token: signedToken, expires_at: l.expires_at });
+        return res.json({
+            status: 'ok',
+            next_heartbeat_in_hours: 24,
+            license_token: signedToken,
+            token: signedToken,  // Alias
+            expires_at: l.expires_at
+        });
 
     } catch (e) {
         console.error(e);
@@ -1046,7 +1087,7 @@ app.post('/api/admin/impersonate', requireAuth, requireSuperAdmin, async (req, r
 app.listen(PORT, () => {
     console.log(`\n🏛️  OPA! Santorini License Server v2.0 läuft auf http://localhost:${PORT}`);
     console.log(`📋  Pläne: ${Object.keys(PLAN_DEFINITIONS).join(' | ')}`);
-    console.log(`🌐  CORS: ${allowedOrigins ? allowedOrigins.join(', ') : 'alle Origins erlaubt'}`);
+    console.log(`🌐  CORS: ${staticAllowedOrigins.length > 0 ? staticAllowedOrigins.join(', ') + ' + dynamisch aus DB' : 'alle Origins erlaubt (CORS_ORIGINS nicht gesetzt)'}`);
     console.log(`🔐  HMAC Signing: ${HMAC_SECRET !== 'hmac-change-me-in-production' ? 'AKTIV' : 'INAKTIV'}`);
     console.log(`🔑  RSA JWT Signing: ${RSA_PRIVATE_KEY ? 'AKTIV (RS256)' : 'INAKTIV – RSA_PRIVATE_KEY nicht gesetzt!'}`);
     console.log(`📧  SMTP: ${(envSmtp.host && envSmtp.user) ? `${envSmtp.host}:${envSmtp.port}` : 'nicht konfiguriert'}\n`);
