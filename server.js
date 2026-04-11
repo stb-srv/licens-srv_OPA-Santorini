@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { fileURLToPath } from 'url';
@@ -37,9 +38,10 @@ const db = mysql.createPool({
 try {
     const conn = await db.getConnection();
     conn.release();
-    console.log('✅  MySQL Verbindung erfolgreich');
+    console.log('✅  MySQL Verbindung erfolgreich –', process.env.DB_HOST + ':' + (process.env.DB_PORT || 3306));
 } catch (e) {
     console.error('❌  MySQL Verbindungsfehler:', e.message);
+    console.error('    Host:', process.env.DB_HOST || '127.0.0.1 (Fallback – DB_HOST nicht gesetzt!)');
     process.exit(1);
 }
 
@@ -358,7 +360,6 @@ async function runExpiryCron() {
             }
         }
 
-        // Abgelaufene Lizenzen automatisch auf 'expired' setzen
         const [result] = await db.query(`
             UPDATE licenses SET status = 'expired'
             WHERE status = 'active' AND expires_at < NOW()
@@ -369,7 +370,6 @@ async function runExpiryCron() {
             await fireWebhook('licenses.auto_expired', { count: result.affectedRows });
         }
 
-        // Nonces aufräumen
         await db.query('DELETE FROM used_nonces WHERE ts < ?', [Date.now() - 5 * 60 * 1000]);
 
     } catch (e) {
@@ -377,9 +377,8 @@ async function runExpiryCron() {
     }
 }
 
-// Cron alle 24h ausführen
 setInterval(runExpiryCron, 24 * 60 * 60 * 1000);
-runExpiryCron(); // Beim Start sofort einmal ausführen
+runExpiryCron();
 
 // ════════════════════════════════════════════════════════════════════════════
 // PUBLIC API
@@ -414,7 +413,6 @@ app.post('/api/v1/validate', validateLimiter, async (req, res) => {
             return res.status(403).json({ status: 'domain_mismatch', message: `Lizenz ist nicht für Domain "${domain}" gültig.` });
         }
 
-        // Replay Protection
         if (nonce) {
             const [nonceRows] = await db.query('SELECT val FROM used_nonces WHERE val = ?', [nonce]);
             if (nonceRows.length > 0) {
@@ -424,7 +422,6 @@ app.post('/api/v1/validate', validateLimiter, async (req, res) => {
             await db.query('INSERT INTO used_nonces (val, ts) VALUES (?, ?)', [nonce, Date.now()]);
         }
 
-        // Device Management
         if (device_id) {
             const maxDevices = l.max_devices || 0;
             const [licDevices] = await db.query(
@@ -450,7 +447,6 @@ app.post('/api/v1/validate', validateLimiter, async (req, res) => {
             }
         }
 
-        // Analytics
         const today = new Date().toISOString().slice(0, 10);
         let dailyAnalytics = {};
         let featuresAnalytics = {};
@@ -488,7 +484,7 @@ app.post('/api/v1/validate', validateLimiter, async (req, res) => {
         const plan = PLAN_DEFINITIONS[l.type] || PLAN_DEFINITIONS['FREE'];
         const [custRows] = l.customer_id
             ? await db.query('SELECT email, company FROM customers WHERE id = ?', [l.customer_id])
-            : [[]]; 
+            : [[]];
         const customer = custRows[0] || null;
 
         let allowedModules = plan.modules;
@@ -773,7 +769,6 @@ app.patch('/api/admin/licenses/:key/status', requireAuth, async (req, res) => {
     }
 });
 
-// NEU: Lizenz verlängern
 app.post('/api/admin/licenses/:key/renew', requireAuth, async (req, res) => {
     try {
         const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [req.params.key]);
@@ -781,7 +776,6 @@ app.post('/api/admin/licenses/:key/renew', requireAuth, async (req, res) => {
         if (!l) return res.status(404).json({ success: false, message: 'Lizenz nicht gefunden' });
         const plan = PLAN_DEFINITIONS[l.type] || PLAN_DEFINITIONS['FREE'];
         const days = req.body.days || plan.expires_days;
-        // Verlängerung ab jetzt oder ab aktuellem Ablaufdatum (je nachdem was später ist)
         const baseDate = new Date(l.expires_at) > new Date() ? new Date(l.expires_at) : new Date();
         const newExpiry = new Date(baseDate.getTime() + days * 86400000);
         const newExpiryStr = newExpiry.toISOString().slice(0, 19).replace('T', ' ');
@@ -1001,7 +995,6 @@ app.get('/api/admin/audit-log', requireAuth, async (req, res) => {
     res.json({ logs });
 });
 
-// Webhooks verwalten
 app.get('/api/admin/webhooks', requireAuth, requireSuperAdmin, async (req, res) => {
     const [rows] = await db.query('SELECT id, url, events, active, created_at FROM webhooks');
     res.json({ webhooks: rows });
