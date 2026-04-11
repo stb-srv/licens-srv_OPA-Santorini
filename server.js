@@ -1,6 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import { readFile, writeFile } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import crypto from 'crypto';
@@ -8,26 +7,49 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
 import nodemailer from 'nodemailer';
+import mysql from 'mysql2/promise';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DB_PATH = path.join(__dirname, 'db.json');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 const ADMIN_SECRET = process.env.ADMIN_SECRET || 'change-me-in-production';
 const HMAC_SECRET = process.env.HMAC_SECRET || 'hmac-change-me-in-production';
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STUFE 1: RSA-256 Schlüsselpaar für signierte Lizenz-Tokens
-// Private Key: nur auf diesem Server (in .env als RSA_PRIVATE_KEY)
-// Public Key:  hardcoded im CMS – kann keine gültige Signatur fälschen ohne Private Key
+// MySQL Connection Pool
+// ─────────────────────────────────────────────────────────────────────────────
+const db = mysql.createPool({
+    host: process.env.DB_HOST || '127.0.0.1',
+    port: parseInt(process.env.DB_PORT) || 3306,
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASS || '',
+    database: process.env.DB_NAME || 'opa_licenses',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    timezone: '+00:00'
+});
+
+// Test DB connection on startup
+try {
+    const conn = await db.getConnection();
+    conn.release();
+    console.log('✅  MySQL Verbindung erfolgreich');
+} catch (e) {
+    console.error('❌  MySQL Verbindungsfehler:', e.message);
+    process.exit(1);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RSA Keys
 // ─────────────────────────────────────────────────────────────────────────────
 const RSA_PRIVATE_KEY = process.env.RSA_PRIVATE_KEY
     ? process.env.RSA_PRIVATE_KEY.replace(/\\n/g, '\n')
     : null;
 
-// Public Key hardcoded – CMS-Clients verifizieren damit die Signatur lokal
 export const RSA_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAutES8Xqif1PpLJU9ClMJ
 rGfeCoUVOOni5/WiwGFdTd5ygYyie22fBheBA2fRek6xXDfGtC/QdIg7zbqI/0eQ
@@ -38,27 +60,108 @@ N+xMcoOA3fRdAICdI6kI9LccR4hzr7Btf/8Wbk0erF48Xw5NjFj0CZcRIjegiq2m
 HQIDAQAB
 -----END PUBLIC KEY-----`;
 
-if (!RSA_PRIVATE_KEY) {
-    console.warn('⚠️  WARNING: RSA_PRIVATE_KEY not set in .env – signed JWT tokens disabled! Set RSA_PRIVATE_KEY for full security.');
-}
-if (ADMIN_SECRET === 'change-me-in-production') {
-    console.warn('⚠️  WARNING: ADMIN_SECRET is not set in .env! Using insecure default.');
-}
-if (HMAC_SECRET === 'hmac-change-me-in-production') {
-    console.warn('⚠️  WARNING: HMAC_SECRET is not set in .env! Using insecure default.');
-}
+if (!RSA_PRIVATE_KEY) console.warn('⚠️  RSA_PRIVATE_KEY nicht gesetzt – JWT Signing deaktiviert!');
+if (ADMIN_SECRET === 'change-me-in-production') console.warn('⚠️  ADMIN_SECRET ist unsicher!');
+if (HMAC_SECRET === 'hmac-change-me-in-production') console.warn('⚠️  HMAC_SECRET ist unsicher!');
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper: signierte Lizenz-JWT erstellen (RS256)
-// Enthält domain-binding (Stufe 2) + Ablaufzeit (Stufe 3 Basis)
-// ─────────────────────────────────────────────────────────────────────────────
 const createSignedLicenseToken = (payload, expiresIn = '25h') => {
     if (!RSA_PRIVATE_KEY) return null;
     return jwt.sign(payload, RSA_PRIVATE_KEY, { algorithm: 'RS256', expiresIn });
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SMTP Transporter
+// OPA! Santorini Plan Definitionen
+// ─────────────────────────────────────────────────────────────────────────────
+export const PLAN_DEFINITIONS = {
+    FREE: {
+        label: 'Free',
+        menu_items: 30,
+        max_tables: 5,
+        expires_days: 36500,
+        modules: {
+            menu_edit: true,
+            multilanguage: false,
+            seasonal_menu: false,
+            orders_kitchen: false,
+            reservations_online: false,
+            reservations_phone: true,
+            custom_branding: false,
+            analytics: false,
+            qr_pay: false
+        }
+    },
+    STARTER: {
+        label: 'Starter',
+        menu_items: 60,
+        max_tables: 10,
+        expires_days: 365,
+        modules: {
+            menu_edit: true,
+            multilanguage: true,
+            seasonal_menu: false,
+            orders_kitchen: true,
+            reservations_online: false,
+            reservations_phone: true,
+            custom_branding: false,
+            analytics: false,
+            qr_pay: false
+        }
+    },
+    PRO: {
+        label: 'Pro',
+        menu_items: 150,
+        max_tables: 25,
+        expires_days: 365,
+        modules: {
+            menu_edit: true,
+            multilanguage: true,
+            seasonal_menu: true,
+            orders_kitchen: true,
+            reservations_online: true,
+            reservations_phone: true,
+            custom_branding: true,
+            analytics: false,
+            qr_pay: true
+        }
+    },
+    PRO_PLUS: {
+        label: 'Pro+',
+        menu_items: 300,
+        max_tables: 50,
+        expires_days: 365,
+        modules: {
+            menu_edit: true,
+            multilanguage: true,
+            seasonal_menu: true,
+            orders_kitchen: true,
+            reservations_online: true,
+            reservations_phone: true,
+            custom_branding: true,
+            analytics: true,
+            qr_pay: true
+        }
+    },
+    ENTERPRISE: {
+        label: 'Enterprise',
+        menu_items: 999,
+        max_tables: 999,
+        expires_days: 365,
+        modules: {
+            menu_edit: true,
+            multilanguage: true,
+            seasonal_menu: true,
+            orders_kitchen: true,
+            reservations_online: true,
+            reservations_phone: true,
+            custom_branding: true,
+            analytics: true,
+            qr_pay: true
+        }
+    }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SMTP
 // ─────────────────────────────────────────────────────────────────────────────
 let smtpTransporter = null;
 function createSmtpTransporter(config) {
@@ -84,23 +187,50 @@ if (envSmtp.host && envSmtp.user && envSmtp.pass) {
     console.log('📧  SMTP: Konfiguriert über .env');
 }
 
-async function getActiveSmtp(db) {
-    const cfg = db.smtp_config;
-    if (cfg && cfg.host && cfg.user && cfg.pass) {
-        return { transporter: createSmtpTransporter(cfg), from: cfg.from || cfg.user };
+async function getActiveSmtp() {
+    const [rows] = await db.query('SELECT * FROM smtp_config WHERE id = 1 LIMIT 1');
+    const cfg = rows[0];
+    if (cfg && cfg.host && cfg.smtp_user && cfg.smtp_pass) {
+        const t = createSmtpTransporter({ host: cfg.host, port: cfg.port, secure: cfg.secure, user: cfg.smtp_user, pass: cfg.smtp_pass });
+        return { transporter: t, from: cfg.smtp_from || cfg.smtp_user };
     }
-    if (smtpTransporter) {
-        return { transporter: smtpTransporter, from: envSmtp.from || envSmtp.user };
-    }
+    if (smtpTransporter) return { transporter: smtpTransporter, from: envSmtp.from || envSmtp.user };
     return null;
 }
 
-async function sendMail(db, to, subject, html) {
-    const smtp = await getActiveSmtp(db);
+async function sendMail(to, subject, html) {
+    const smtp = await getActiveSmtp();
     if (!smtp) throw new Error('SMTP nicht konfiguriert');
     await smtp.transporter.sendMail({ from: smtp.from, to, subject, html });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Webhook
+// ─────────────────────────────────────────────────────────────────────────────
+async function fireWebhook(event, payload) {
+    const urls = [];
+    if (process.env.WEBHOOK_URL) urls.push({ url: process.env.WEBHOOK_URL, secret: WEBHOOK_SECRET });
+    try {
+        const [rows] = await db.query('SELECT url, secret FROM webhooks WHERE active = 1');
+        for (const r of rows) urls.push({ url: r.url, secret: r.secret });
+    } catch {}
+
+    const body = JSON.stringify({ event, ts: new Date().toISOString(), ...payload });
+    for (const { url, secret } of urls) {
+        try {
+            const sig = secret ? crypto.createHmac('sha256', secret).update(body).digest('hex') : null;
+            const headers = { 'Content-Type': 'application/json' };
+            if (sig) headers['X-OPA-Signature'] = sig;
+            await fetch(url, { method: 'POST', headers, body, signal: AbortSignal.timeout(5000) });
+        } catch (e) {
+            console.warn(`⚠️  Webhook ${url} fehlgeschlagen:`, e.message);
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Express Setup
+// ─────────────────────────────────────────────────────────────────────────────
 app.set('trust proxy', 1);
 
 const rawCorsOrigins = process.env.CORS_ORIGINS || '';
@@ -111,9 +241,9 @@ const allowedOrigins = rawCorsOrigins
 app.use(cors({
     origin: (origin, callback) => {
         if (!origin) return callback(null, true);
-        if (!allowedOrigins) return callback(null, true);
+        if (!allowedOrigins || allowedOrigins.length === 0) return callback(null, true);
         if (allowedOrigins.includes(origin)) return callback(null, true);
-        callback(null, true);
+        callback(new Error(`CORS: Origin ${origin} nicht erlaubt`), false);
     },
     credentials: true
 }));
@@ -138,11 +268,11 @@ const validateLimiter = rateLimit({
 // Auth Middleware
 // ─────────────────────────────────────────────────────────────────────────────
 const requireAuth = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    const token = req.headers['authorization']?.startsWith('Bearer ')
+        ? req.headers['authorization'].slice(7) : null;
     if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
     try { req.admin = jwt.verify(token, ADMIN_SECRET); next(); }
-    catch (e) { return res.status(401).json({ success: false, message: 'Invalid or expired token' }); }
+    catch { return res.status(401).json({ success: false, message: 'Invalid or expired token' }); }
 };
 
 const requireSuperAdmin = (req, res, next) => {
@@ -150,45 +280,6 @@ const requireSuperAdmin = (req, res, next) => {
         return res.status(403).json({ success: false, message: 'Superadmin required' });
     next();
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Plan Definitions
-// ─────────────────────────────────────────────────────────────────────────────
-export const PLAN_DEFINITIONS = {
-    FREE: {
-        label: 'Free', menu_items: 10, max_tables: 5, expires_days: 36500,
-        modules: { menu_edit: true, orders_kitchen: false, reservations: false, custom_design: false, analytics: false, qr_pay: false }
-    },
-    STARTER: {
-        label: 'Starter', menu_items: 40, max_tables: 10, expires_days: 365,
-        modules: { menu_edit: true, orders_kitchen: true, reservations: true, custom_design: false, analytics: false, qr_pay: false }
-    },
-    PRO: {
-        label: 'Pro', menu_items: 100, max_tables: 25, expires_days: 365,
-        modules: { menu_edit: true, orders_kitchen: true, reservations: true, custom_design: true, analytics: false, qr_pay: false }
-    },
-    PRO_PLUS: {
-        label: 'Pro+', menu_items: 200, max_tables: 50, expires_days: 365,
-        modules: { menu_edit: true, orders_kitchen: true, reservations: true, custom_design: true, analytics: true, qr_pay: false }
-    },
-    ENTERPRISE: {
-        label: 'Enterprise', menu_items: 500, max_tables: 999, expires_days: 365,
-        modules: { menu_edit: true, orders_kitchen: true, reservations: true, custom_design: true, analytics: true, qr_pay: true }
-    }
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// DB Utility
-// ─────────────────────────────────────────────────────────────────────────────
-const getDB = async () => {
-    const data = JSON.parse(await readFile(DB_PATH, 'utf-8'));
-    if (!data.customers) data.customers = [];
-    if (!data.devices) data.devices = [];
-    if (!data.audit_log) data.audit_log = [];
-    if (!data.used_nonces) data.used_nonces = [];
-    return data;
-};
-const saveDB = async (data) => await writeFile(DB_PATH, JSON.stringify(data, null, 2));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -217,142 +308,193 @@ const signResponse = (payload) => {
     return { ...payload, _sig: sig, _ts: Date.now() };
 };
 
-const addAuditLog = async (db, action, details, actor = 'system') => {
-    if (!db.audit_log) db.audit_log = [];
-    db.audit_log.unshift({
-        id: crypto.randomUUID(),
-        ts: new Date().toISOString(),
-        actor,
-        action,
-        details
-    });
-    if (db.audit_log.length > 2000) db.audit_log = db.audit_log.slice(0, 2000);
+const addAuditLog = async (action, details, actor = 'system') => {
+    try {
+        await db.query(
+            'INSERT INTO audit_log (id, actor, action, details) VALUES (?, ?, ?, ?)',
+            [crypto.randomUUID(), actor, action, JSON.stringify(details)]
+        );
+    } catch (e) {
+        console.error('Audit-Log Fehler:', e.message);
+    }
 };
 
-const getClientIp = (req) => {
-    return req.headers['x-forwarded-for']?.split(',')[0]?.trim()
-        || req.headers['x-real-ip']
-        || req.socket?.remoteAddress
-        || 'unknown';
-};
+const getClientIp = (req) =>
+    req.headers['x-forwarded-for']?.split(',')[0]?.trim()
+    || req.headers['x-real-ip']
+    || req.socket?.remoteAddress
+    || 'unknown';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ablauf-Cron: täglich prüfen, Mails senden
+// ─────────────────────────────────────────────────────────────────────────────
+async function runExpiryCron() {
+    try {
+        const [expiring] = await db.query(`
+            SELECT l.license_key, l.customer_name, l.type, l.expires_at, c.email
+            FROM licenses l
+            LEFT JOIN customers c ON l.customer_id = c.id
+            WHERE l.status = 'active'
+              AND l.expires_at BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 30 DAY)
+        `);
+
+        for (const lic of expiring) {
+            if (!lic.email) continue;
+            const daysLeft = Math.ceil((new Date(lic.expires_at) - new Date()) / 86400000);
+            try {
+                await sendMail(
+                    lic.email,
+                    `⏰ OPA! Santorini Lizenz läuft in ${daysLeft} Tagen ab`,
+                    `<h2>🏛️ OPA! Santorini – Lizenzablauf</h2>
+                    <p>Hallo ${lic.customer_name},</p>
+                    <p>deine <strong>${lic.type}</strong>-Lizenz (<code>${lic.license_key}</code>) läuft am 
+                    <strong>${new Date(lic.expires_at).toLocaleDateString('de-DE')}</strong> ab (in ${daysLeft} Tagen).</p>
+                    <p>Bitte wende dich an deinen Administrator, um die Lizenz zu verlängern.</p>
+                    <p style="color:#888;font-size:12px">OPA! Santorini License Server</p>`
+                );
+                await addAuditLog('expiry_notification_sent', { license_key: lic.license_key, days_left: daysLeft, email: lic.email });
+            } catch (e) {
+                console.warn(`📧 Ablauf-Mail fehlgeschlagen für ${lic.license_key}:`, e.message);
+            }
+        }
+
+        // Abgelaufene Lizenzen automatisch auf 'expired' setzen
+        const [result] = await db.query(`
+            UPDATE licenses SET status = 'expired'
+            WHERE status = 'active' AND expires_at < NOW()
+        `);
+        if (result.affectedRows > 0) {
+            console.log(`🕐 ${result.affectedRows} Lizenz(en) auf 'expired' gesetzt.`);
+            await addAuditLog('licenses_auto_expired', { count: result.affectedRows });
+            await fireWebhook('licenses.auto_expired', { count: result.affectedRows });
+        }
+
+        // Nonces aufräumen
+        await db.query('DELETE FROM used_nonces WHERE ts < ?', [Date.now() - 5 * 60 * 1000]);
+
+    } catch (e) {
+        console.error('Expiry-Cron Fehler:', e.message);
+    }
+}
+
+// Cron alle 24h ausführen
+setInterval(runExpiryCron, 24 * 60 * 60 * 1000);
+runExpiryCron(); // Beim Start sofort einmal ausführen
 
 // ════════════════════════════════════════════════════════════════════════════
 // PUBLIC API
 // ════════════════════════════════════════════════════════════════════════════
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STUFE 1+2+3: Haupt-Validate Endpoint
-// - Gibt jetzt zusätzlich einen RS256-signierten license_token zurück
-// - token enthält: domain (Stufe 2 binding), exp (Stufe 3 kurze TTL 25h)
-// - CMS muss token mit hardcoded Public Key verifizieren → DB-Edit hilft nicht
-// ─────────────────────────────────────────────────────────────────────────────
 app.post('/api/v1/validate', validateLimiter, async (req, res) => {
     const { license_key, domain, device_id, device_type, nonce, features_used } = req.body;
     if (!license_key) return res.status(400).json({ status: 'invalid', message: 'No key provided' });
-
     const clientIp = getClientIp(req);
 
     try {
-        const data = await getDB();
-        const l = data.licenses.find(lic => lic.license_key === license_key);
+        const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [license_key]);
+        const l = rows[0];
 
         if (!l) {
-            await addAuditLog(data, 'validate_failed', { license_key, reason: 'not_found', ip: clientIp });
-            await saveDB(data);
+            await addAuditLog('validate_failed', { license_key, reason: 'not_found', ip: clientIp });
             return res.status(404).json({ status: 'invalid', message: 'Lizenz-Key nicht gefunden.' });
         }
 
-        const isExpired = new Date(l.expires_at) < new Date();
-        if (isExpired) {
-            await addAuditLog(data, 'validate_failed', { license_key, reason: 'expired', ip: clientIp });
-            await saveDB(data);
+        if (new Date(l.expires_at) < new Date()) {
+            await addAuditLog('validate_failed', { license_key, reason: 'expired', ip: clientIp });
             return res.status(403).json({ status: 'expired', message: 'Lizenz ist abgelaufen.' });
         }
 
         if (l.status !== 'active') {
-            await addAuditLog(data, 'validate_failed', { license_key, reason: `status_${l.status}`, ip: clientIp });
-            await saveDB(data);
+            await addAuditLog('validate_failed', { license_key, reason: `status_${l.status}`, ip: clientIp });
             return res.status(403).json({ status: l.status, message: 'Lizenz ist nicht aktiv.' });
         }
 
-        // STUFE 2: Domain-Binding Prüfung
         if (!domainMatches(l.associated_domain, domain)) {
-            await addAuditLog(data, 'validate_failed', { license_key, reason: 'domain_mismatch', domain, ip: clientIp });
-            await saveDB(data);
+            await addAuditLog('validate_failed', { license_key, reason: 'domain_mismatch', domain, ip: clientIp });
             return res.status(403).json({ status: 'domain_mismatch', message: `Lizenz ist nicht für Domain "${domain}" gültig.` });
         }
 
-        // Replay Protection (optional nonce)
+        // Replay Protection
         if (nonce) {
-            if (!data.used_nonces) data.used_nonces = [];
-            const nonceAge = 5 * 60 * 1000;
-            data.used_nonces = data.used_nonces.filter(n => Date.now() - n.ts < nonceAge);
-            if (data.used_nonces.find(n => n.val === nonce)) {
-                await addAuditLog(data, 'replay_attack', { license_key, nonce, ip: clientIp });
-                await saveDB(data);
+            const [nonceRows] = await db.query('SELECT val FROM used_nonces WHERE val = ?', [nonce]);
+            if (nonceRows.length > 0) {
+                await addAuditLog('replay_attack', { license_key, nonce, ip: clientIp });
                 return res.status(400).json({ status: 'replay', message: 'Nonce already used.' });
             }
-            data.used_nonces.push({ val: nonce, ts: Date.now() });
+            await db.query('INSERT INTO used_nonces (val, ts) VALUES (?, ?)', [nonce, Date.now()]);
         }
 
         // Device Management
         if (device_id) {
-            if (!data.devices) data.devices = [];
             const maxDevices = l.max_devices || 0;
-            const licDevices = data.devices.filter(d => d.license_key === license_key && d.active);
+            const [licDevices] = await db.query(
+                'SELECT * FROM devices WHERE license_key = ? AND active = 1', [license_key]
+            );
             const existing = licDevices.find(d => d.device_id === device_id);
 
             if (!existing) {
                 if (maxDevices > 0 && licDevices.length >= maxDevices) {
-                    await addAuditLog(data, 'validate_failed', { license_key, reason: 'device_limit', device_id, ip: clientIp });
-                    await saveDB(data);
+                    await addAuditLog('validate_failed', { license_key, reason: 'device_limit', device_id, ip: clientIp });
                     return res.status(403).json({ status: 'device_limit', message: `Maximale Geräteanzahl (${maxDevices}) erreicht.` });
                 }
-                data.devices.push({
-                    id: crypto.randomUUID(),
-                    license_key,
-                    device_id,
-                    device_type: device_type || 'unknown',
-                    ip: clientIp,
-                    first_seen: new Date().toISOString(),
-                    last_seen: new Date().toISOString(),
-                    active: true
-                });
-                await addAuditLog(data, 'device_registered', { license_key, device_id, device_type, ip: clientIp });
+                await db.query(
+                    'INSERT INTO devices (id, license_key, device_id, device_type, ip) VALUES (?, ?, ?, ?, ?)',
+                    [crypto.randomUUID(), license_key, device_id, device_type || 'unknown', clientIp]
+                );
+                await addAuditLog('device_registered', { license_key, device_id, device_type, ip: clientIp });
             } else {
-                existing.last_seen = new Date().toISOString();
-                existing.ip = clientIp;
-                if (device_type) existing.device_type = device_type;
+                await db.query(
+                    'UPDATE devices SET last_seen = NOW(), ip = ?, device_type = ? WHERE id = ?',
+                    [clientIp, device_type || existing.device_type, existing.id]
+                );
             }
         }
 
-        // Analytics tracking
-        l.last_validated = new Date().toISOString();
-        l.usage_count = (l.usage_count || 0) + 1;
-        if (!l.analytics) l.analytics = { daily: {}, features: {} };
+        // Analytics
         const today = new Date().toISOString().slice(0, 10);
-        l.analytics.daily[today] = (l.analytics.daily[today] || 0) + 1;
-        if (features_used && Array.isArray(features_used)) {
-            for (const f of features_used) {
-                l.analytics.features[f] = (l.analytics.features[f] || 0) + 1;
-            }
-        }
+        let dailyAnalytics = {};
+        let featuresAnalytics = {};
+        try {
+            dailyAnalytics = typeof l.analytics_daily === 'string' ? JSON.parse(l.analytics_daily) : (l.analytics_daily || {});
+            featuresAnalytics = typeof l.analytics_features === 'string' ? JSON.parse(l.analytics_features) : (l.analytics_features || {});
+        } catch {}
+
+        dailyAnalytics[today] = (dailyAnalytics[today] || 0) + 1;
         const cutoff = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
-        for (const d of Object.keys(l.analytics.daily)) {
-            if (d < cutoff) delete l.analytics.daily[d];
+        for (const d of Object.keys(dailyAnalytics)) { if (d < cutoff) delete dailyAnalytics[d]; }
+
+        if (features_used && Array.isArray(features_used)) {
+            for (const f of features_used) featuresAnalytics[f] = (featuresAnalytics[f] || 0) + 1;
         }
 
-        if (domain && (!l.validated_domains || !l.validated_domains.includes(domain))) {
-            if (!l.validated_domains) l.validated_domains = [];
-            l.validated_domains.push(domain);
-        }
-        l.validated_domain = domain;
+        let validatedDomains = [];
+        try { validatedDomains = typeof l.validated_domains === 'string' ? JSON.parse(l.validated_domains) : (l.validated_domains || []); } catch {}
+        if (domain && !validatedDomains.includes(domain)) validatedDomains.push(domain);
 
-        await addAuditLog(data, 'validate_success', { license_key, domain, device_id: device_id || null, ip: clientIp });
-        await saveDB(data);
+        await db.query(`
+            UPDATE licenses SET
+                last_validated = NOW(),
+                usage_count = usage_count + 1,
+                validated_domain = ?,
+                validated_domains = ?,
+                analytics_daily = ?,
+                analytics_features = ?
+            WHERE license_key = ?`,
+            [domain || null, JSON.stringify(validatedDomains), JSON.stringify(dailyAnalytics), JSON.stringify(featuresAnalytics), license_key]
+        );
+
+        await addAuditLog('validate_success', { license_key, domain, device_id: device_id || null, ip: clientIp });
 
         const plan = PLAN_DEFINITIONS[l.type] || PLAN_DEFINITIONS['FREE'];
-        const customer = l.customer_id ? (data.customers || []).find(c => c.id === l.customer_id) : null;
+        const [custRows] = l.customer_id
+            ? await db.query('SELECT email, company FROM customers WHERE id = ?', [l.customer_id])
+            : [[]]; 
+        const customer = custRows[0] || null;
+
+        let allowedModules = plan.modules;
+        let limits = { max_dishes: plan.menu_items, max_tables: plan.max_tables };
+        try { if (l.allowed_modules) allowedModules = typeof l.allowed_modules === 'string' ? JSON.parse(l.allowed_modules) : l.allowed_modules; } catch {}
+        try { if (l.limits) limits = typeof l.limits === 'string' ? JSON.parse(l.limits) : l.limits; } catch {}
 
         const responsePayload = {
             status: 'active',
@@ -360,37 +502,26 @@ app.post('/api/v1/validate', validateLimiter, async (req, res) => {
             type: l.type,
             plan_label: plan.label,
             expires_at: l.expires_at,
-            allowed_modules: l.allowed_modules || plan.modules,
-            limits: l.limits || { max_dishes: plan.menu_items, max_tables: plan.max_tables },
+            allowed_modules: allowedModules,
+            limits,
             ...(customer ? { account_email: customer.email, company: customer.company } : {})
         };
 
-        // ── STUFE 1: Signiertes RS256 Token zurückgeben ──────────────────────
-        // Das CMS soll dieses token mit RSA_PUBLIC_KEY verifizieren.
-        // Enthält domain (Stufe 2 binding) + exp 25h (Stufe 3 periodische Prüfung).
-        // Wer die DB manipuliert, hat kein gültiges token – Signatur schlägt fehl.
         const tokenPayload = {
-            license_key,
-            type: l.type,
-            plan_label: plan.label,
-            expires_at: l.expires_at,
-            allowed_modules: l.allowed_modules || plan.modules,
-            limits: l.limits || { max_dishes: plan.menu_items, max_tables: plan.max_tables },
-            domain: domain || l.associated_domain,  // STUFE 2: domain hardcoded in Signatur
+            license_key, type: l.type, plan_label: plan.label,
+            expires_at: l.expires_at, allowed_modules: allowedModules, limits,
+            domain: domain || l.associated_domain,
             issued_at: Math.floor(Date.now() / 1000)
         };
 
         const signedToken = createSignedLicenseToken(tokenPayload, '25h');
-
         const finalResponse = { ...responsePayload };
         if (signedToken) {
-            finalResponse.license_token = signedToken;           // RS256 signiert
-            finalResponse.license_token_public_key = RSA_PUBLIC_KEY; // CMS kann direkt verifizieren
+            finalResponse.license_token = signedToken;
+            finalResponse.license_token_public_key = RSA_PUBLIC_KEY;
         }
 
-        if (HMAC_SECRET !== 'hmac-change-me-in-production') {
-            return res.json(signResponse(finalResponse));
-        }
+        if (HMAC_SECRET !== 'hmac-change-me-in-production') return res.json(signResponse(finalResponse));
         return res.json(finalResponse);
 
     } catch (e) {
@@ -399,68 +530,47 @@ app.post('/api/v1/validate', validateLimiter, async (req, res) => {
     }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STUFE 1: Public Key Endpoint
-// CMS kann den Public Key abrufen und gecacht lokal speichern
-// ─────────────────────────────────────────────────────────────────────────────
 app.get('/api/v1/public-key', (req, res) => {
     res.json({ public_key: RSA_PUBLIC_KEY, algorithm: 'RS256' });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STUFE 3: Heartbeat / Periodische Online-Validierung
-// CMS pingt alle 24h an – gibt frisches signiertes token zurück
-// Schlägt 3x fehl → CMS degradiert auf FREE
-// ─────────────────────────────────────────────────────────────────────────────
 app.post('/api/v1/heartbeat', validateLimiter, async (req, res) => {
-    const { license_key, domain, license_token } = req.body;
+    const { license_key, domain } = req.body;
     if (!license_key) return res.status(400).json({ status: 'invalid', message: 'No key provided' });
-
     const clientIp = getClientIp(req);
 
     try {
-        const data = await getDB();
-        const l = data.licenses.find(lic => lic.license_key === license_key);
+        const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [license_key]);
+        const l = rows[0];
 
         if (!l || l.status !== 'active' || new Date(l.expires_at) < new Date()) {
-            await addAuditLog(data, 'heartbeat_failed', { license_key, reason: 'invalid_or_expired', ip: clientIp });
-            await saveDB(data);
+            await addAuditLog('heartbeat_failed', { license_key, reason: 'invalid_or_expired', ip: clientIp });
             return res.status(403).json({ status: 'invalid', message: 'Lizenz ungültig oder abgelaufen.' });
         }
 
-        // Domain-Check beim Heartbeat (Stufe 2)
         if (domain && !domainMatches(l.associated_domain, domain)) {
-            await addAuditLog(data, 'heartbeat_failed', { license_key, reason: 'domain_mismatch', domain, ip: clientIp });
-            await saveDB(data);
+            await addAuditLog('heartbeat_failed', { license_key, reason: 'domain_mismatch', domain, ip: clientIp });
             return res.status(403).json({ status: 'domain_mismatch', message: 'Domain stimmt nicht überein.' });
         }
 
-        l.last_heartbeat = new Date().toISOString();
-        await addAuditLog(data, 'heartbeat_ok', { license_key, domain, ip: clientIp });
-        await saveDB(data);
+        await db.query('UPDATE licenses SET last_heartbeat = NOW() WHERE license_key = ?', [license_key]);
+        await addAuditLog('heartbeat_ok', { license_key, domain, ip: clientIp });
 
         const plan = PLAN_DEFINITIONS[l.type] || PLAN_DEFINITIONS['FREE'];
+        let allowedModules = plan.modules;
+        let limits = { max_dishes: plan.menu_items, max_tables: plan.max_tables };
+        try { if (l.allowed_modules) allowedModules = typeof l.allowed_modules === 'string' ? JSON.parse(l.allowed_modules) : l.allowed_modules; } catch {}
+        try { if (l.limits) limits = typeof l.limits === 'string' ? JSON.parse(l.limits) : l.limits; } catch {}
 
-        // Frisches RS256 Token (25h gültig)
         const tokenPayload = {
-            license_key,
-            type: l.type,
-            plan_label: plan.label,
-            expires_at: l.expires_at,
-            allowed_modules: l.allowed_modules || plan.modules,
-            limits: l.limits || { max_dishes: plan.menu_items, max_tables: plan.max_tables },
+            license_key, type: l.type, plan_label: plan.label,
+            expires_at: l.expires_at, allowed_modules: allowedModules, limits,
             domain: domain || l.associated_domain,
             issued_at: Math.floor(Date.now() / 1000)
         };
 
         const signedToken = createSignedLicenseToken(tokenPayload, '25h');
-
-        return res.json({
-            status: 'ok',
-            next_heartbeat_in_hours: 24,
-            license_token: signedToken,
-            expires_at: l.expires_at
-        });
+        return res.json({ status: 'ok', next_heartbeat_in_hours: 24, license_token: signedToken, expires_at: l.expires_at });
 
     } catch (e) {
         console.error(e);
@@ -468,10 +578,6 @@ app.post('/api/v1/heartbeat', validateLimiter, async (req, res) => {
     }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STUFE 1: Token verifizieren (für CMS-seitige Verifikation via Server)
-// Alternativ: CMS verifiziert lokal mit dem hardcoded Public Key (sicherer)
-// ─────────────────────────────────────────────────────────────────────────────
 app.post('/api/v1/verify-license-token', validateLimiter, (req, res) => {
     const { license_token } = req.body;
     if (!license_token) return res.status(400).json({ valid: false, message: 'No token provided' });
@@ -483,31 +589,28 @@ app.post('/api/v1/verify-license-token', validateLimiter, (req, res) => {
     }
 });
 
-// Offline Token Generation (unverändert)
 app.post('/api/v1/offline-token', validateLimiter, async (req, res) => {
     const { license_key, domain, device_id, duration_hours } = req.body;
     if (!license_key) return res.status(400).json({ success: false, message: 'No key provided' });
-
     try {
-        const data = await getDB();
-        const l = data.licenses.find(lic => lic.license_key === license_key);
-        if (!l || l.status !== 'active' || new Date(l.expires_at) < new Date()) {
+        const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [license_key]);
+        const l = rows[0];
+        if (!l || l.status !== 'active' || new Date(l.expires_at) < new Date())
             return res.status(403).json({ success: false, message: 'License invalid or expired' });
-        }
+
         const plan = PLAN_DEFINITIONS[l.type] || PLAN_DEFINITIONS['FREE'];
         const hours = Math.min(duration_hours || 24, 168);
+        let allowedModules = plan.modules;
+        let limits = { max_dishes: plan.menu_items, max_tables: plan.max_tables };
+        try { if (l.allowed_modules) allowedModules = typeof l.allowed_modules === 'string' ? JSON.parse(l.allowed_modules) : l.allowed_modules; } catch {}
+        try { if (l.limits) limits = typeof l.limits === 'string' ? JSON.parse(l.limits) : l.limits; } catch {}
+
         const token = jwt.sign({
-            license_key, domain, device_id,
-            type: l.type,
-            plan_label: plan.label,
-            allowed_modules: l.allowed_modules || plan.modules,
-            limits: l.limits || { max_dishes: plan.menu_items, max_tables: plan.max_tables },
-            offline: true
+            license_key, domain, device_id, type: l.type,
+            plan_label: plan.label, allowed_modules: allowedModules, limits, offline: true
         }, HMAC_SECRET, { expiresIn: `${hours}h` });
 
-        await addAuditLog(data, 'offline_token_issued', { license_key, domain, device_id: device_id || null, duration_hours: hours, ip: getClientIp(req) });
-        await saveDB(data);
-
+        await addAuditLog('offline_token_issued', { license_key, domain, device_id: device_id || null, duration_hours: hours, ip: getClientIp(req) });
         res.json({ success: true, offline_token: token, valid_hours: hours });
     } catch (e) {
         console.error(e);
@@ -535,26 +638,20 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
     if (!username || !password)
         return res.status(400).json({ success: false, message: 'Username and password required' });
     try {
-        const db = await getDB();
-        const admin = (db.admins || []).find(a => a.username === username);
+        const [rows] = await db.query('SELECT * FROM admins WHERE username = ?', [username]);
+        const admin = rows[0];
         if (!admin) {
-            await addAuditLog(db, 'admin_login_failed', { username, ip: getClientIp(req) });
-            await saveDB(db);
+            await addAuditLog('admin_login_failed', { username, ip: getClientIp(req) });
             return res.status(401).json({ success: false, message: 'Invalid credentials' });
         }
         const valid = await bcrypt.compare(password, admin.password_hash);
         if (!valid) {
-            await addAuditLog(db, 'admin_login_failed', { username, ip: getClientIp(req) });
-            await saveDB(db);
+            await addAuditLog('admin_login_failed', { username, ip: getClientIp(req) });
             return res.status(401).json({ success: false, message: 'Invalid credentials' });
         }
-        const token = jwt.sign(
-            { username: admin.username, role: admin.role || 'admin' },
-            ADMIN_SECRET, { expiresIn: '8h' }
-        );
-        await addAuditLog(db, 'admin_login', { username, ip: getClientIp(req) });
-        await saveDB(db);
-        res.json({ success: true, token, username: admin.username, role: admin.role || 'admin' });
+        const token = jwt.sign({ username: admin.username, role: admin.role }, ADMIN_SECRET, { expiresIn: '8h' });
+        await addAuditLog('admin_login', { username, ip: getClientIp(req) }, username);
+        res.json({ success: true, token, username: admin.username, role: admin.role });
     } catch (e) {
         console.error(e);
         res.status(500).json({ success: false, message: 'Internal server error' });
@@ -562,9 +659,8 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
 });
 
 app.get('/api/admin/users', requireAuth, requireSuperAdmin, async (req, res) => {
-    const db = await getDB();
-    const users = (db.admins || []).map(({ password_hash, ...u }) => u);
-    res.json({ users });
+    const [rows] = await db.query('SELECT id, username, role, created_at FROM admins');
+    res.json({ users: rows });
 });
 
 app.post('/api/admin/users', requireAuth, requireSuperAdmin, async (req, res) => {
@@ -573,21 +669,14 @@ app.post('/api/admin/users', requireAuth, requireSuperAdmin, async (req, res) =>
         return res.status(400).json({ success: false, message: 'Username and password required' });
     if (password.length < 8)
         return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
-    const allowedRoles = ['admin', 'superadmin'];
-    const assignedRole = allowedRoles.includes(role) ? role : 'admin';
+    const assignedRole = ['admin', 'superadmin'].includes(role) ? role : 'admin';
     try {
-        const db = await getDB();
-        if (!db.admins) db.admins = [];
-        if (db.admins.find(a => a.username === username))
-            return res.status(409).json({ success: false, message: 'Username already exists' });
         const hash = await bcrypt.hash(password, 12);
-        const newUser = { username, password_hash: hash, role: assignedRole, created_at: new Date().toISOString() };
-        db.admins.push(newUser);
-        await addAuditLog(db, 'admin_user_created', { username, role: assignedRole, by: req.admin.username });
-        await saveDB(db);
-        res.json({ success: true, user: { username, role: assignedRole, created_at: newUser.created_at } });
+        await db.query('INSERT INTO admins (username, password_hash, role) VALUES (?, ?, ?)', [username, hash, assignedRole]);
+        await addAuditLog('admin_user_created', { username, role: assignedRole, by: req.admin.username }, req.admin.username);
+        res.json({ success: true, user: { username, role: assignedRole } });
     } catch (e) {
-        console.error(e);
+        if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ success: false, message: 'Username already exists' });
         res.status(500).json({ success: false, message: 'Internal server error' });
     }
 });
@@ -596,16 +685,11 @@ app.delete('/api/admin/users/:username', requireAuth, requireSuperAdmin, async (
     if (req.params.username === req.admin.username)
         return res.status(400).json({ success: false, message: 'Cannot delete your own account' });
     try {
-        const db = await getDB();
-        const before = (db.admins || []).length;
-        db.admins = db.admins.filter(a => a.username !== req.params.username);
-        if (db.admins.length === before)
-            return res.status(404).json({ success: false, message: 'User not found' });
-        await addAuditLog(db, 'admin_user_deleted', { username: req.params.username, by: req.admin.username });
-        await saveDB(db);
+        const [result] = await db.query('DELETE FROM admins WHERE username = ?', [req.params.username]);
+        if (result.affectedRows === 0) return res.status(404).json({ success: false, message: 'User not found' });
+        await addAuditLog('admin_user_deleted', { username: req.params.username, by: req.admin.username }, req.admin.username);
         res.json({ success: true });
     } catch (e) {
-        console.error(e);
         res.status(500).json({ success: false, message: 'Internal server error' });
     }
 });
@@ -613,18 +697,14 @@ app.delete('/api/admin/users/:username', requireAuth, requireSuperAdmin, async (
 app.patch('/api/admin/users/:username/password', requireAuth, async (req, res) => {
     const isSelf = req.params.username === req.admin.username;
     const isSuperAdmin = req.admin.role === 'superadmin';
-    if (!isSelf && !isSuperAdmin)
-        return res.status(403).json({ success: false, message: 'Forbidden' });
+    if (!isSelf && !isSuperAdmin) return res.status(403).json({ success: false, message: 'Forbidden' });
     const { password } = req.body;
     if (!password || password.length < 8)
         return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
     try {
-        const db = await getDB();
-        const user = (db.admins || []).find(a => a.username === req.params.username);
-        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-        user.password_hash = await bcrypt.hash(password, 12);
-        await addAuditLog(db, 'admin_password_changed', { username: req.params.username, by: req.admin.username });
-        await saveDB(db);
+        const hash = await bcrypt.hash(password, 12);
+        await db.query('UPDATE admins SET password_hash = ? WHERE username = ?', [hash, req.params.username]);
+        await addAuditLog('admin_password_changed', { username: req.params.username, by: req.admin.username }, req.admin.username);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ success: false, message: 'Internal server error' });
@@ -634,97 +714,120 @@ app.patch('/api/admin/users/:username/password', requireAuth, async (req, res) =
 app.get('/api/admin/plans', requireAuth, (req, res) => res.json(PLAN_DEFINITIONS));
 
 app.get('/api/admin/licenses', requireAuth, async (req, res) => {
-    const db = await getDB();
     const now = new Date();
+    const [licenses] = await db.query('SELECT * FROM licenses ORDER BY created_at DESC');
     const stats = {
-        total: db.licenses.length,
-        active: db.licenses.filter(l => l.status === 'active' && new Date(l.expires_at) > now).length,
-        expiring: db.licenses.filter(l => { const d = (new Date(l.expires_at) - now) / 86400000; return d > 0 && d < 30; }).length,
-        total_usage: db.licenses.reduce((s, l) => s + (l.usage_count || 0), 0)
+        total: licenses.length,
+        active: licenses.filter(l => l.status === 'active' && new Date(l.expires_at) > now).length,
+        expiring: licenses.filter(l => { const d = (new Date(l.expires_at) - now) / 86400000; return d > 0 && d < 30; }).length,
+        total_usage: licenses.reduce((s, l) => s + (l.usage_count || 0), 0)
     };
-    res.json({ licenses: db.licenses, stats });
+    res.json({ licenses, stats });
+});
+
+app.get('/api/admin/licenses/:key', requireAuth, async (req, res) => {
+    const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [req.params.key]);
+    if (!rows[0]) return res.status(404).json({ success: false, message: 'Not found' });
+    res.json({ success: true, license: rows[0] });
 });
 
 app.post('/api/admin/licenses', requireAuth, async (req, res) => {
-    const db = await getDB();
     const raw = req.body;
     const plan = PLAN_DEFINITIONS[raw.type] || PLAN_DEFINITIONS['FREE'];
     const key = raw.license_key?.trim() || generateKey(raw.type);
-    const expiresAt = raw.expires_at || new Date(Date.now() + plan.expires_days * 86400000).toISOString();
-    const newLic = {
-        license_key: key,
-        type: raw.type || 'FREE',
-        customer_name: raw.customer_name,
-        customer_id: raw.customer_id || null,
-        status: 'active',
-        associated_domain: raw.associated_domain || '*',
-        expires_at: expiresAt,
-        allowed_modules: plan.modules,
-        limits: { max_dishes: plan.menu_items, max_tables: plan.max_tables },
-        max_devices: raw.max_devices ? parseInt(raw.max_devices) : 0,
-        usage_count: 0,
-        last_validated: null,
-        last_heartbeat: null,
-        validated_domain: null,
-        validated_domains: [],
-        analytics: { daily: {}, features: {} },
-        created_at: new Date().toISOString()
-    };
-    const idx = db.licenses.findIndex(l => l.license_key === key);
-    if (idx > -1) db.licenses[idx] = { ...db.licenses[idx], ...newLic };
-    else db.licenses.unshift(newLic);
-    await addAuditLog(db, 'license_created', { license_key: key, type: raw.type, customer_name: raw.customer_name, by: req.admin.username });
-    await saveDB(db);
-    res.json({ success: true, license: newLic });
+    const expiresAt = raw.expires_at || new Date(Date.now() + plan.expires_days * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+    const modules = plan.modules;
+    const limits = { max_dishes: plan.menu_items, max_tables: plan.max_tables };
+    try {
+        await db.query(`
+            INSERT INTO licenses (license_key, type, customer_id, customer_name, status, associated_domain, expires_at, allowed_modules, limits, max_devices, analytics_daily, analytics_features, validated_domains)
+            VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, '{}', '{}', '[]')
+            ON DUPLICATE KEY UPDATE
+                type = VALUES(type), customer_id = VALUES(customer_id), customer_name = VALUES(customer_name),
+                associated_domain = VALUES(associated_domain), expires_at = VALUES(expires_at),
+                allowed_modules = VALUES(allowed_modules), limits = VALUES(limits), max_devices = VALUES(max_devices)`,
+            [key, raw.type || 'FREE', raw.customer_id || null, raw.customer_name || null,
+             raw.associated_domain || '*', expiresAt, JSON.stringify(modules), JSON.stringify(limits),
+             raw.max_devices ? parseInt(raw.max_devices) : 0]
+        );
+        await addAuditLog('license_created', { license_key: key, type: raw.type, customer_name: raw.customer_name, by: req.admin.username }, req.admin.username);
+        const [newRows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [key]);
+        res.json({ success: true, license: newRows[0] });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
 });
 
 app.patch('/api/admin/licenses/:key/status', requireAuth, async (req, res) => {
-    const db = await getDB();
-    const l = db.licenses.find(x => x.license_key === req.params.key);
-    if (!l) return res.status(404).json({ success: false });
-    const oldStatus = l.status;
-    l.status = req.body.status;
-    await addAuditLog(db, 'license_status_changed', { license_key: req.params.key, from: oldStatus, to: req.body.status, by: req.admin.username });
-    await saveDB(db);
-    res.json({ success: true });
+    try {
+        const [rows] = await db.query('SELECT status FROM licenses WHERE license_key = ?', [req.params.key]);
+        if (!rows[0]) return res.status(404).json({ success: false });
+        const oldStatus = rows[0].status;
+        await db.query('UPDATE licenses SET status = ? WHERE license_key = ?', [req.body.status, req.params.key]);
+        await addAuditLog('license_status_changed', { license_key: req.params.key, from: oldStatus, to: req.body.status, by: req.admin.username }, req.admin.username);
+        await fireWebhook('license.status_changed', { license_key: req.params.key, from: oldStatus, to: req.body.status });
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
+// NEU: Lizenz verlängern
+app.post('/api/admin/licenses/:key/renew', requireAuth, async (req, res) => {
+    try {
+        const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [req.params.key]);
+        const l = rows[0];
+        if (!l) return res.status(404).json({ success: false, message: 'Lizenz nicht gefunden' });
+        const plan = PLAN_DEFINITIONS[l.type] || PLAN_DEFINITIONS['FREE'];
+        const days = req.body.days || plan.expires_days;
+        // Verlängerung ab jetzt oder ab aktuellem Ablaufdatum (je nachdem was später ist)
+        const baseDate = new Date(l.expires_at) > new Date() ? new Date(l.expires_at) : new Date();
+        const newExpiry = new Date(baseDate.getTime() + days * 86400000);
+        const newExpiryStr = newExpiry.toISOString().slice(0, 19).replace('T', ' ');
+        await db.query(
+            "UPDATE licenses SET expires_at = ?, status = 'active' WHERE license_key = ?",
+            [newExpiryStr, req.params.key]
+        );
+        await addAuditLog('license_renewed', { license_key: req.params.key, days, new_expiry: newExpiryStr, by: req.admin.username }, req.admin.username);
+        await fireWebhook('license.renewed', { license_key: req.params.key, new_expiry: newExpiryStr });
+        res.json({ success: true, new_expires_at: newExpiryStr, days_extended: days });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
 });
 
 app.delete('/api/admin/licenses/:key', requireAuth, async (req, res) => {
-    const db = await getDB();
-    db.licenses = db.licenses.filter(l => l.license_key !== req.params.key);
-    await addAuditLog(db, 'license_deleted', { license_key: req.params.key, by: req.admin.username });
-    await saveDB(db);
-    res.json({ success: true });
+    try {
+        await db.query('DELETE FROM licenses WHERE license_key = ?', [req.params.key]);
+        await addAuditLog('license_deleted', { license_key: req.params.key, by: req.admin.username }, req.admin.username);
+        await fireWebhook('license.deleted', { license_key: req.params.key });
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
 });
 
 app.get('/api/admin/customers', requireAuth, async (req, res) => {
-    const db = await getDB();
-    res.json({ customers: db.customers || [] });
+    const [rows] = await db.query('SELECT * FROM customers ORDER BY created_at DESC');
+    res.json({ customers: rows });
 });
 
 app.post('/api/admin/customers', requireAuth, async (req, res) => {
     const { name, email, phone, contact_person, company, payment_status, notes } = req.body;
     if (!name) return res.status(400).json({ success: false, message: 'Name required' });
     if (!email) return res.status(400).json({ success: false, message: 'E-Mail ist ein Pflichtfeld' });
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) return res.status(400).json({ success: false, message: 'Ungültige E-Mail-Adresse' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ success: false, message: 'Ungültige E-Mail-Adresse' });
     try {
-        const db = await getDB();
-        if (!db.customers) db.customers = [];
-        const newCustomer = {
-            id: crypto.randomUUID(),
-            name, email,
-            phone: phone || null,
-            contact_person: contact_person || null,
-            company: company || null,
-            payment_status: payment_status || 'unknown',
-            notes: notes || '',
-            created_at: new Date().toISOString()
-        };
-        db.customers.push(newCustomer);
-        await addAuditLog(db, 'customer_created', { customer_id: newCustomer.id, name, email, by: req.admin.username });
-        await saveDB(db);
-        res.json({ success: true, customer: newCustomer });
+        const id = crypto.randomUUID();
+        await db.query(
+            'INSERT INTO customers (id, name, email, phone, contact_person, company, payment_status, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [id, name, email, phone || null, contact_person || null, company || null, payment_status || 'unknown', notes || '']
+        );
+        await addAuditLog('customer_created', { customer_id: id, name, email, by: req.admin.username }, req.admin.username);
+        const [rows] = await db.query('SELECT * FROM customers WHERE id = ?', [id]);
+        res.json({ success: true, customer: rows[0] });
     } catch (e) {
         res.status(500).json({ success: false, message: 'Internal server error' });
     }
@@ -732,26 +835,26 @@ app.post('/api/admin/customers', requireAuth, async (req, res) => {
 
 app.patch('/api/admin/customers/:id', requireAuth, async (req, res) => {
     try {
-        const db = await getDB();
-        const customer = (db.customers || []).find(c => c.id === req.params.id);
-        if (!customer) return res.status(404).json({ success: false, message: 'Customer not found' });
+        const [rows] = await db.query('SELECT * FROM customers WHERE id = ?', [req.params.id]);
+        if (!rows[0]) return res.status(404).json({ success: false, message: 'Customer not found' });
         const { name, email, phone, contact_person, company, payment_status, notes } = req.body;
-        if (name) customer.name = name;
         if (email !== undefined) {
             if (!email) return res.status(400).json({ success: false, message: 'E-Mail ist ein Pflichtfeld' });
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(email)) return res.status(400).json({ success: false, message: 'Ungültige E-Mail-Adresse' });
-            customer.email = email;
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ success: false, message: 'Ungültige E-Mail-Adresse' });
         }
-        if (phone !== undefined) customer.phone = phone || null;
-        if (contact_person !== undefined) customer.contact_person = contact_person || null;
-        if (company !== undefined) customer.company = company;
-        if (payment_status) customer.payment_status = payment_status;
-        if (notes !== undefined) customer.notes = notes;
-        customer.updated_at = new Date().toISOString();
-        await addAuditLog(db, 'customer_updated', { customer_id: req.params.id, by: req.admin.username });
-        await saveDB(db);
-        res.json({ success: true, customer });
+        await db.query(`
+            UPDATE customers SET
+                name = COALESCE(?, name), email = COALESCE(?, email),
+                phone = ?, contact_person = ?, company = COALESCE(?, company),
+                payment_status = COALESCE(?, payment_status), notes = COALESCE(?, notes)
+            WHERE id = ?`,
+            [name || null, email || null, phone !== undefined ? phone : rows[0].phone,
+             contact_person !== undefined ? contact_person : rows[0].contact_person,
+             company || null, payment_status || null, notes !== undefined ? notes : rows[0].notes, req.params.id]
+        );
+        await addAuditLog('customer_updated', { customer_id: req.params.id, by: req.admin.username }, req.admin.username);
+        const [updated] = await db.query('SELECT * FROM customers WHERE id = ?', [req.params.id]);
+        res.json({ success: true, customer: updated[0] });
     } catch (e) {
         res.status(500).json({ success: false, message: 'Internal server error' });
     }
@@ -759,10 +862,8 @@ app.patch('/api/admin/customers/:id', requireAuth, async (req, res) => {
 
 app.delete('/api/admin/customers/:id', requireAuth, async (req, res) => {
     try {
-        const db = await getDB();
-        db.customers = (db.customers || []).filter(c => c.id !== req.params.id);
-        await addAuditLog(db, 'customer_deleted', { customer_id: req.params.id, by: req.admin.username });
-        await saveDB(db);
+        await db.query('DELETE FROM customers WHERE id = ?', [req.params.id]);
+        await addAuditLog('customer_deleted', { customer_id: req.params.id, by: req.admin.username }, req.admin.username);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ success: false, message: 'Internal server error' });
@@ -771,12 +872,8 @@ app.delete('/api/admin/customers/:id', requireAuth, async (req, res) => {
 
 app.patch('/api/admin/licenses/:key/customer', requireAuth, async (req, res) => {
     try {
-        const db = await getDB();
-        const l = db.licenses.find(x => x.license_key === req.params.key);
-        if (!l) return res.status(404).json({ success: false });
-        l.customer_id = req.body.customer_id || null;
-        await addAuditLog(db, 'license_customer_linked', { license_key: req.params.key, customer_id: l.customer_id, by: req.admin.username });
-        await saveDB(db);
+        await db.query('UPDATE licenses SET customer_id = ? WHERE license_key = ?', [req.body.customer_id || null, req.params.key]);
+        await addAuditLog('license_customer_linked', { license_key: req.params.key, customer_id: req.body.customer_id, by: req.admin.username }, req.admin.username);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ success: false, message: 'Internal server error' });
@@ -785,19 +882,9 @@ app.patch('/api/admin/licenses/:key/customer', requireAuth, async (req, res) => 
 
 app.get('/api/admin/smtp', requireAuth, requireSuperAdmin, async (req, res) => {
     try {
-        const db = await getDB();
-        const cfg = db.smtp_config || {};
-        res.json({
-            success: true,
-            smtp: {
-                host: cfg.host || '',
-                port: cfg.port || '587',
-                secure: cfg.secure || 'false',
-                user: cfg.user || '',
-                from: cfg.from || '',
-                configured: !!(cfg.host && cfg.user && cfg.pass)
-            }
-        });
+        const [rows] = await db.query('SELECT host, port, secure, smtp_user, smtp_from FROM smtp_config WHERE id = 1');
+        const cfg = rows[0] || {};
+        res.json({ success: true, smtp: { host: cfg.host || '', port: cfg.port || '587', secure: cfg.secure || 'false', user: cfg.smtp_user || '', from: cfg.smtp_from || '', configured: !!(cfg.host && cfg.smtp_user) } });
     } catch (e) {
         res.status(500).json({ success: false, message: 'Internal server error' });
     }
@@ -808,12 +895,14 @@ app.post('/api/admin/smtp', requireAuth, requireSuperAdmin, async (req, res) => 
     if (!host || !user || !pass)
         return res.status(400).json({ success: false, message: 'Host, Benutzer und Passwort sind Pflichtfelder' });
     try {
-        const db = await getDB();
-        db.smtp_config = { host, port: port || '587', secure: secure || 'false', user, pass, from: from || user };
-        const transporter = createSmtpTransporter(db.smtp_config);
+        const transporter = createSmtpTransporter({ host, port: port || '587', secure: secure || 'false', user, pass });
         await transporter.verify();
-        await addAuditLog(db, 'smtp_config_updated', { host, user, by: req.admin.username });
-        await saveDB(db);
+        await db.query(`
+            INSERT INTO smtp_config (id, host, port, secure, smtp_user, smtp_pass, smtp_from) VALUES (1, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE host=VALUES(host), port=VALUES(port), secure=VALUES(secure), smtp_user=VALUES(smtp_user), smtp_pass=VALUES(smtp_pass), smtp_from=VALUES(smtp_from)`,
+            [host, port || '587', secure || 'false', user, pass, from || user]
+        );
+        await addAuditLog('smtp_config_updated', { host, user, by: req.admin.username }, req.admin.username);
         res.json({ success: true, message: 'SMTP-Konfiguration gespeichert und Verbindung erfolgreich getestet.' });
     } catch (e) {
         res.status(400).json({ success: false, message: `SMTP-Verbindungsfehler: ${e.message}` });
@@ -824,11 +913,8 @@ app.post('/api/admin/smtp/test', requireAuth, requireSuperAdmin, async (req, res
     const { to } = req.body;
     if (!to) return res.status(400).json({ success: false, message: 'Empfänger-E-Mail fehlt' });
     try {
-        const db = await getDB();
-        await sendMail(db, to,
-            'OPA License Server — SMTP Test',
-            '<h2>✅ SMTP Test erfolgreich</h2><p>Die SMTP-Konfiguration deines OPA License Servers funktioniert korrekt.</p>'
-        );
+        await sendMail(to, 'OPA! Santorini License Server — SMTP Test',
+            '<h2>✅ SMTP Test erfolgreich</h2><p>Die SMTP-Konfiguration deines OPA! Santorini License Servers funktioniert korrekt.</p>');
         res.json({ success: true, message: `Test-E-Mail an ${to} gesendet.` });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
@@ -837,10 +923,8 @@ app.post('/api/admin/smtp/test', requireAuth, requireSuperAdmin, async (req, res
 
 app.delete('/api/admin/smtp', requireAuth, requireSuperAdmin, async (req, res) => {
     try {
-        const db = await getDB();
-        delete db.smtp_config;
-        await addAuditLog(db, 'smtp_config_deleted', { by: req.admin.username });
-        await saveDB(db);
+        await db.query('DELETE FROM smtp_config WHERE id = 1');
+        await addAuditLog('smtp_config_deleted', { by: req.admin.username }, req.admin.username);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ success: false, message: 'Internal server error' });
@@ -848,22 +932,20 @@ app.delete('/api/admin/smtp', requireAuth, requireSuperAdmin, async (req, res) =
 });
 
 app.get('/api/admin/devices', requireAuth, async (req, res) => {
-    const db = await getDB();
     const { license_key } = req.query;
-    let devices = db.devices || [];
-    if (license_key) devices = devices.filter(d => d.license_key === license_key);
+    let query = 'SELECT * FROM devices';
+    const params = [];
+    if (license_key) { query += ' WHERE license_key = ?'; params.push(license_key); }
+    const [devices] = await db.query(query, params);
     res.json({ devices });
 });
 
 app.patch('/api/admin/devices/:id/deactivate', requireAuth, async (req, res) => {
     try {
-        const db = await getDB();
-        const device = (db.devices || []).find(d => d.id === req.params.id);
-        if (!device) return res.status(404).json({ success: false });
-        device.active = false;
-        device.deactivated_at = new Date().toISOString();
-        await addAuditLog(db, 'device_deactivated', { device_id: device.device_id, license_key: device.license_key, by: req.admin.username });
-        await saveDB(db);
+        const [rows] = await db.query('SELECT * FROM devices WHERE id = ?', [req.params.id]);
+        if (!rows[0]) return res.status(404).json({ success: false });
+        await db.query('UPDATE devices SET active = 0, deactivated_at = NOW() WHERE id = ?', [req.params.id]);
+        await addAuditLog('device_deactivated', { device_id: rows[0].device_id, license_key: rows[0].license_key, by: req.admin.username }, req.admin.username);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ success: false, message: 'Internal server error' });
@@ -872,12 +954,10 @@ app.patch('/api/admin/devices/:id/deactivate', requireAuth, async (req, res) => 
 
 app.delete('/api/admin/devices/:id', requireAuth, async (req, res) => {
     try {
-        const db = await getDB();
-        const device = (db.devices || []).find(d => d.id === req.params.id);
-        if (!device) return res.status(404).json({ success: false });
-        db.devices = db.devices.filter(d => d.id !== req.params.id);
-        await addAuditLog(db, 'device_removed', { device_id: device.device_id, license_key: device.license_key, by: req.admin.username });
-        await saveDB(db);
+        const [rows] = await db.query('SELECT * FROM devices WHERE id = ?', [req.params.id]);
+        if (!rows[0]) return res.status(404).json({ success: false });
+        await db.query('DELETE FROM devices WHERE id = ?', [req.params.id]);
+        await addAuditLog('device_removed', { device_id: rows[0].device_id, license_key: rows[0].license_key, by: req.admin.username }, req.admin.username);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ success: false, message: 'Internal server error' });
@@ -885,73 +965,96 @@ app.delete('/api/admin/devices/:id', requireAuth, async (req, res) => {
 });
 
 app.get('/api/admin/analytics', requireAuth, async (req, res) => {
-    const db = await getDB();
-    const licenses = db.licenses || [];
     const now = new Date();
+    const [licenses] = await db.query('SELECT license_key, customer_name, type, usage_count, last_validated, analytics_daily, analytics_features FROM licenses ORDER BY usage_count DESC LIMIT 10');
+    const topLicenses = licenses.map(l => ({ license_key: l.license_key, customer_name: l.customer_name, type: l.type, usage_count: l.usage_count || 0, last_validated: l.last_validated }));
 
-    const topLicenses = [...licenses]
-        .sort((a, b) => (b.usage_count || 0) - (a.usage_count || 0))
-        .slice(0, 10)
-        .map(l => ({ license_key: l.license_key, customer_name: l.customer_name, type: l.type, usage_count: l.usage_count || 0, last_validated: l.last_validated }));
-
+    const [allLicenses] = await db.query('SELECT analytics_daily, analytics_features FROM licenses');
     const daily = {};
-    for (const l of licenses) {
-        if (l.analytics?.daily) {
-            for (const [day, count] of Object.entries(l.analytics.daily)) {
-                daily[day] = (daily[day] || 0) + count;
-            }
-        }
-    }
-
     const features = {};
-    for (const l of licenses) {
-        if (l.analytics?.features) {
-            for (const [f, count] of Object.entries(l.analytics.features)) {
-                features[f] = (features[f] || 0) + count;
-            }
-        }
+    for (const l of allLicenses) {
+        try {
+            const d = typeof l.analytics_daily === 'string' ? JSON.parse(l.analytics_daily) : (l.analytics_daily || {});
+            for (const [day, count] of Object.entries(d)) daily[day] = (daily[day] || 0) + count;
+        } catch {}
+        try {
+            const f = typeof l.analytics_features === 'string' ? JSON.parse(l.analytics_features) : (l.analytics_features || {});
+            for (const [feat, count] of Object.entries(f)) features[feat] = (features[feat] || 0) + count;
+        } catch {}
     }
 
-    res.json({
-        top_licenses: topLicenses,
-        daily_requests: daily,
-        feature_usage: features,
-        total_devices: (db.devices || []).length,
-        active_devices: (db.devices || []).filter(d => d.active).length
-    });
+    const [[{ total_devices }]] = await db.query('SELECT COUNT(*) as total_devices FROM devices');
+    const [[{ active_devices }]] = await db.query('SELECT COUNT(*) as active_devices FROM devices WHERE active = 1');
+
+    res.json({ top_licenses: topLicenses, daily_requests: daily, feature_usage: features, total_devices, active_devices });
 });
 
 app.get('/api/admin/audit-log', requireAuth, async (req, res) => {
-    const db = await getDB();
     const { limit = 100, action, license_key } = req.query;
-    let logs = db.audit_log || [];
-    if (action) logs = logs.filter(l => l.action === action);
-    if (license_key) logs = logs.filter(l => l.details?.license_key === license_key);
-    res.json({ logs: logs.slice(0, parseInt(limit)) });
+    let query = 'SELECT * FROM audit_log WHERE 1=1';
+    const params = [];
+    if (action) { query += ' AND action = ?'; params.push(action); }
+    if (license_key) { query += ' AND JSON_EXTRACT(details, "$.license_key") = ?'; params.push(license_key); }
+    query += ' ORDER BY ts DESC LIMIT ?';
+    params.push(parseInt(limit));
+    const [logs] = await db.query(query, params);
+    res.json({ logs });
+});
+
+// Webhooks verwalten
+app.get('/api/admin/webhooks', requireAuth, requireSuperAdmin, async (req, res) => {
+    const [rows] = await db.query('SELECT id, url, events, active, created_at FROM webhooks');
+    res.json({ webhooks: rows });
+});
+
+app.post('/api/admin/webhooks', requireAuth, requireSuperAdmin, async (req, res) => {
+    const { url, secret, events } = req.body;
+    if (!url) return res.status(400).json({ success: false, message: 'URL erforderlich' });
+    try {
+        const [result] = await db.query(
+            'INSERT INTO webhooks (url, secret, events) VALUES (?, ?, ?)',
+            [url, secret || null, JSON.stringify(events || ['*'])]
+        );
+        await addAuditLog('webhook_created', { url, by: req.admin.username }, req.admin.username);
+        res.json({ success: true, id: result.insertId });
+    } catch (e) {
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
+app.delete('/api/admin/webhooks/:id', requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+        await db.query('DELETE FROM webhooks WHERE id = ?', [req.params.id]);
+        await addAuditLog('webhook_deleted', { webhook_id: req.params.id, by: req.admin.username }, req.admin.username);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
 });
 
 app.post('/api/admin/impersonate', requireAuth, requireSuperAdmin, async (req, res) => {
     const { license_key } = req.body;
     if (!license_key) return res.status(400).json({ success: false });
     try {
-        const db = await getDB();
-        const l = db.licenses.find(x => x.license_key === license_key);
+        const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [license_key]);
+        const l = rows[0];
         if (!l) return res.status(404).json({ success: false });
-        const customer = l.customer_id ? (db.customers || []).find(c => c.id === l.customer_id) : null;
-        const devices = (db.devices || []).filter(d => d.license_key === license_key);
-        await addAuditLog(db, 'impersonate', { license_key, by: req.admin.username });
-        await saveDB(db);
-        res.json({ success: true, license: l, customer: customer || null, devices });
+        const [custRows] = l.customer_id
+            ? await db.query('SELECT * FROM customers WHERE id = ?', [l.customer_id])
+            : [[]];
+        const [devices] = await db.query('SELECT * FROM devices WHERE license_key = ?', [license_key]);
+        await addAuditLog('impersonate', { license_key, by: req.admin.username }, req.admin.username);
+        res.json({ success: true, license: l, customer: custRows[0] || null, devices });
     } catch (e) {
         res.status(500).json({ success: false, message: 'Internal server error' });
     }
 });
 
 app.listen(PORT, () => {
-    console.log(`\n🏘️  OPA License Server running on http://localhost:${PORT}`);
-    console.log(`📋  Plans: ${Object.keys(PLAN_DEFINITIONS).join(' | ')}`);
+    console.log(`\n🏛️  OPA! Santorini License Server v2.0 läuft auf http://localhost:${PORT}`);
+    console.log(`📋  Pläne: ${Object.keys(PLAN_DEFINITIONS).join(' | ')}`);
     console.log(`🌐  CORS: ${allowedOrigins ? allowedOrigins.join(', ') : 'alle Origins erlaubt'}`);
-    console.log(`🔐  HMAC Signing: ${HMAC_SECRET !== 'hmac-change-me-in-production' ? 'AKTIV' : 'INAKTIV (HMAC_SECRET nicht gesetzt)'}`);
+    console.log(`🔐  HMAC Signing: ${HMAC_SECRET !== 'hmac-change-me-in-production' ? 'AKTIV' : 'INAKTIV'}`);
     console.log(`🔑  RSA JWT Signing: ${RSA_PRIVATE_KEY ? 'AKTIV (RS256)' : 'INAKTIV – RSA_PRIVATE_KEY nicht gesetzt!'}`);
     console.log(`📧  SMTP: ${(envSmtp.host && envSmtp.user) ? `${envSmtp.host}:${envSmtp.port}` : 'nicht konfiguriert'}\n`);
 });
