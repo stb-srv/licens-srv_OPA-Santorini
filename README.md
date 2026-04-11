@@ -1,11 +1,12 @@
-# 🏘️ OPA License Server
+# 🏛️ OPA! Santorini License Server
 
 Central license management server for the **OPA-Santorini** restaurant CMS system.
 
-![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933?logo=node.js&logoColor=white)
 ![Express](https://img.shields.io/badge/Express-4.x-000000?logo=express)
+![MySQL](https://img.shields.io/badge/MySQL-8.0%2B-4479A1?logo=mysql&logoColor=white)
 ![License](https://img.shields.io/badge/License-Private-red)
-![Version](https://img.shields.io/badge/Version-1.2.0-6366f1)
+![Version](https://img.shields.io/badge/Version-2.0.0-6366f1)
 
 ---
 
@@ -13,20 +14,17 @@ Central license management server for the **OPA-Santorini** restaurant CMS syste
 
 - [Features](#-features)
 - [Architektur](#-architektur)
-- [Installation](#-installation)
-- [Konfiguration](#-konfiguration)
+- [Erstinstallation (Produktion)](#-erstinstallation-produktion)
+- [Manuelle Installation (Lokal/Dev)](#-manuelle-installation-lokaldev)
+- [Konfiguration (.env)](#-konfiguration-env)
+- [Datenbank-Migration](#-datenbank-migration)
+- [Server updaten](#-server-updaten)
 - [Pläne & Module](#-pläne--module)
 - [API Referenz](#-api-referenz)
-  - [Public API](#public-api)
-  - [Admin API – Lizenzen](#admin-api--lizenzen)
-  - [Admin API – Kunden](#admin-api--kunden)
-  - [Admin API – Geräte](#admin-api--geräte)
-  - [Admin API – Analytics](#admin-api--analytics)
-  - [Admin API – Audit Log](#admin-api--audit-log)
-  - [Admin API – Benutzer](#admin-api--benutzer)
 - [Sicherheit](#-sicherheit)
 - [Admin Panel](#-admin-panel)
-- [Deployment](#-deployment)
+- [Nginx Reverse Proxy](#-nginx-reverse-proxy)
+- [Troubleshooting](#-troubleshooting)
 - [Changelog](#-changelog)
 
 ---
@@ -36,10 +34,12 @@ Central license management server for the **OPA-Santorini** restaurant CMS syste
 | Feature | Status |
 |---|---|
 | Lizenz-Validierung (Key-based) | ✅ |
+| MySQL-Datenbank (kein JSON-File mehr) | ✅ |
 | Kunden- & Account-Verwaltung | ✅ |
 | Geräte-Management (Device Fingerprint) | ✅ |
 | Gerätelimit pro Lizenz | ✅ |
 | Analytics & Nutzungsdaten | ✅ |
+| RSA-2048 signierte License Tokens (RS256) | ✅ |
 | HMAC-signierte Antworten | ✅ |
 | Replay-Schutz (Nonce) | ✅ |
 | Offline Tokens (JWT, zeitlich begrenzt) | ✅ |
@@ -49,6 +49,10 @@ Central license management server for the **OPA-Santorini** restaurant CMS syste
 | Superadmin / Admin Rollen | ✅ |
 | Impersonate (Support-Feature) | ✅ |
 | Domain-Whitelist / Wildcard | ✅ |
+| Ablauf-Benachrichtigungen per E-Mail | ✅ |
+| Webhook-Unterstützung | ✅ |
+| Automatisches Deploy-Script | ✅ |
+| Automatisches Update-Script | ✅ |
 
 ---
 
@@ -56,87 +60,264 @@ Central license management server for the **OPA-Santorini** restaurant CMS syste
 
 ```
 licens-srv_OPA-Santorini/
-├── server.js          # Express-Server, alle API-Endpunkte
-├── db.json            # JSON-Datenbank (Lizenzen, Kunden, Geräte, Logs)
-├── setup-admin.js     # Setup-Script: ersten Admin anlegen
-├── deploy.sh          # Deploy-Script für Produktionsserver
+├── server.js        # Express-Server, alle API-Endpunkte
+├── migrate.js       # Datenbank-Schema erstellen + db.json migrieren
+├── deploy.sh        # Erstinstallation auf Produktionsserver (als root)
+├── update.sh        # Konfliktfreies Update + Migration + Neustart
 ├── package.json
-├── .env.example       # Umgebungsvariablen-Vorlage
+├── .env             # Umgebungsvariablen (nie in Git!)
+├── .env.example     # Vorlage für .env
+├── private.pem      # RSA Private Key (automatisch generiert, nie in Git!)
+├── public.pem       # RSA Public Key (fürs CMS)
+├── backups/         # Automatische Backups (db.json + .env)
 └── public/
     └── index.html     # Admin Panel (Single Page App)
 ```
 
-**Datenbank-Struktur (`db.json`):**
-```json
-{
-  "licenses":    [...],   // Lizenz-Objekte
-  "customers":   [...],   // Kunden / Accounts
-  "devices":     [...],   // Registrierte Client-Geräte
-  "audit_log":   [...],   // Audit-Einträge (max. 2000)
-  "used_nonces": [...],   // Replay-Schutz (5 min TTL)
-  "admins":      [...]    // Admin-Accounts (bcrypt-gehashed)
-}
+**Datenbank-Tabellen (MySQL):**
+
+| Tabelle | Inhalt |
+|---|---|
+| `licenses` | Lizenz-Schlüssel, Typ, Status, Ablaufdatum, Module |
+| `customers` | Kunden mit E-Mail, Firma, Zahlungsstatus |
+| `devices` | Registrierte Client-Geräte |
+| `admins` | Admin-Accounts (bcrypt-gehashed) |
+| `audit_log` | Alle Aktionen protokolliert |
+| `smtp_config` | SMTP-Einstellungen |
+| `webhooks` | Webhook-URLs |
+| `used_nonces` | Replay-Schutz (5 min TTL) |
+
+---
+
+## 🚀 Erstinstallation (Produktion)
+
+> Voraussetzungen: Ubuntu 22.04/24.04/25.04, Root-Zugriff, MySQL-Datenbank vorhanden
+
+### Schritt 1 — deploy.sh herunterladen & ausführen
+
+```bash
+# Als root auf dem Produktionsserver:
+wget https://raw.githubusercontent.com/stb-srv/licens-srv_OPA-Santorini/main/deploy.sh
+bash deploy.sh
+```
+
+Das Script führt **automatisch** folgende Schritte aus:
+
+1. ✅ Node.js 22, Git, OpenSSL installieren
+2. ✅ System-User `licens-srv` anlegen
+3. ✅ Repository klonen (fragt GitHub Token ab – da privates Repo)
+4. ✅ Alle Secrets automatisch generieren:
+   - `ADMIN_SECRET` – 48-Byte zufälliger Hex-String
+   - `HMAC_SECRET` – 48-Byte zufälliger Hex-String
+   - `WEBHOOK_SECRET` – 24-Byte zufälliger Hex-String
+   - RSA-2048 Schlüsselpaar (`private.pem` + `public.pem`)
+5. ✅ DB-Passwort interaktiv abfragen
+6. ✅ `.env` mit allen Werten erstellen (`chmod 600`)
+7. ✅ `npm install`
+8. ✅ `node migrate.js` – Tabellen erstellen + Admin anlegen
+9. ✅ systemd-Service einrichten & starten
+
+> ❗ **Wichtig:** Das Script benötigt einen **GitHub Personal Access Token** mit `repo`-Berechtigung, da das Repository privat ist.
+> Token erstellen unter: https://github.com/settings/tokens
+
+### Schritt 2 — Netcup: Externen DB-Zugriff freischalten
+
+Da die Datenbank bei Netcup liegt, muss die IP des Lizenzservers in der Netcup-Firewall freigegeben werden:
+
+1. → https://www.customercontrolpanel.de einloggen
+2. → **Produkte** → Webhosting-Paket
+3. → **MySQL-Datenbanken** → `k220163_opa`
+4. → **Externer Zugriff** → IP des Lizenzservers eintragen
+
+### Schritt 3 — Firewall & erster Login
+
+```bash
+# Port 4000 freigeben
+ufw allow 4000
+
+# Logs prüfen
+journalctl -fu licens-srv
+
+# Erwartete Ausgabe:
+# ✅  MySQL Verbindung erfolgreich – mysql2ebc.netcup.net:3306
+# 🏛️  OPA! Santorini License Server läuft auf http://localhost:4000
+```
+
+Admin Panel: `http://DEINE-SERVER-IP:4000`
+
+**Standard-Zugangsdaten (sofort ändern!):**
+```
+Username: admin
+Password: admin123
+```
+
+### Schritt 4 — RSA Public Key ins CMS kopieren
+
+```bash
+cat /opt/licens-srv/public.pem
+# Ausgabe in die CMS-Konfiguration einfügen
 ```
 
 ---
 
-## 🚀 Installation
-
-### Voraussetzungen
-- Node.js 18+
-- npm
-
-### Setup
+## 💻 Manuelle Installation (Lokal/Dev)
 
 ```bash
-# 1. Repository klonen
+# 1. Repository klonen (GitHub Token erforderlich)
 git clone https://github.com/stb-srv/licens-srv_OPA-Santorini.git
 cd licens-srv_OPA-Santorini
 
 # 2. Abhängigkeiten installieren
 npm install
 
-# 3. Umgebungsvariablen konfigurieren
+# 3. .env anlegen
 cp .env.example .env
-nano .env
+nano .env  # DB-Zugangsdaten + Secrets eintragen
 
-# 4. Ersten Admin anlegen
-node setup-admin.js
+# 4. Datenbank-Tabellen erstellen + Admin anlegen
+node migrate.js
 
 # 5. Server starten
 npm start
+# oder für Entwicklung mit Auto-Reload:
+npm run dev
 ```
 
-Der Server läuft dann auf `http://localhost:4000`.
+Der Server läuft auf `http://localhost:4000`.
 
 ---
 
-## ⚙️ Konfiguration
+## ⚙️ Konfiguration (.env)
 
-Alle Einstellungen erfolgen über die `.env` Datei:
+Alle Einstellungen erfolgen über die `.env` Datei im Projektverzeichnis.
+Die `.env` wird automatisch beim Start geladen (via `dotenv`).
 
 ```env
-# Server-Port (Standard: 4000)
+# Server-Port
 PORT=4000
 
-# JWT-Secret für Admin-Authentifizierung
-# Mindestens 32 zufällige Zeichen!
+# Admin JWT Secret (automatisch generiert durch deploy.sh)
 ADMIN_SECRET=dein-sehr-sicherer-jwt-key-hier
 
-# HMAC-Secret für signierte Validate-Antworten
-# Mindestens 32 zufällige Zeichen!
+# HMAC Signing Secret (automatisch generiert durch deploy.sh)
 HMAC_SECRET=dein-hmac-signing-secret-hier
 
-# Erlaubte CORS-Origins (kommagetrennt)
-# Leer lassen = alle Origins erlaubt
-CORS_ORIGINS=https://licens-prod.stb-srv.de
+# RSA-2048 Private Key für signierte License Tokens (RS256)
+# Automatisch generiert durch deploy.sh, als Inline-String:
+RSA_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----"
+
+# MySQL Datenbank
+DB_HOST=mysql2ebc.netcup.net
+DB_PORT=3306
+DB_NAME=k220163_opa
+DB_USER=k220163_opa
+DB_PASS=dein-db-passwort
+
+# CORS: erlaubte Origins (kommagetrennt, leer = alle erlaubt)
+CORS_ORIGINS=https://dein-cms.de
+
+# SMTP (optional – kann auch im Admin-Panel konfiguriert werden)
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM=
+
+# Webhook (optional)
+WEBHOOK_URL=
+WEBHOOK_SECRET=
 ```
 
-> ⚠️ **Wichtig:** Ohne gesetztes `HMAC_SECRET` sind Response-Signaturen deaktiviert. Ohne gesetztes `ADMIN_SECRET` ist das System unsicher!
+> ⚠️ **Sonderzeichen im Passwort** (`$`, `!`, `#`, `@`) müssen in Anführungszeichen gesetzt werden:
+> ```env
+> DB_PASS="mein$Pa$$wort!"
+> ```
 
-Zufällige Secrets generieren:
+Secrets manuell generieren:
 ```bash
-node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+openssl rand -hex 48
+```
+
+---
+
+## 🔄 Datenbank-Migration
+
+Das `migrate.js`-Script übernimmt zwei Aufgaben:
+
+1. **Schema erstellen** – Alle MySQL-Tabellen werden angelegt (`CREATE TABLE IF NOT EXISTS`)
+2. **Daten migrieren** – Vorhandene `db.json` (altes Format) wird in MySQL importiert
+
+### Wann muss `migrate.js` ausgeführt werden?
+
+| Situation | Aktion |
+|---|---|
+| Erstinstallation (keine Tabellen) | `node migrate.js` |
+| Update mit neuen Tabellen/Spalten | `node migrate.js` |
+| Migration von alter `db.json` | `node migrate.js` |
+| Fehler `Table '...' doesn't exist` | `node migrate.js` |
+
+```bash
+cd /opt/licens-srv
+node migrate.js
+```
+
+**Erwartete Ausgabe:**
+```
+🔄 Starte Migration...
+✅ Tabellen erstellt/geprüft
+✅ Admin 'admin' angelegt (Passwort: admin123)
+✅ Migration abgeschlossen
+
+📊 Zusammenfassung:
+   Lizenzen migriert:  1
+   Kunden migriert:    0
+   Admins migriert:    1
+```
+
+> ❗ **Nach der Migration:** Standard-Passwort `admin123` sofort im Admin-Panel ändern!
+
+### Verhalten bei wiederholter Ausführung
+
+- Bereits vorhandene Lizenzen/Kunden werden **nicht überschrieben**
+- `usage_count` und Timestamps werden aktualisiert
+- Bestehende Admin-Accounts bleiben erhalten (Passwörter nicht zurückgesetzt)
+- Sicher jederzeit ausführbar (idempotent)
+
+---
+
+## 🔄 Server updaten
+
+Für Updates auf dem Produktionsserver gibt es das `update.sh`-Script.
+Es ist **vollautomatisch** – keine manuelle Intervention nötig.
+
+```bash
+cd /opt/licens-srv
+bash update.sh
+```
+
+**Was das Script macht:**
+
+1. 📦 Backup von `db.json` und `.env` nach `backups/` (max. 10 Backups)
+2. 📥 `git fetch origin main` + `git reset --hard origin/main`
+   - **Kein `git pull`**, kein Stash, kein Merge – überschreibt lokale Änderungen
+   - `.env` ist in `.gitignore` und wird **nie überschrieben**
+3. 📦 `npm install` (bei geänderter `package.json` automatisch `npm ci`)
+4. ⏸️ Server kurz stoppen (für saubere Migration)
+5. 🔄 `node migrate.js` (neue Tabellen/Spalten werden angelegt)
+6. 🚀 Server neu starten (PM2 oder systemd)
+
+> ❗ **Wichtig:** Das Script überschreibt alle versionierten Dateien (`server.js`, `package.json`, etc.) ohne Rückfrage.
+> Eigene Änderungen an diesen Dateien gehen verloren. Konfiguration gehört ausschließlich in die `.env`.
+
+### Typischer Update-Ablauf
+
+```bash
+# Auf dem Server:
+bash update.sh
+
+# Logs prüfen:
+journalctl -fu licens-srv
 ```
 
 ---
@@ -145,22 +326,25 @@ node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 
 | Plan | Schlüssel-Prefix | Speisen | Tische | Laufzeit |
 |---|---|---|---|---|
-| Free | `OPA-FREE-` | 10 | 5 | Unbegrenzt |
-| Starter | `OPA-START-` | 40 | 10 | 365 Tage |
-| Pro | `OPA-PRO-` | 100 | 25 | 365 Tage |
-| Pro+ | `OPA-PROPLUS-` | 200 | 50 | 365 Tage |
-| Enterprise | `OPA-ENT-` | 500 | 999 | 365 Tage |
+| Free | `OPA-FREE-` | 30 | 5 | Unbegrenzt |
+| Starter | `OPA-START-` | 60 | 10 | 365 Tage |
+| Pro | `OPA-PRO-` | 150 | 25 | 365 Tage |
+| Pro+ | `OPA-PROPLUS-` | 300 | 50 | 365 Tage |
+| Enterprise | `OPA-ENT-` | 999 | 999 | 365 Tage |
 
 **Verfügbare Module pro Plan:**
 
 | Modul | Free | Starter | Pro | Pro+ | Enterprise |
 |---|---|---|---|---|---|
 | `menu_edit` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `multilanguage` | ❌ | ✅ | ✅ | ✅ | ✅ |
 | `orders_kitchen` | ❌ | ✅ | ✅ | ✅ | ✅ |
-| `reservations` | ❌ | ✅ | ✅ | ✅ | ✅ |
-| `custom_design` | ❌ | ❌ | ✅ | ✅ | ✅ |
+| `reservations_phone` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `reservations_online` | ❌ | ❌ | ✅ | ✅ | ✅ |
+| `seasonal_menu` | ❌ | ❌ | ✅ | ✅ | ✅ |
+| `custom_branding` | ❌ | ❌ | ✅ | ✅ | ✅ |
+| `qr_pay` | ❌ | ❌ | ✅ | ✅ | ✅ |
 | `analytics` | ❌ | ❌ | ❌ | ✅ | ✅ |
-| `qr_pay` | ❌ | ❌ | ❌ | ❌ | ✅ |
 
 ---
 
@@ -170,7 +354,7 @@ node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 
 #### `POST /api/v1/validate`
 
-Validiert einen Lizenz-Key. Dies ist der Hauptendpoint für Client-Plugins.
+Validiert einen Lizenz-Key. Hauptendpoint für Client-Plugins.
 
 **Rate Limit:** 30 Requests/Minute pro IP
 
@@ -179,16 +363,10 @@ Validiert einen Lizenz-Key. Dies ist der Hauptendpoint für Client-Plugins.
 {
   "license_key": "OPA-PRO-ABCD1234-2026",
   "domain": "meinrestaurant.de",
-
-  // Optional: Geräteverwaltung
   "device_id": "unique-device-fingerprint",
   "device_type": "windows",
-
-  // Optional: Replay-Schutz
   "nonce": "zufaelliger-einmal-string",
-
-  // Optional: Feature-Tracking
-  "features_used": ["menu_edit", "reservations"]
+  "features_used": ["menu_edit", "reservations_online"]
 }
 ```
 
@@ -200,29 +378,19 @@ Validiert einen Lizenz-Key. Dies ist der Hauptendpoint für Client-Plugins.
   "type": "PRO",
   "plan_label": "Pro",
   "expires_at": "2027-04-08T00:00:00.000Z",
-  "allowed_modules": {
-    "menu_edit": true,
-    "orders_kitchen": true,
-    "reservations": true,
-    "custom_design": true,
-    "analytics": false,
-    "qr_pay": false
-  },
-  "limits": {
-    "max_dishes": 100,
-    "max_tables": 25
-  },
-  // Wenn HMAC_SECRET gesetzt:
+  "allowed_modules": { "menu_edit": true, "qr_pay": true, "..." : "..." },
+  "limits": { "max_dishes": 150, "max_tables": 25 },
+  "license_token": "eyJhbGciOiJSUzI1NiJ9...",
+  "license_token_public_key": "-----BEGIN PUBLIC KEY-----...",
   "_sig": "hmac-sha256-signatur",
   "_ts": 1712607600000
 }
 ```
 
-**Fehlerfälle:**
+**Fehlercodes:**
 
 | HTTP | `status` | Beschreibung |
 |---|---|---|
-| 400 | `invalid` | Kein Key angegeben |
 | 404 | `invalid` | Key nicht gefunden |
 | 403 | `expired` | Lizenz abgelaufen |
 | 403 | `inactive` | Lizenz deaktiviert |
@@ -233,55 +401,49 @@ Validiert einen Lizenz-Key. Dies ist der Hauptendpoint für Client-Plugins.
 
 ---
 
+#### `POST /api/v1/heartbeat`
+
+Reguläre Verbindungskontrolle. Erneuert den `license_token` ohne vollständige Validierung.
+
+```json
+{ "license_key": "OPA-PRO-ABCD1234-2026", "domain": "meinrestaurant.de" }
+```
+
+---
+
+#### `GET /api/v1/public-key`
+
+Gibt den RSA Public Key zurück (für Client-seitige Token-Verifikation).
+
+```json
+{ "public_key": "-----BEGIN PUBLIC KEY-----...", "algorithm": "RS256" }
+```
+
+---
+
 #### `POST /api/v1/offline-token`
 
-Generiert einen signierten JWT-Token für Offline-Betrieb.
+Generiert einen signierten JWT-Token für Offline-Betrieb (max. 168h / 7 Tage).
 
-**Request Body:**
 ```json
 {
   "license_key": "OPA-PRO-ABCD1234-2026",
   "domain": "meinrestaurant.de",
-  "device_id": "device-fingerprint",
+  "device_id": "fingerprint",
   "duration_hours": 24
 }
 ```
 
-**Antwort:**
-```json
-{
-  "success": true,
-  "offline_token": "eyJhbGciOiJIUzI1NiJ9...",
-  "valid_hours": 24
-}
-```
-
-> Maximum: 168 Stunden (7 Tage). Benötigt `HMAC_SECRET`.
-
 ---
 
-#### `POST /api/v1/verify-offline-token`
+### Admin API
 
-Verifiziert einen Offline-Token lokal (kein DB-Zugriff).
-
-**Request Body:**
-```json
-{
-  "offline_token": "eyJhbGciOiJIUzI1NiJ9..."
-}
-```
-
----
-
-### Admin API – Authentifizierung
-
-Alle `/api/admin/*` Endpunkte benötigen einen Bearer Token im Header:
+Alle `/api/admin/*` Endpunkte benötigen:
 ```
 Authorization: Bearer <token>
 ```
 
 #### `POST /api/admin/login`
-
 ```json
 { "username": "admin", "password": "deinpasswort" }
 ```
@@ -289,18 +451,19 @@ Authorization: Bearer <token>
 
 ---
 
-### Admin API – Lizenzen
+#### Lizenzen
 
 | Methode | Endpoint | Beschreibung |
 |---|---|---|
 | `GET` | `/api/admin/licenses` | Alle Lizenzen + Stats |
 | `POST` | `/api/admin/licenses` | Neue Lizenz erstellen |
-| `PATCH` | `/api/admin/licenses/:key/status` | Status ändern (`active`/`inactive`) |
-| `PATCH` | `/api/admin/licenses/:key/customer` | Lizenz mit Kunden verknüpfen |
+| `GET` | `/api/admin/licenses/:key` | Einzelne Lizenz |
+| `PATCH` | `/api/admin/licenses/:key/status` | Status ändern |
+| `POST` | `/api/admin/licenses/:key/renew` | Lizenz verlängern |
+| `PATCH` | `/api/admin/licenses/:key/customer` | Kunde verknüpfen |
 | `DELETE` | `/api/admin/licenses/:key` | Lizenz löschen |
-| `GET` | `/api/admin/plans` | Plan-Definitionen abrufen |
 
-**Lizenz erstellen – Body:**
+**Lizenz erstellen:**
 ```json
 {
   "type": "PRO",
@@ -309,17 +472,16 @@ Authorization: Bearer <token>
   "license_key": "OPA-PRO-CUSTOM-2026",
   "associated_domain": "*.meinrestaurant.de",
   "max_devices": 3,
-  "expires_at": "2027-04-08T00:00:00.000Z"
+  "expires_at": "2027-04-08T00:00:00"
 }
 ```
-
 > `license_key` leer lassen → wird automatisch generiert  
 > `associated_domain: "*"` → alle Domains erlaubt  
 > `max_devices: 0` → unbegrenzte Geräte
 
 ---
 
-### Admin API – Kunden
+#### Kunden
 
 | Methode | Endpoint | Beschreibung |
 |---|---|---|
@@ -328,115 +490,31 @@ Authorization: Bearer <token>
 | `PATCH` | `/api/admin/customers/:id` | Kunden bearbeiten |
 | `DELETE` | `/api/admin/customers/:id` | Kunden löschen |
 
-**Kunden-Objekt:**
-```json
-{
-  "id": "uuid",
-  "name": "Max Mustermann",
-  "email": "max@taverna.de",
-  "company": "Taverna GmbH",
-  "payment_status": "active",
-  "notes": "Jahresvertrag, Verlängerung April 2027",
-  "created_at": "2026-04-08T21:00:00.000Z"
-}
-```
-
-**Zahlungsstatus-Werte:** `active` | `trial` | `unpaid` | `unknown`
-
 ---
 
-### Admin API – Geräte
+#### Geräte
 
 | Methode | Endpoint | Beschreibung |
 |---|---|---|
-| `GET` | `/api/admin/devices` | Alle Geräte (optional `?license_key=`) |
+| `GET` | `/api/admin/devices` | Alle Geräte (`?license_key=` optional) |
 | `PATCH` | `/api/admin/devices/:id/deactivate` | Gerät deaktivieren |
-| `DELETE` | `/api/admin/devices/:id` | Gerät endgültig entfernen |
-
-**Geräte-Objekt:**
-```json
-{
-  "id": "uuid",
-  "license_key": "OPA-PRO-ABCD1234-2026",
-  "device_id": "client-fingerprint-hash",
-  "device_type": "windows",
-  "ip": "192.168.1.100",
-  "first_seen": "2026-04-08T21:00:00.000Z",
-  "last_seen": "2026-04-08T21:15:00.000Z",
-  "active": true
-}
-```
-
-**Gerätetypen:** `windows` | `ios` | `android` | `server` | `unknown`
+| `DELETE` | `/api/admin/devices/:id` | Gerät entfernen |
 
 ---
 
-### Admin API – Analytics
+#### Analytics, Audit Log, Webhooks
 
-#### `GET /api/admin/analytics`
-
-```json
-{
-  "top_licenses": [
-    {
-      "license_key": "OPA-PRO-...",
-      "customer_name": "Taverna ...",
-      "type": "PRO",
-      "usage_count": 1250,
-      "last_validated": "2026-04-08T21:00:00.000Z"
-    }
-  ],
-  "daily_requests": {
-    "2026-04-07": 143,
-    "2026-04-08": 87
-  },
-  "feature_usage": {
-    "menu_edit": 980,
-    "reservations": 540
-  },
-  "total_devices": 12,
-  "active_devices": 9
-}
-```
+| Methode | Endpoint | Beschreibung |
+|---|---|---|
+| `GET` | `/api/admin/analytics` | Statistiken & Feature-Nutzung |
+| `GET` | `/api/admin/audit-log` | Alle Events (`?limit=100&action=...`) |
+| `GET` | `/api/admin/webhooks` | Webhooks anzeigen |
+| `POST` | `/api/admin/webhooks` | Webhook hinzufügen |
+| `DELETE` | `/api/admin/webhooks/:id` | Webhook entfernen |
 
 ---
 
-### Admin API – Audit Log
-
-#### `GET /api/admin/audit-log`
-
-Query-Parameter: `?limit=100&action=validate_failed&license_key=OPA-PRO-...`
-
-**Audit-Event-Typen:**
-
-| Event | Beschreibung |
-|---|---|
-| `validate_success` | Erfolgreiche Validierung |
-| `validate_failed` | Fehlgeschlagene Validierung |
-| `replay_attack` | Replay-Angriff erkannt |
-| `device_registered` | Neues Gerät registriert |
-| `device_deactivated` | Gerät deaktiviert |
-| `device_removed` | Gerät entfernt |
-| `license_created` | Lizenz erstellt |
-| `license_deleted` | Lizenz gelöscht |
-| `license_status_changed` | Lizenz-Status geändert |
-| `license_customer_linked` | Lizenz ↔ Kunde verknüpft |
-| `offline_token_issued` | Offline-Token ausgestellt |
-| `admin_login` | Erfolgreicher Admin-Login |
-| `admin_login_failed` | Fehlgeschlagener Login |
-| `admin_user_created` | Admin-User erstellt |
-| `admin_user_deleted` | Admin-User gelöscht |
-| `admin_password_changed` | Passwort geändert |
-| `customer_created` | Kunde angelegt |
-| `customer_updated` | Kunde bearbeitet |
-| `customer_deleted` | Kunde gelöscht |
-| `impersonate` | Superadmin-Impersonation |
-
----
-
-### Admin API – Benutzer
-
-> Nur für **Superadmin** zugänglich.
+#### Benutzer *(nur Superadmin)*
 
 | Methode | Endpoint | Beschreibung |
 |---|---|---|
@@ -445,62 +523,48 @@ Query-Parameter: `?limit=100&action=validate_failed&license_key=OPA-PRO-...`
 | `DELETE` | `/api/admin/users/:username` | User löschen |
 | `PATCH` | `/api/admin/users/:username/password` | Passwort ändern |
 
-**Rollen:** `admin` (Lizenzen verwalten) | `superadmin` (Lizenzen + User + Impersonate)
-
----
-
-### Admin API – Impersonate
-
-> Nur **Superadmin**. Gibt vollständigen Lizenz-Kontext zurück (für Support).
-
-#### `POST /api/admin/impersonate`
-
-```json
-{ "license_key": "OPA-PRO-ABCD1234-2026" }
-```
-
-**Antwort:**
-```json
-{
-  "success": true,
-  "license": { ... },
-  "customer": { ... },
-  "devices": [ ... ]
-}
-```
+**Rollen:** `admin` | `superadmin`
 
 ---
 
 ## 🔐 Sicherheit
 
+### RSA-2048 License Tokens (RS256)
+
+Jede erfolgreiche Validierung gibt einen signierten JWT `license_token` zurück.
+Das CMS kann diesen lokal mit dem Public Key verifizieren – ohne Serverzugriff:
+
+```javascript
+import jwt from 'jsonwebtoken';
+
+const decoded = jwt.verify(licenseToken, publicKey, { algorithms: ['RS256'] });
+console.log(decoded.type);            // 'PRO'
+console.log(decoded.allowed_modules); // { menu_edit: true, ... }
+```
+
 ### HMAC-Signierung
 
-Wenn `HMAC_SECRET` gesetzt ist, enthält jede `/api/v1/validate`-Antwort:
+Wenn `HMAC_SECRET` gesetzt ist, enthält jede Validate-Antwort:
 - `_sig`: HMAC-SHA256-Signatur des Response-Bodies
-- `_ts`: Unix-Timestamp der Antwort
+- `_ts`: Unix-Timestamp
 
-**Client-seitige Verifikation (Node.js):**
 ```javascript
 const crypto = require('crypto');
-
-function verifyResponse(responseBody, hmacSecret) {
-  const { _sig, _ts, ...payload } = responseBody;
-  const expected = crypto
-    .createHmac('sha256', hmacSecret)
-    .update(JSON.stringify(payload))
-    .digest('hex');
+function verifyResponse(body, hmacSecret) {
+  const { _sig, _ts, ...payload } = body;
+  const expected = crypto.createHmac('sha256', hmacSecret)
+    .update(JSON.stringify(payload)).digest('hex');
   return expected === _sig;
 }
 ```
 
 ### Replay-Schutz
 
-Client sendet bei jedem Request einen einmaligen `nonce`:
 ```javascript
 const nonce = crypto.randomBytes(16).toString('hex');
-// Im Request-Body mitschicken: { ..., nonce }
+// Im Request: { ..., nonce }
+// Server lehnt bereits verwendete Nonces (5-Minuten-Fenster) ab
 ```
-Der Server lehnt bereits verwendete Nonces innerhalb von 5 Minuten ab.
 
 ### Rate Limiting
 
@@ -515,56 +579,29 @@ Der Server lehnt bereits verwendete Nonces innerhalb von 5 Minuten ab.
 
 ## 🖥️ Admin Panel
 
-Erreichbar unter: `http://localhost:4000` (bzw. deine Produktions-URL)
-
-### Tabs
+Erreichbar unter: `http://DEINE-IP:4000` (oder via Nginx: `https://deine-domain.de`)
 
 | Tab | Beschreibung |
 |---|---|
-| **🔑 Lizenzen** | Lizenzen erstellen, sperren, löschen. Stats-Übersicht. Impersonate-Button. |
+| **🔑 Lizenzen** | Lizenzen erstellen, sperren, verlängern, löschen. Stats-Übersicht. |
 | **🏢 Kunden** | Kunden anlegen/bearbeiten mit E-Mail, Firma, Zahlungsstatus, Notizen |
 | **💻 Geräte** | Alle registrierten Client-Geräte sehen, deaktivieren oder entfernen |
-| **📊 Analytics** | Feature-Nutzung, Top-Lizenzen, 30-Tage-Balkendiagramm |
-| **📜 Audit Log** | Alle Events, filterbar nach Typ, automatische Farb-Codierung |
-| **👥 Benutzer** | *(Nur Superadmin)* Admin-User verwalten, Passwörter ändern |
+| **📊 Analytics** | Feature-Nutzung, Top-Lizenzen, 30-Tage-Diagramm |
+| **📜 Audit Log** | Alle Events, filterbar nach Typ |
+| **📧 SMTP** | E-Mail-Konfiguration für Ablauf-Benachrichtigungen |
+| **👥 Benutzer** | *(Nur Superadmin)* Admin-User verwalten |
 
 ---
 
-## 🚢 Deployment
-
-### Mit PM2 (empfohlen)
-
-```bash
-# PM2 installieren (einmalig)
-npm install -g pm2
-
-# Server starten
-pm2 start server.js --name opa-license-server
-
-# Autostart bei Reboot
-pm2 startup
-pm2 save
-
-# Logs anzeigen
-pm2 logs opa-license-server
-
-# Neustart
-pm2 restart opa-license-server
-```
-
-### Mit deploy.sh
-
-```bash
-chmod +x deploy.sh
-./deploy.sh
-```
-
-### Nginx Reverse Proxy
+## 🌐 Nginx Reverse Proxy
 
 ```nginx
 server {
     listen 443 ssl;
     server_name licens-prod.stb-srv.de;
+
+    ssl_certificate     /etc/letsencrypt/live/licens-prod.stb-srv.de/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/licens-prod.stb-srv.de/privkey.pem;
 
     location / {
         proxy_pass http://localhost:4000;
@@ -579,11 +616,104 @@ server {
 }
 ```
 
-> Wichtig: `app.set('trust proxy', 1)` ist bereits im Server gesetzt, damit IP-Adressen hinter Nginx korrekt erkannt werden.
+> `app.set('trust proxy', 1)` ist bereits gesetzt – IP-Adressen hinter Nginx werden korrekt erkannt.
 
 ---
 
-## 📌 Client-Integration (Beispiel PHP/WordPress)
+## 🐛 Troubleshooting
+
+### `Table '...' doesn't exist`
+
+```bash
+cd /opt/licens-srv && node migrate.js
+```
+
+Das Schema wurde noch nicht erstellt. Migration löst das sofort.
+
+---
+
+### `Access denied for user '...'@'87.x.x.x'`
+
+Netcup blockiert externe MySQL-Verbindungen. Lösung:
+1. → https://www.customercontrolpanel.de
+2. → Webhosting → MySQL-Datenbanken → `k220163_opa`
+3. → **Externer Zugriff** → Server-IP eintragen
+
+---
+
+### `connect ENETUNREACH` / DB-Host nicht erreichbar
+
+Server kann `mysql2ebc.netcup.net` nicht erreichen:
+```bash
+nc -zv mysql2ebc.netcup.net 3306   # Verbindungstest
+grep DB_HOST /opt/licens-srv/.env  # Prüfen ob Host korrekt gesetzt
+```
+
+---
+
+### `.env` wird nicht geladen / Server nimmt Fallback-Werte
+
+Seit v2.0 wird `dotenv` automatisch beim Start geladen. Prüfen:
+```bash
+# .env vorhanden?
+ls -la /opt/licens-srv/.env
+
+# Inhalt prüfen
+grep DB_HOST /opt/licens-srv/.env
+
+# Sonderzeichen im Passwort?
+# Falls ja: DB_PASS="mein$Passwort" in Anführungszeichen setzen
+
+# Service neu starten
+systemctl restart licens-srv
+journalctl -fu licens-srv
+```
+
+---
+
+### `git pull` schlägt fehl / Merge-Konflikt
+
+Nicht `git pull` verwenden – stattdessen `update.sh` nutzen:
+```bash
+bash update.sh
+# Nutzt intern: git fetch + git reset --hard origin/main
+# Kein Stash, kein Merge, keine Konflikte
+```
+
+---
+
+### Server startet nicht nach Update
+
+```bash
+# Letzten 50 Log-Zeilen anzeigen
+journalctl -u licens-srv -n 50 --no-pager
+
+# Service-Status
+systemctl status licens-srv
+
+# Manuell testen (zeigt direkte Fehlerausgabe)
+cd /opt/licens-srv && node server.js
+```
+
+---
+
+### Admin-Passwort vergessen
+
+```bash
+# Direkt in MySQL zurücksetzen:
+node -e "
+import bcrypt from 'bcryptjs';
+const hash = await bcrypt.hash('neuesPasswort', 12);
+console.log(hash);
+" --input-type=module
+
+# Dann in MySQL:
+# UPDATE admins SET password_hash='DER_HASH' WHERE username='admin';
+```
+
+---
+
+## 📋 Client-Integration (PHP/WordPress)
 
 ```php
 function opa_validate_license($license_key, $domain) {
@@ -594,7 +724,7 @@ function opa_validate_license($license_key, $domain) {
             'device_id'     => md5(gethostname()),
             'device_type'   => 'server',
             'nonce'         => bin2hex(random_bytes(16)),
-            'features_used' => ['menu_edit', 'reservations'],
+            'features_used' => ['menu_edit', 'reservations_online'],
         ]),
         'headers' => ['Content-Type' => 'application/json'],
         'timeout' => 10,
@@ -608,31 +738,27 @@ function opa_validate_license($license_key, $domain) {
 
 ---
 
-## 📋 Changelog
+## 📝 Changelog
+
+### v2.0.0 (2026-04-11)
+- 🔄 **MySQL statt JSON-Datei** – vollständige Datenbankmigrierung
+- ✨ **`migrate.js`** – automatische Schema-Erstellung + `db.json`-Import
+- ✨ **`deploy.sh` v2.1** – vollautomatische Erstinstallation inkl. Secret-Generierung
+- ✨ **`update.sh`** – konfliktfreies Update via `git reset --hard`
+- ✨ **RSA-2048 License Tokens** (RS256) – CMS kann Tokens lokal verifizieren
+- ✨ **`dotenv`** – `.env` wird immer geladen, auch bei manuellem Start
+- ✨ **GitHub Token Auth** im `deploy.sh` für private Repositories
+- ✨ **Lizenz verlängern** (`/api/admin/licenses/:key/renew`)
+- 🔒 Verbesserter DB-Verbindungsfehler-Log (zeigt verwendeten Host)
+- 🛠️ Netcup-spezifische DB-Host-Konfiguration (`mysql2ebc.netcup.net`)
 
 ### v1.2.0 (2026-04-08)
-- ✨ **Kunden-Verwaltung**: Accounts mit E-Mail, Firma, Zahlungsstatus
-- ✨ **Geräte-Management**: Fingerprint, Typ, IP, Gerätelimit, Deaktivierung
-- ✨ **Analytics**: Tagesstatistiken (90 Tage), Feature-Tracking, Top-Lizenzen
-- ✨ **HMAC-Signierung**: Signierte Validate-Antworten
-- ✨ **Replay-Schutz**: Nonce-basierter Schutz (5-Minuten-Fenster)
-- ✨ **Offline Tokens**: JWT-basiert, konfigurierbarer Zeitraum (max. 7 Tage)
-- ✨ **Audit Log**: Alle Aktionen protokolliert (max. 2000 Einträge)
-- ✨ **Impersonate**: Superadmin kann Lizenz-Kontext für Support einsehen
-- ✨ **Admin Panel**: 5 Tabs (Lizenzen, Kunden, Geräte, Analytics, Audit Log)
-- 🔒 Verschärftes Rate Limiting auf Validate-Endpoint
-- 🔄 **Vollständig backward-kompatibel** — existierende Clients unverändert
-
-### v1.1.0
-- Admin-Benutzer-Verwaltung (superadmin/admin Rollen)
-- Rate Limiting auf Login-Endpoint
-- CORS-Konfiguration via `.env`
+- ✨ Kunden-Verwaltung, Geräte-Management, Analytics
+- ✨ HMAC-Signierung, Replay-Schutz, Offline Tokens
+- ✨ Audit Log, Impersonate, Admin Panel (5 Tabs)
 
 ### v1.0.0
-- Initiales Release
-- Lizenz-Validierung mit Plänen (FREE, STARTER, PRO, PRO_PLUS, ENTERPRISE)
-- Admin Panel mit Login
-- Domain-Whitelist / Wildcard-Support
+- Initiales Release – Lizenz-Validierung mit JSON-Datenbank
 
 ---
 
