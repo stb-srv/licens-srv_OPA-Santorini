@@ -18,10 +18,11 @@ const PORT = process.env.PORT || 4000;
 const ADMIN_SECRET = process.env.ADMIN_SECRET || 'change-me-in-production';
 const HMAC_SECRET = process.env.HMAC_SECRET || 'hmac-change-me-in-production';
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
+const SETUP_TOKEN = process.env.SETUP_TOKEN || '';
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
 // MySQL Connection Pool
-// ─────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
 const db = mysql.createPool({
     host: process.env.DB_HOST || '127.0.0.1',
     port: parseInt(process.env.DB_PORT) || 3306,
@@ -38,16 +39,16 @@ const db = mysql.createPool({
 try {
     const conn = await db.getConnection();
     conn.release();
-    console.log('✅  MySQL Verbindung erfolgreich –', process.env.DB_HOST + ':' + (process.env.DB_PORT || 3306));
+    console.log('\u2705  MySQL Verbindung erfolgreich –', process.env.DB_HOST + ':' + (process.env.DB_PORT || 3306));
 } catch (e) {
-    console.error('❌  MySQL Verbindungsfehler:', e.message);
+    console.error('\u274c  MySQL Verbindungsfehler:', e.message);
     console.error('    Host:', process.env.DB_HOST || '127.0.0.1 (Fallback – DB_HOST nicht gesetzt!)');
     process.exit(1);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
 // RSA Keys
-// ─────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
 const RSA_PRIVATE_KEY = process.env.RSA_PRIVATE_KEY
     ? process.env.RSA_PRIVATE_KEY.replace(/\\n/g, '\n')
     : null;
@@ -62,18 +63,20 @@ N+xMcoOA3fRdAICdI6kI9LccR4hzr7Btf/8Wbk0erF48Xw5NjFj0CZcRIjegiq2m
 HQIDAQAB
 -----END PUBLIC KEY-----`;
 
-if (!RSA_PRIVATE_KEY) console.warn('⚠️  RSA_PRIVATE_KEY nicht gesetzt – JWT Signing deaktiviert!');
-if (ADMIN_SECRET === 'change-me-in-production') console.warn('⚠️  ADMIN_SECRET ist unsicher!');
-if (HMAC_SECRET === 'hmac-change-me-in-production') console.warn('⚠️  HMAC_SECRET ist unsicher!');
+if (!RSA_PRIVATE_KEY) console.warn('\u26a0\ufe0f  RSA_PRIVATE_KEY nicht gesetzt – JWT Signing deaktiviert!');
+if (ADMIN_SECRET === 'change-me-in-production') console.warn('\u26a0\ufe0f  ADMIN_SECRET ist unsicher!');
+if (HMAC_SECRET === 'hmac-change-me-in-production') console.warn('\u26a0\ufe0f  HMAC_SECRET ist unsicher!');
+// SEC-03: Warnung wenn SETUP_TOKEN nicht gesetzt
+if (!SETUP_TOKEN) console.warn('\u26a0\ufe0f  SETUP_TOKEN nicht gesetzt – POST /api/v1/setup ist deaktiviert!');
 
 const createSignedLicenseToken = (payload, expiresIn = '25h') => {
     if (!RSA_PRIVATE_KEY) return null;
     return jwt.sign(payload, RSA_PRIVATE_KEY, { algorithm: 'RS256', expiresIn });
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
 // OPA! Santorini Plan Definitionen
-// ─────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
 export const PLAN_DEFINITIONS = {
     FREE: {
         label: 'Free',
@@ -162,18 +165,17 @@ export const PLAN_DEFINITIONS = {
     }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
 // CORS – dynamisch aus DB + .env
 // Beim Erstellen einer Lizenz mit Domain werden automatisch
 // https://domain und http://domain als erlaubte Origins gespeichert.
-// ─────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
 const rawCorsOrigins = process.env.CORS_ORIGINS || '';
 const staticAllowedOrigins = rawCorsOrigins
     ? rawCorsOrigins.split(',').map(o => o.trim()).filter(Boolean)
     : [];
 
 async function getDynamicAllowedOrigins() {
-    // Alle aktiven Lizenz-Domains aus DB holen und als http+https Origins bauen
     try {
         const [rows] = await db.query(
             "SELECT DISTINCT associated_domain FROM licenses WHERE status = 'active' AND associated_domain IS NOT NULL AND associated_domain != '*'"
@@ -196,20 +198,12 @@ app.set('trust proxy', 1);
 
 app.use(cors({
     origin: async (origin, callback) => {
-        // Server-zu-Server oder direkte Aufrufe (kein Origin-Header) immer erlauben
         if (!origin) return callback(null, true);
-
-        // Wenn CORS_ORIGINS leer ist → alle Origins erlaubt (Open Mode)
         if (staticAllowedOrigins.length === 0) return callback(null, true);
-
-        // Statische Origins aus .env prüfen
         if (staticAllowedOrigins.includes(origin)) return callback(null, true);
-
-        // Dynamische Origins aus DB prüfen (aktive Lizenz-Domains)
         const dynamic = await getDynamicAllowedOrigins();
         if (dynamic.includes(origin)) return callback(null, true);
-
-        console.error(`❌ CORS: Origin '${origin}' nicht erlaubt.`);
+        console.error(`\u274c CORS: Origin '${origin}' nicht erlaubt.`);
         callback(new Error(`CORS: Origin '${origin}' nicht erlaubt.`), false);
     },
     credentials: true
@@ -218,9 +212,9 @@ app.use(cors({
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
 // SMTP
-// ─────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
 let smtpTransporter = null;
 function createSmtpTransporter(config) {
     if (!config.host || !config.user || !config.pass) return null;
@@ -242,7 +236,7 @@ const envSmtp = {
 };
 if (envSmtp.host && envSmtp.user && envSmtp.pass) {
     smtpTransporter = createSmtpTransporter(envSmtp);
-    console.log('📧  SMTP: Konfiguriert über .env');
+    console.log('\ud83d\udce7  SMTP: Konfiguriert über .env');
 }
 
 async function getActiveSmtp() {
@@ -262,9 +256,9 @@ async function sendMail(to, subject, html) {
     await smtp.transporter.sendMail({ from: smtp.from, to, subject, html });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
 // Webhook
-// ─────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
 async function fireWebhook(event, payload) {
     const urls = [];
     if (process.env.WEBHOOK_URL) urls.push({ url: process.env.WEBHOOK_URL, secret: WEBHOOK_SECRET });
@@ -281,14 +275,14 @@ async function fireWebhook(event, payload) {
             if (sig) headers['X-OPA-Signature'] = sig;
             await fetch(url, { method: 'POST', headers, body, signal: AbortSignal.timeout(5000) });
         } catch (e) {
-            console.warn(`⚠️  Webhook ${url} fehlgeschlagen:`, e.message);
+            console.warn(`\u26a0\ufe0f  Webhook ${url} fehlgeschlagen:`, e.message);
         }
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
 // Rate Limiters
-// ─────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, max: 10,
     message: { success: false, message: 'Too many login attempts. Please wait 15 minutes.' }
@@ -298,10 +292,14 @@ const validateLimiter = rateLimit({
     windowMs: 60 * 1000, max: 30,
     message: { status: 'rate_limited', message: 'Too many validation requests.' }
 });
+const setupLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, max: 5,
+    message: { success: false, message: 'Too many setup attempts.' }
+});
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
 // Auth Middleware
-// ─────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
 const requireAuth = (req, res, next) => {
     const token = req.headers['authorization']?.startsWith('Bearer ')
         ? req.headers['authorization'].slice(7) : null;
@@ -316,9 +314,9 @@ const requireSuperAdmin = (req, res, next) => {
     next();
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
 // Helpers
-// ─────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
 const generateKey = (type) => {
     const prefix = { FREE: 'OPA-FREE', STARTER: 'OPA-START', PRO: 'OPA-PRO', PRO_PLUS: 'OPA-PROPLUS', ENTERPRISE: 'OPA-ENT' }[type] || 'OPA-UNKNOWN';
     const rand = crypto.randomBytes(4).toString('hex').toUpperCase();
@@ -360,9 +358,9 @@ const getClientIp = (req) =>
     || req.socket?.remoteAddress
     || 'unknown';
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
 // Ablauf-Cron: täglich prüfen, Mails senden
-// ─────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────────────────
 async function runExpiryCron() {
     try {
         const [expiring] = await db.query(`
@@ -379,8 +377,8 @@ async function runExpiryCron() {
             try {
                 await sendMail(
                     lic.email,
-                    `⏰ OPA! Santorini Lizenz läuft in ${daysLeft} Tagen ab`,
-                    `<h2>🏛️ OPA! Santorini – Lizenzablauf</h2>
+                    `\u23f0 OPA! Santorini Lizenz läuft in ${daysLeft} Tagen ab`,
+                    `<h2>\ud83c\udfdb\ufe0f OPA! Santorini – Lizenzablauf</h2>
                     <p>Hallo ${lic.customer_name},</p>
                     <p>deine <strong>${lic.type}</strong>-Lizenz (<code>${lic.license_key}</code>) läuft am
                     <strong>${new Date(lic.expires_at).toLocaleDateString('de-DE')}</strong> ab (in ${daysLeft} Tagen).</p>
@@ -389,7 +387,7 @@ async function runExpiryCron() {
                 );
                 await addAuditLog('expiry_notification_sent', { license_key: lic.license_key, days_left: daysLeft, email: lic.email });
             } catch (e) {
-                console.warn(`📧 Ablauf-Mail fehlgeschlagen für ${lic.license_key}:`, e.message);
+                console.warn(`\ud83d\udce7 Ablauf-Mail fehlgeschlagen für ${lic.license_key}:`, e.message);
             }
         }
 
@@ -398,7 +396,7 @@ async function runExpiryCron() {
             WHERE status = 'active' AND expires_at < NOW()
         `);
         if (result.affectedRows > 0) {
-            console.log(`🕐 ${result.affectedRows} Lizenz(en) auf 'expired' gesetzt.`);
+            console.log(`\ud83d\udd50 ${result.affectedRows} Lizenz(en) auf 'expired' gesetzt.`);
             await addAuditLog('licenses_auto_expired', { count: result.affectedRows });
             await fireWebhook('licenses.auto_expired', { count: result.affectedRows });
         }
@@ -416,6 +414,64 @@ runExpiryCron();
 // ════════════════════════════════════════════════════════════════════════════
 // PUBLIC API
 // ════════════════════════════════════════════════════════════════════════════
+
+// ───────────────────────────────────────────────────────────────────────────────
+// SEC-03: Setup-Endpoint – Erstellt den ersten Superadmin-Account.
+// Gesichert durch SETUP_TOKEN Env-Variable – ohne Token komplett deaktiviert.
+// Rate Limit: 5 Versuche/Stunde um Brute-Force zu verhindern.
+// ───────────────────────────────────────────────────────────────────────────────
+app.post('/api/v1/setup', setupLimiter, async (req, res) => {
+    // SETUP_TOKEN muss in .env gesetzt sein, sonst ist der Endpoint komplett gesperrt
+    if (!SETUP_TOKEN) {
+        return res.status(503).json({
+            success: false,
+            message: 'Setup ist deaktiviert. SETUP_TOKEN nicht in .env konfiguriert.'
+        });
+    }
+
+    // Token-Prüfung: x-setup-token Header oder setup_token im Body
+    const providedToken = req.headers['x-setup-token'] || req.body?.setup_token;
+    if (!providedToken || providedToken !== SETUP_TOKEN) {
+        await addAuditLog('setup_attempt_failed', { reason: 'invalid_token', ip: getClientIp(req) });
+        return res.status(401).json({
+            success: false,
+            message: 'Ungültiger Setup-Token.'
+        });
+    }
+
+    const { username, password } = req.body;
+    if (!username || !password)
+        return res.status(400).json({ success: false, message: 'Username und Passwort sind Pflichtfelder.' });
+    if (password.length < 12)
+        return res.status(400).json({ success: false, message: 'Passwort muss mindestens 12 Zeichen haben.' });
+
+    try {
+        // Prüfen ob bereits Admins existieren – Setup nur einmalig möglich
+        const [existing] = await db.query('SELECT COUNT(*) as count FROM admins');
+        if (existing[0].count > 0) {
+            return res.status(409).json({
+                success: false,
+                message: 'Setup bereits abgeschlossen. Admin-Account existiert bereits.'
+            });
+        }
+
+        const hash = await bcrypt.hash(password, 12);
+        await db.query(
+            'INSERT INTO admins (username, password_hash, role) VALUES (?, ?, ?)',
+            [username, hash, 'superadmin']
+        );
+        await addAuditLog('setup_completed', { username, ip: getClientIp(req) });
+
+        console.log(`\u2705  Setup abgeschlossen: Superadmin '${username}' erstellt.`);
+        res.json({
+            success: true,
+            message: `Superadmin '${username}' erfolgreich erstellt. SETUP_TOKEN kann jetzt aus .env entfernt werden.`
+        });
+    } catch (e) {
+        console.error('Setup-Fehler:', e.message);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
 
 app.post('/api/v1/validate', validateLimiter, async (req, res) => {
     const { license_key, domain, device_id, device_type, nonce, features_used } = req.body;
@@ -546,7 +602,6 @@ app.post('/api/v1/validate', validateLimiter, async (req, res) => {
         const signedToken = createSignedLicenseToken(tokenPayload, '25h');
         const finalResponse = { ...responsePayload };
         if (signedToken) {
-            // Beide Felder senden: license_token (neu) UND token (Alias für ältere CMS-Versionen)
             finalResponse.license_token = signedToken;
             finalResponse.token = signedToken;
             finalResponse.license_token_public_key = RSA_PUBLIC_KEY;
@@ -605,7 +660,7 @@ app.post('/api/v1/heartbeat', validateLimiter, async (req, res) => {
             status: 'ok',
             next_heartbeat_in_hours: 24,
             license_token: signedToken,
-            token: signedToken,  // Alias
+            token: signedToken,
             expires_at: l.expires_at
         });
 
@@ -949,7 +1004,7 @@ app.post('/api/admin/smtp/test', requireAuth, requireSuperAdmin, async (req, res
     if (!to) return res.status(400).json({ success: false, message: 'Empfänger-E-Mail fehlt' });
     try {
         await sendMail(to, 'OPA! Santorini License Server — SMTP Test',
-            '<h2>✅ SMTP Test erfolgreich</h2><p>Die SMTP-Konfiguration deines OPA! Santorini License Servers funktioniert korrekt.</p>');
+            '<h2>\u2705 SMTP Test erfolgreich</h2><p>Die SMTP-Konfiguration deines OPA! Santorini License Servers funktioniert korrekt.</p>');
         res.json({ success: true, message: `Test-E-Mail an ${to} gesendet.` });
     } catch (e) {
         res.status(500).json({ success: false, message: e.message });
@@ -1085,10 +1140,11 @@ app.post('/api/admin/impersonate', requireAuth, requireSuperAdmin, async (req, r
 });
 
 app.listen(PORT, () => {
-    console.log(`\n🏛️  OPA! Santorini License Server v2.0 läuft auf http://localhost:${PORT}`);
-    console.log(`📋  Pläne: ${Object.keys(PLAN_DEFINITIONS).join(' | ')}`);
-    console.log(`🌐  CORS: ${staticAllowedOrigins.length > 0 ? staticAllowedOrigins.join(', ') + ' + dynamisch aus DB' : 'alle Origins erlaubt (CORS_ORIGINS nicht gesetzt)'}`);
-    console.log(`🔐  HMAC Signing: ${HMAC_SECRET !== 'hmac-change-me-in-production' ? 'AKTIV' : 'INAKTIV'}`);
-    console.log(`🔑  RSA JWT Signing: ${RSA_PRIVATE_KEY ? 'AKTIV (RS256)' : 'INAKTIV – RSA_PRIVATE_KEY nicht gesetzt!'}`);
-    console.log(`📧  SMTP: ${(envSmtp.host && envSmtp.user) ? `${envSmtp.host}:${envSmtp.port}` : 'nicht konfiguriert'}\n`);
+    console.log(`\n\ud83c\udfdb\ufe0f  OPA! Santorini License Server v2.0 läuft auf http://localhost:${PORT}`);
+    console.log(`\ud83d\udccb  Pläne: ${Object.keys(PLAN_DEFINITIONS).join(' | ')}`);
+    console.log(`\ud83c\udf10  CORS: ${staticAllowedOrigins.length > 0 ? staticAllowedOrigins.join(', ') + ' + dynamisch aus DB' : 'alle Origins erlaubt (CORS_ORIGINS nicht gesetzt)'}`);
+    console.log(`\ud83d\udd10  HMAC Signing: ${HMAC_SECRET !== 'hmac-change-me-in-production' ? 'AKTIV' : 'INAKTIV'}`);
+    console.log(`\ud83d\udd11  RSA JWT Signing: ${RSA_PRIVATE_KEY ? 'AKTIV (RS256)' : 'INAKTIV – RSA_PRIVATE_KEY nicht gesetzt!'}`);
+    console.log(`\ud83d\udce7  SMTP: ${(envSmtp.host && envSmtp.user) ? `${envSmtp.host}:${envSmtp.port}` : 'nicht konfiguriert'}`);
+    console.log(`\ud83d\udd12  Setup-Endpoint: ${SETUP_TOKEN ? 'AKTIV (SETUP_TOKEN gesetzt)' : 'DEAKTIVIERT (SETUP_TOKEN nicht gesetzt)'}\n`);
 });
