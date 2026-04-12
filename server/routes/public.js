@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import db from '../db.js';
 import { PLAN_DEFINITIONS } from '../plans.js';
-import { RSA_PUBLIC_KEY, RSA_PRIVATE_KEY, createSignedLicenseToken, signResponse, isHmacActive, HMAC_SECRET } from '../crypto.js';
+import { RSA_PUBLIC_KEY, createSignedLicenseToken, signResponse, isHmacActive, HMAC_SECRET } from '../crypto.js';
 import { domainMatches, getClientIp, addAuditLog, parseJsonField } from '../helpers.js';
 import { validateLimiter, setupLimiter } from '../middleware.js';
 
@@ -36,7 +36,7 @@ router.post('/setup', setupLimiter, async (req, res) => {
         const hash = await bcrypt.hash(password, 12);
         await db.query('INSERT INTO admins (username, password_hash, role) VALUES (?, ?, ?)', [username, hash, 'superadmin']);
         await addAuditLog('setup_completed', { username, ip: getClientIp(req) });
-        console.log(`✅  Setup abgeschlossen: Superadmin '${username}' erstellt.`);
+        console.log(`\u2705  Setup abgeschlossen: Superadmin '${username}' erstellt.`);
         res.json({ success: true, message: `Superadmin '${username}' erfolgreich erstellt. SETUP_TOKEN kann jetzt aus .env entfernt werden.` });
     } catch (e) {
         console.error('Setup-Fehler:', e.message);
@@ -68,7 +68,7 @@ router.post('/validate', validateLimiter, async (req, res) => {
         }
         if (!domainMatches(l.associated_domain, domain)) {
             await addAuditLog('validate_failed', { license_key, reason: 'domain_mismatch', domain, ip: clientIp });
-            return res.status(403).json({ status: 'domain_mismatch', message: `Lizenz ist nicht für Domain "${domain}" gültig.` });
+            return res.status(403).json({ status: 'domain_mismatch', message: `Lizenz ist nicht f\u00fcr Domain "${domain}" g\u00fcltig.` });
         }
 
         if (nonce) {
@@ -87,7 +87,7 @@ router.post('/validate', validateLimiter, async (req, res) => {
             if (!existing) {
                 if (maxDevices > 0 && licDevices.length >= maxDevices) {
                     await addAuditLog('validate_failed', { license_key, reason: 'device_limit', device_id, ip: clientIp });
-                    return res.status(403).json({ status: 'device_limit', message: `Maximale Geräteanzahl (${maxDevices}) erreicht.` });
+                    return res.status(403).json({ status: 'device_limit', message: `Maximale Ger\u00e4teanzahl (${maxDevices}) erreicht.` });
                 }
                 await db.query(
                     'INSERT INTO devices (id, license_key, device_id, device_type, ip) VALUES (?, ?, ?, ?, ?)',
@@ -128,7 +128,9 @@ router.post('/validate', validateLimiter, async (req, res) => {
         const customer = custRows[0] || null;
 
         const allowedModules = l.allowed_modules ? parseJsonField(l.allowed_modules, plan.modules) : plan.modules;
-        const limits = l.limits ? parseJsonField(l.limits, { max_dishes: plan.menu_items, max_tables: plan.max_tables }) : { max_dishes: plan.menu_items, max_tables: plan.max_tables };
+        const limits = l.limits
+            ? parseJsonField(l.limits, { max_dishes: plan.menu_items, max_tables: plan.max_tables })
+            : { max_dishes: plan.menu_items, max_tables: plan.max_tables };
 
         const responsePayload = {
             status: 'active',
@@ -177,11 +179,11 @@ router.post('/heartbeat', validateLimiter, async (req, res) => {
         const l = rows[0];
         if (!l || l.status !== 'active' || new Date(l.expires_at) < new Date()) {
             await addAuditLog('heartbeat_failed', { license_key, reason: 'invalid_or_expired', ip: clientIp });
-            return res.status(403).json({ status: 'invalid', message: 'Lizenz ungültig oder abgelaufen.' });
+            return res.status(403).json({ status: 'invalid', message: 'Lizenz ung\u00fcltig oder abgelaufen.' });
         }
         if (domain && !domainMatches(l.associated_domain, domain)) {
             await addAuditLog('heartbeat_failed', { license_key, reason: 'domain_mismatch', domain, ip: clientIp });
-            return res.status(403).json({ status: 'domain_mismatch', message: 'Domain stimmt nicht überein.' });
+            return res.status(403).json({ status: 'domain_mismatch', message: 'Domain stimmt nicht \u00fcberein.' });
         }
 
         await db.query('UPDATE licenses SET last_heartbeat = NOW() WHERE license_key = ?', [license_key]);
@@ -189,7 +191,9 @@ router.post('/heartbeat', validateLimiter, async (req, res) => {
 
         const plan = PLAN_DEFINITIONS[l.type] || PLAN_DEFINITIONS['FREE'];
         const allowedModules = l.allowed_modules ? parseJsonField(l.allowed_modules, plan.modules) : plan.modules;
-        const limits = l.limits ? parseJsonField(l.limits, { max_dishes: plan.menu_items, max_tables: plan.max_tables }) : { max_dishes: plan.menu_items, max_tables: plan.max_tables };
+        const limits = l.limits
+            ? parseJsonField(l.limits, { max_dishes: plan.menu_items, max_tables: plan.max_tables })
+            : { max_dishes: plan.menu_items, max_tables: plan.max_tables };
 
         const signedToken = createSignedLicenseToken({
             license_key, type: l.type, plan_label: plan.label, expires_at: l.expires_at,
@@ -204,6 +208,66 @@ router.post('/heartbeat', validateLimiter, async (req, res) => {
     }
 });
 
+// ── Refresh (genutzt von OPA-CMS LicenseChecker alle 24h) ───────────────────
+// Identisch zu /heartbeat, aber Response-Format passt zum CMS LicenseChecker:
+// { status: 'active'|'revoked', token: '<RS256 JWT>' }
+router.post('/refresh', validateLimiter, async (req, res) => {
+    const { license_key, domain } = req.body;
+    if (!license_key) return res.status(400).json({ status: 'invalid', message: 'No key provided' });
+    const clientIp = getClientIp(req);
+
+    try {
+        const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [license_key]);
+        const l = rows[0];
+
+        if (!l) {
+            await addAuditLog('refresh_failed', { license_key, reason: 'not_found', ip: clientIp });
+            return res.status(404).json({ status: 'invalid', message: 'Lizenz-Key nicht gefunden.' });
+        }
+        if (l.status === 'revoked' || l.status === 'cancelled') {
+            await addAuditLog('refresh_failed', { license_key, reason: l.status, ip: clientIp });
+            return res.status(403).json({ status: l.status, message: `Lizenz wurde widerrufen (${l.status}).` });
+        }
+        if (l.status !== 'active' || new Date(l.expires_at) < new Date()) {
+            await addAuditLog('refresh_failed', { license_key, reason: 'expired_or_inactive', ip: clientIp });
+            return res.status(403).json({ status: 'expired', message: 'Lizenz ist abgelaufen oder inaktiv.' });
+        }
+        if (domain && !domainMatches(l.associated_domain, domain)) {
+            await addAuditLog('refresh_failed', { license_key, reason: 'domain_mismatch', domain, ip: clientIp });
+            return res.status(403).json({ status: 'domain_mismatch', message: 'Domain stimmt nicht \u00fcberein.' });
+        }
+
+        await db.query('UPDATE licenses SET last_heartbeat = NOW() WHERE license_key = ?', [license_key]);
+        await addAuditLog('refresh_ok', { license_key, domain, ip: clientIp });
+
+        const plan = PLAN_DEFINITIONS[l.type] || PLAN_DEFINITIONS['FREE'];
+        const allowedModules = l.allowed_modules ? parseJsonField(l.allowed_modules, plan.modules) : plan.modules;
+        const limits = l.limits
+            ? parseJsonField(l.limits, { max_dishes: plan.menu_items, max_tables: plan.max_tables })
+            : { max_dishes: plan.menu_items, max_tables: plan.max_tables };
+
+        const signedToken = createSignedLicenseToken({
+            license_key, type: l.type, plan_label: plan.label, expires_at: l.expires_at,
+            allowed_modules: allowedModules, limits, domain: domain || l.associated_domain,
+            issued_at: Math.floor(Date.now() / 1000)
+        }, '25h');
+
+        // Response-Format: { status, token } – exakt was OPA-CMS LicenseChecker erwartet
+        res.json({
+            status: 'active',
+            token: signedToken,
+            type: l.type,
+            plan_label: plan.label,
+            expires_at: l.expires_at,
+            allowed_modules: allowedModules,
+            limits
+        });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ status: 'error', message: 'Internal server error' });
+    }
+});
+
 // ── Verify License Token ─────────────────────────────────────────────────────
 router.post('/verify-license-token', validateLimiter, (req, res) => {
     const { license_token } = req.body;
@@ -212,7 +276,7 @@ router.post('/verify-license-token', validateLimiter, (req, res) => {
         const decoded = jwt.verify(license_token, RSA_PUBLIC_KEY, { algorithms: ['RS256'] });
         res.json({ valid: true, payload: decoded });
     } catch (e) {
-        res.status(401).json({ valid: false, message: 'Ungültiges oder abgelaufenes Token: ' + e.message });
+        res.status(401).json({ valid: false, message: 'Ung\u00fcltiges oder abgelaufenes Token: ' + e.message });
     }
 });
 
@@ -229,7 +293,9 @@ router.post('/offline-token', validateLimiter, async (req, res) => {
         const plan = PLAN_DEFINITIONS[l.type] || PLAN_DEFINITIONS['FREE'];
         const hours = Math.min(duration_hours || 24, 168);
         const allowedModules = l.allowed_modules ? parseJsonField(l.allowed_modules, plan.modules) : plan.modules;
-        const limits = l.limits ? parseJsonField(l.limits, { max_dishes: plan.menu_items, max_tables: plan.max_tables }) : { max_dishes: plan.menu_items, max_tables: plan.max_tables };
+        const limits = l.limits
+            ? parseJsonField(l.limits, { max_dishes: plan.menu_items, max_tables: plan.max_tables })
+            : { max_dishes: plan.menu_items, max_tables: plan.max_tables };
 
         const token = jwt.sign(
             { license_key, domain, device_id, type: l.type, plan_label: plan.label, allowed_modules: allowedModules, limits, offline: true },

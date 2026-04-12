@@ -88,17 +88,48 @@ router.patch('/users/:username/password', requireAuth, async (req, res) => {
 // ── Plans ────────────────────────────────────────────────────────────────────
 router.get('/plans', requireAuth, (req, res) => res.json(PLAN_DEFINITIONS));
 
-// ── Licenses ─────────────────────────────────────────────────────────────────
+// ── Licenses (mit Paginierung) ───────────────────────────────────────────────────
 router.get('/licenses', requireAuth, async (req, res) => {
     const now = new Date();
-    const [licenses] = await db.query('SELECT * FROM licenses ORDER BY created_at DESC');
-    const stats = {
-        total: licenses.length,
-        active: licenses.filter(l => l.status === 'active' && new Date(l.expires_at) > now).length,
-        expiring: licenses.filter(l => { const d = (new Date(l.expires_at) - now) / 86400000; return d > 0 && d < 30; }).length,
-        total_usage: licenses.reduce((s, l) => s + (l.usage_count || 0), 0)
-    };
-    res.json({ licenses, stats });
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit = Math.min(500, Math.max(1, parseInt(req.query.limit) || 100));
+    const offset = (page - 1) * limit;
+    const search = req.query.search ? `%${req.query.search}%` : null;
+
+    const [[{ total }]] = await db.query(
+        search
+            ? 'SELECT COUNT(*) as total FROM licenses WHERE license_key LIKE ? OR customer_name LIKE ?'
+            : 'SELECT COUNT(*) as total FROM licenses',
+        search ? [search, search] : []
+    );
+
+    const [licenses] = await db.query(
+        search
+            ? 'SELECT * FROM licenses WHERE license_key LIKE ? OR customer_name LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?'
+            : 'SELECT * FROM licenses ORDER BY created_at DESC LIMIT ? OFFSET ?',
+        search ? [search, search, limit, offset] : [limit, offset]
+    );
+
+    // Stats werden immer über die gesamte Tabelle berechnet (schnelle Aggregat-Query)
+    const [[statsRow]] = await db.query(`
+        SELECT
+            COUNT(*) as total_all,
+            SUM(status = 'active' AND expires_at > NOW()) as active,
+            SUM(status = 'active' AND expires_at BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 30 DAY)) as expiring,
+            SUM(usage_count) as total_usage
+        FROM licenses
+    `);
+
+    res.json({
+        licenses,
+        stats: {
+            total: statsRow.total_all,
+            active: statsRow.active || 0,
+            expiring: statsRow.expiring || 0,
+            total_usage: statsRow.total_usage || 0
+        },
+        pagination: { page, limit, total: parseInt(total), pages: Math.ceil(total / limit) }
+    });
 });
 
 router.get('/licenses/:key', requireAuth, async (req, res) => {
@@ -191,7 +222,7 @@ router.post('/customers', requireAuth, async (req, res) => {
     const { name, email, phone, contact_person, company, payment_status, notes } = req.body;
     if (!name) return res.status(400).json({ success: false, message: 'Name required' });
     if (!email) return res.status(400).json({ success: false, message: 'E-Mail ist ein Pflichtfeld' });
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ success: false, message: 'Ungültige E-Mail-Adresse' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ success: false, message: 'Ung\u00fcltige E-Mail-Adresse' });
     try {
         const id = crypto.randomUUID();
         await db.query(
@@ -211,7 +242,7 @@ router.patch('/customers/:id', requireAuth, async (req, res) => {
         const { name, email, phone, contact_person, company, payment_status, notes } = req.body;
         if (email !== undefined) {
             if (!email) return res.status(400).json({ success: false, message: 'E-Mail ist ein Pflichtfeld' });
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ success: false, message: 'Ungültige E-Mail-Adresse' });
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ success: false, message: 'Ung\u00fcltige E-Mail-Adresse' });
         }
         await db.query(`UPDATE customers SET name=COALESCE(?,name), email=COALESCE(?,email),
             phone=?, contact_person=?, company=COALESCE(?,company),
@@ -322,10 +353,10 @@ router.post('/smtp', requireAuth, requireSuperAdmin, async (req, res) => {
 
 router.post('/smtp/test', requireAuth, requireSuperAdmin, async (req, res) => {
     const { to } = req.body;
-    if (!to) return res.status(400).json({ success: false, message: 'Empfänger-E-Mail fehlt' });
+    if (!to) return res.status(400).json({ success: false, message: 'Empf\u00e4nger-E-Mail fehlt' });
     try {
-        await sendMail(to, 'OPA! Santorini License Server — SMTP Test',
-            '<h2>✅ SMTP Test erfolgreich</h2><p>Die SMTP-Konfiguration deines OPA! Santorini License Servers funktioniert korrekt.</p>');
+        await sendMail(to, 'OPA! Santorini License Server \u2014 SMTP Test',
+            '<h2>\u2705 SMTP Test erfolgreich</h2><p>Die SMTP-Konfiguration deines OPA! Santorini License Servers funktioniert korrekt.</p>');
         res.json({ success: true, message: `Test-E-Mail an ${to} gesendet.` });
     } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });

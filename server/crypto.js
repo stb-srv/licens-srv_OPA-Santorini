@@ -15,6 +15,7 @@ N+xMcoOA3fRdAICdI6kI9LccR4hzr7Btf/8Wbk0erF48Xw5NjFj0CZcRIjegiq2m
 HQIDAQAB
 -----END PUBLIC KEY-----`;
 
+// HMAC_SECRET: nur intern in diesem Modul verwendet – kein Export nach außen
 const HMAC_SECRET = process.env.HMAC_SECRET || 'hmac-change-me-in-production';
 
 export const createSignedLicenseToken = (payload, expiresIn = '25h') => {
@@ -30,4 +31,5 @@ export const signResponse = (payload) => {
 
 export const isHmacActive = () => HMAC_SECRET !== 'hmac-change-me-in-production';
 
+// Nur für interne Nutzung in public.js (Offline-Token Signing)
 export { HMAC_SECRET };
