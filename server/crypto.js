@@ -18,7 +18,9 @@ HQIDAQAB
 // HMAC_SECRET: nur intern in diesem Modul verwendet – kein Export nach außen
 const HMAC_SECRET = process.env.HMAC_SECRET || 'hmac-change-me-in-production';
 
-export const createSignedLicenseToken = (payload, expiresIn = '25h') => {
+// Token-Laufzeit: 72h statt 25h – verhindert FREE-Fallback bei Server-Neustart
+// da der LicenseChecker erst nach 5min + alle 24h prüft
+export const createSignedLicenseToken = (payload, expiresIn = '72h') => {
     if (!RSA_PRIVATE_KEY) return null;
     return jwt.sign(payload, RSA_PRIVATE_KEY, { algorithm: 'RS256', expiresIn });
 };
