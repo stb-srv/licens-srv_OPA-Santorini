@@ -143,11 +143,12 @@ router.post('/validate', validateLimiter, async (req, res) => {
             ...(customer ? { account_email: customer.email, company: customer.company } : {})
         };
 
+        // Token-Gültigkeit: 73h (72h Check-Intervall + 1h Puffer)
         const signedToken = createSignedLicenseToken({
             license_key, type: l.type, plan_label: plan.label, expires_at: l.expires_at,
             allowed_modules: allowedModules, limits, domain: domain || l.associated_domain,
             issued_at: Math.floor(Date.now() / 1000)
-        }, '25h');
+        }, '73h');
 
         const finalResponse = { ...responsePayload };
         if (signedToken) {
@@ -195,22 +196,22 @@ router.post('/heartbeat', validateLimiter, async (req, res) => {
             ? parseJsonField(l.limits, { max_dishes: plan.menu_items, max_tables: plan.max_tables })
             : { max_dishes: plan.menu_items, max_tables: plan.max_tables };
 
+        // Token-Gültigkeit: 73h (72h Check-Intervall + 1h Puffer)
         const signedToken = createSignedLicenseToken({
             license_key, type: l.type, plan_label: plan.label, expires_at: l.expires_at,
             allowed_modules: allowedModules, limits, domain: domain || l.associated_domain,
             issued_at: Math.floor(Date.now() / 1000)
-        }, '25h');
+        }, '73h');
 
-        res.json({ status: 'ok', next_heartbeat_in_hours: 24, license_token: signedToken, token: signedToken, expires_at: l.expires_at });
+        res.json({ status: 'ok', next_heartbeat_in_hours: 72, license_token: signedToken, token: signedToken, expires_at: l.expires_at });
     } catch (e) {
         console.error(e);
         res.status(500).json({ status: 'error', message: 'Internal server error' });
     }
 });
 
-// ── Refresh (genutzt von OPA-CMS LicenseChecker alle 24h) ───────────────────
-// Identisch zu /heartbeat, aber Response-Format passt zum CMS LicenseChecker:
-// { status: 'active'|'revoked', token: '<RS256 JWT>' }
+// ── Refresh (genutzt von OPA-CMS LicenseChecker alle 72h) ───────────────────
+// Response-Format: { status: 'active'|'revoked', token: '<RS256 JWT>' }
 router.post('/refresh', validateLimiter, async (req, res) => {
     const { license_key, domain } = req.body;
     if (!license_key) return res.status(400).json({ status: 'invalid', message: 'No key provided' });
@@ -246,13 +247,13 @@ router.post('/refresh', validateLimiter, async (req, res) => {
             ? parseJsonField(l.limits, { max_dishes: plan.menu_items, max_tables: plan.max_tables })
             : { max_dishes: plan.menu_items, max_tables: plan.max_tables };
 
+        // Token-Gültigkeit: 73h (72h Check-Intervall + 1h Puffer)
         const signedToken = createSignedLicenseToken({
             license_key, type: l.type, plan_label: plan.label, expires_at: l.expires_at,
             allowed_modules: allowedModules, limits, domain: domain || l.associated_domain,
             issued_at: Math.floor(Date.now() / 1000)
-        }, '25h');
+        }, '73h');
 
-        // Response-Format: { status, token } – exakt was OPA-CMS LicenseChecker erwartet
         res.json({
             status: 'active',
             token: signedToken,
