@@ -7,10 +7,23 @@ import nodemailer from 'nodemailer';
 import db from '../db.js';
 import { renderTemplate } from './templates.js';
 
+// Hostname aus einer E-Mail-Adresse extrahieren (z.B. "noreply@lizenz.de" → "lizenz.de")
+function domainFromAddress(addr) {
+    if (!addr) return null;
+    const match = String(addr).match(/@([\w.-]+)/);
+    return match ? match[1] : null;
+}
+
 // ── Transporter-Factory ────────────────────────────────────────────────────
 export function buildTransporter(cfg) {
     const port = parseInt(cfg.port) || 587;
     const secure = cfg.secure === true || cfg.secure === 'true' || port === 465;
+
+    // Hostname für den EHLO/HELO-Gruß: from-Domain > user-Domain > SMTP_HOSTNAME env > smtp host
+    const greeting = domainFromAddress(cfg.from)
+        || domainFromAddress(cfg.user)
+        || process.env.SMTP_HOSTNAME
+        || cfg.host;
 
     const options = {
         host: cfg.host,
@@ -20,13 +33,11 @@ export function buildTransporter(cfg) {
             user: cfg.user,
             pass: cfg.pass
         },
-        // STARTTLS erzwingen wenn Port 587 und nicht secure
+        name: greeting,                  // Verhindert @localhost in der MessageId
         requireTLS: !secure && port === 587,
-        // Timeout erhöhen für langsame Provider
         connectionTimeout: 10000,
         greetingTimeout: 10000,
         socketTimeout: 15000,
-        // TLS-Optionen: selbstsignierte Zertifikate erlauben (für Eigenserver)
         tls: {
             rejectUnauthorized: false
         },
@@ -34,7 +45,7 @@ export function buildTransporter(cfg) {
         debug: false
     };
 
-    console.log(`[Mailer] Transporter erstellt: ${cfg.host}:${port} secure=${secure} requireTLS=${options.requireTLS}`);
+    console.log(`[Mailer] Transporter: ${cfg.host}:${port} secure=${secure} name=${greeting}`);
     return nodemailer.createTransport(options);
 }
 
@@ -93,7 +104,7 @@ export async function sendMail({ to, subject, html, text }) {
         to,
         subject,
         html,
-        text: text || subject  // Plaintext-Fallback
+        text: text || subject
     });
 
     console.log(`[Mailer] E-Mail gesendet an ${to} | MessageId: ${info.messageId} | SMTP: ${cfg.source}`);
