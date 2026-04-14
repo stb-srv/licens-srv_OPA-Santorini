@@ -12,6 +12,31 @@ import { requireAuth, requireSuperAdmin, loginLimiter, MIN_PASSWORD_LENGTH } fro
 const router = Router();
 const ADMIN_SECRET = process.env.ADMIN_SECRET || 'change-me-in-production';
 
+/**
+ * Generiert ein zufälliges 12-Zeichen-Passwort:
+ * mind. 1 Großbuchstabe, 1 Ziffer, 1 Sonderzeichen – Rest alphanumerisch.
+ */
+function generateTempPassword() {
+  const upper  = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lower  = 'abcdefghjkmnpqrstuvwxyz';
+  const digits = '23456789';
+  const special = '!@#$%&*';
+  const all = upper + lower + digits + special;
+  let pw = [
+    upper [crypto.randomInt(upper.length)],
+    digits[crypto.randomInt(digits.length)],
+    special[crypto.randomInt(special.length)]
+  ];
+  for (let i = pw.length; i < 12; i++)
+    pw.push(all[crypto.randomInt(all.length)]);
+  // Fisher-Yates shuffle
+  for (let i = pw.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(i + 1);
+    [pw[i], pw[j]] = [pw[j], pw[i]];
+  }
+  return pw.join('');
+}
+
 // ── Auth ────────────────────────────────────────────────────────────────────
 router.post('/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body;
@@ -175,6 +200,24 @@ router.post('/licenses', requireAuth, async (req, res) => {
         [crypto.randomUUID(), raw.customer_id, key, raw.type || 'FREE',
          raw.amount || null, raw.note || `Lizenz ${raw.type || 'FREE'} erstellt`, req.admin.username]
       );
+
+      // Lizenz-Mail an Kunden senden (wenn E-Mail vorhanden)
+      try {
+        const [custRows] = await db.query('SELECT * FROM customers WHERE id = ?', [raw.customer_id]);
+        const cust = custRows[0];
+        if (cust?.email) {
+          await sendTemplateMail('licenseCreated', cust.email, {
+            customer_name: cust.name,
+            license_key:   key,
+            type:          raw.type || 'FREE',
+            expires_at:    expiresAt,
+            associated_domain: raw.associated_domain || '*'
+          });
+          console.log(`[licenses] Lizenz-Mail gesendet an ${cust.email}`);
+        }
+      } catch (mailErr) {
+        console.error('[licenses] Lizenz-Mail fehlgeschlagen (nicht kritisch):', mailErr.message);
+      }
     }
 
     await addAuditLog('license_created',
@@ -279,13 +322,41 @@ router.post('/customers', requireAuth, async (req, res) => {
     return res.status(400).json({ success: false, message: 'Ungültige E-Mail-Adresse' });
   try {
     const id = crypto.randomUUID();
+
+    // Temporäres Passwort generieren + hashen
+    const tempPassword = generateTempPassword();
+    const passwordHash = await bcrypt.hash(tempPassword, 12);
+
     await db.query(
-      'INSERT INTO customers (id, name, email, phone, contact_person, company, payment_status, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, name, email, phone || null, contact_person || null, company || null, payment_status || 'unknown', notes || '']
+      `INSERT INTO customers
+         (id, name, email, phone, contact_person, company, payment_status, notes,
+          password_hash, must_change_password)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [id, name, email, phone || null, contact_person || null,
+       company || null, payment_status || 'unknown', notes || '',
+       passwordHash]
     );
+
     await addAuditLog('customer_created', { customer_id: id, name, email, by: req.admin.username }, req.admin.username);
+
+    // Willkommens-Mail mit Login-Daten senden
+    const portalUrl = (process.env.PORTAL_URL || `http://localhost:${process.env.PORT || 4000}`).replace(/\/$/, '');
+    try {
+      await sendTemplateMail('accountCreated', email, {
+        name,
+        email,
+        password:  tempPassword,
+        login_url: `${portalUrl}/portal.html`
+      });
+      console.log(`[customers] Willkommens-Mail gesendet an ${email}`);
+    } catch (mailErr) {
+      console.error('[customers] Willkommens-Mail fehlgeschlagen (nicht kritisch):', mailErr.message);
+    }
+
     const [rows] = await db.query('SELECT * FROM customers WHERE id = ?', [id]);
-    res.json({ success: true, customer: rows[0] });
+    // password_hash nie im Response zurückgeben
+    const { password_hash: _, ...safeCustomer } = rows[0];
+    res.json({ success: true, customer: safeCustomer });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
@@ -315,7 +386,8 @@ router.patch('/customers/:id', requireAuth, async (req, res) => {
     );
     await addAuditLog('customer_updated', { customer_id: req.params.id, by: req.admin.username }, req.admin.username);
     const [updated] = await db.query('SELECT * FROM customers WHERE id = ?', [req.params.id]);
-    res.json({ success: true, customer: updated[0] });
+    const { password_hash: _, ...safeCustomer } = updated[0];
+    res.json({ success: true, customer: safeCustomer });
   } catch (e) {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
@@ -332,8 +404,6 @@ router.delete('/customers/:id', requireAuth, async (req, res) => {
 });
 
 // ── Portal-Einladung senden ───────────────────────────────────────────────────
-// POST /api/admin/customers/:id/send-portal-invite
-// Generiert einen Einmal-Token (24h gültig) und schickt dem Kunden eine Einladungsmail.
 router.post('/customers/:id/send-portal-invite', requireAuth, requireSuperAdmin, async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM customers WHERE id = ?', [req.params.id]);
@@ -341,7 +411,6 @@ router.post('/customers/:id/send-portal-invite', requireAuth, requireSuperAdmin,
     if (!customer) return res.status(404).json({ success: false, message: 'Kunde nicht gefunden.' });
     if (!customer.email) return res.status(400).json({ success: false, message: 'Kunde hat keine E-Mail-Adresse.' });
 
-    // Einmal-Token generieren (gültig 24h)
     const token = crypto.randomBytes(40).toString('hex');
     const expires = new Date(Date.now() + 24 * 60 * 60 * 1000)
       .toISOString().slice(0, 19).replace('T', ' ');
@@ -350,11 +419,9 @@ router.post('/customers/:id/send-portal-invite', requireAuth, requireSuperAdmin,
       [token, expires, customer.id]
     );
 
-    // Invite-URL zusammenbauen
     const baseUrl = (process.env.PORTAL_URL || `http://localhost:${process.env.PORT || 4000}`).replace(/\/$/, '');
     const inviteUrl = `${baseUrl}/portal.html?token=${token}`;
 
-    // Mail senden
     await sendTemplateMail('portalInvite', customer.email, {
       name: customer.name,
       email: customer.email,
@@ -576,9 +643,7 @@ router.post('/smtp/test', requireAuth, requireSuperAdmin, async (req, res) => {
   try {
     const cfg = await getActiveSmtpConfig();
     if (!cfg) return res.status(500).json({ success: false, message: 'SMTP nicht konfiguriert. Bitte zuerst SMTP-Einstellungen speichern.' });
-    console.log('[SMTP/test] Verwende Config:', cfg.source, cfg.host, cfg.port);
     const info = await sendTemplateMail('test', to, { host: cfg.host });
-    console.log('[SMTP/test] Gesendet:', info.messageId);
     res.json({ success: true, message: `Test-E-Mail an ${to} gesendet. MessageId: ${info.messageId}` });
   } catch (e) {
     console.error('[SMTP/test] Fehler:', e.message, e.code || '');

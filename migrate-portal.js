@@ -21,7 +21,6 @@ const db = await mysql.createConnection({
 
 console.log('🔄 Starte Portal-Migration...');
 
-// Hilfsfunktion: Spalte nur hinzufügen wenn sie noch nicht existiert
 async function addColumnIfMissing(table, column, definition) {
     const [cols] = await db.query(
         `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
@@ -37,9 +36,10 @@ async function addColumnIfMissing(table, column, definition) {
 }
 
 try {
-    await addColumnIfMissing('customers', 'password_hash',       'VARCHAR(255) DEFAULT NULL');
-    await addColumnIfMissing('customers', 'portal_token',        'VARCHAR(128) DEFAULT NULL');
-    await addColumnIfMissing('customers', 'portal_token_expires','DATETIME DEFAULT NULL');
+    await addColumnIfMissing('customers', 'password_hash',        'VARCHAR(255) DEFAULT NULL');
+    await addColumnIfMissing('customers', 'portal_token',         'VARCHAR(128) DEFAULT NULL');
+    await addColumnIfMissing('customers', 'portal_token_expires', 'DATETIME DEFAULT NULL');
+    await addColumnIfMissing('customers', 'must_change_password', 'TINYINT(1) NOT NULL DEFAULT 0');
 } catch (e) {
     console.error('❌ Fehler bei customers-Spalten:', e.message);
     process.exit(1);

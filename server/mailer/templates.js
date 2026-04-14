@@ -77,6 +77,38 @@ const TEMPLATES = {
         text: `OPA! Santorini Lizenzserver — SMTP Test erfolgreich.\n\nGesendet: ${new Date().toLocaleString('de-DE')}`
     }),
 
+    // Neuer Kunde angelegt — sendet Login-Daten mit temporärem Passwort
+    accountCreated: (d) => ({
+        subject: 'Dein Zugang zum OPA! Santorini Kunden-Portal',
+        html: layout('Account erstellt', `
+          <h2 style="margin:0 0 8px;font-size:18px;color:#222">Willkommen, ${d.name || 'Kunde'}! &#127881;</h2>
+          <p style="margin:0 0 20px;color:#555;line-height:1.7">
+            Dein Zugang zum <strong>OPA! Santorini Kunden-Portal</strong> wurde angelegt.
+            Dort kannst du deine Lizenzen einsehen, Domains verwalten und deine Kaufhistorie abrufen.
+          </p>
+          ${infoBox([
+            ['E-Mail / Login', d.email],
+            ['Temporäres Passwort', `<code style="background:#fff3cd;padding:3px 8px;border-radius:4px;font-size:14px;font-weight:700;color:#856404">${d.password}</code>`],
+            ['Portal-URL', `<a href="${d.login_url}" style="color:#6c63ff">${d.login_url}</a>`]
+          ])}
+          <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:14px 18px;margin:20px 0">
+            <p style="margin:0;color:#856404;font-size:13px;line-height:1.6">
+              ⚠️ <strong>Wichtig:</strong> Bitte ändere dein Passwort direkt nach dem ersten Login.
+              Du wirst automatisch dazu aufgefordert.
+            </p>
+          </div>
+          <div style="text-align:center;margin:28px 0">
+            <a href="${d.login_url}" style="display:inline-block;background:#6c63ff;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:700;font-size:15px">
+              &#128272; Jetzt einloggen
+            </a>
+          </div>
+          <p style="margin:20px 0 0;color:#aaa;font-size:13px">
+            Fragen? Schreib uns an support@stb-srv.de
+          </p>
+        `),
+        text: `Willkommen beim OPA! Santorini Kunden-Portal\n\nDeine Zugangsdaten:\nE-Mail: ${d.email}\nPasswort: ${d.password}\n\nBitte ändere dein Passwort nach dem ersten Login.\n\nPortal: ${d.login_url}`
+    }),
+
     portalInvite: (d) => ({
         subject: 'Einladung zum OPA! Santorini Kunden-Portal',
         html: layout('Portal-Einladung', `
@@ -109,9 +141,10 @@ const TEMPLATES = {
     licenseCreated: (d) => ({
         subject: `Deine OPA! Santorini Lizenz ist bereit`,
         html: layout('Lizenz erstellt', `
-          <h2 style="margin:0 0 8px;font-size:18px;color:#222">Willkommen, ${d.customer_name || 'Kunde'}! &#127881;</h2>
+          <h2 style="margin:0 0 8px;font-size:18px;color:#222">Deine Lizenz ist aktiv &#127881;</h2>
           <p style="margin:0 0 20px;color:#555;line-height:1.7">
-            Deine Lizenz f\u00fcr <strong>OPA! Santorini</strong> wurde erfolgreich erstellt.
+            Hallo ${d.customer_name || 'Kunde'},<br><br>
+            deine Lizenz f\u00fcr <strong>OPA! Santorini</strong> wurde erfolgreich erstellt und ist sofort einsatzbereit.
           </p>
           ${infoBox([
             ['Lizenzschl\u00fcssel', `<code style="background:#f0f2f5;padding:2px 6px;border-radius:4px;font-size:13px">${d.license_key}</code>`],
@@ -119,6 +152,9 @@ const TEMPLATES = {
             ['G\u00fcltig bis', d.expires_at ? new Date(d.expires_at).toLocaleDateString('de-DE') : 'Unbegrenzt'],
             ['Domain', d.associated_domain || '*']
           ])}
+          <p style="margin:20px 0 0;color:#aaa;font-size:13px">
+            Du kannst deine Lizenz jederzeit im Kunden-Portal einsehen.
+          </p>
         `),
         text: `Lizenz erstellt\n\nLizenzschlüssel: ${d.license_key}\nPlan: ${d.type}\nGültig bis: ${d.expires_at}`
     }),
