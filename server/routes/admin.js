@@ -168,7 +168,6 @@ router.post('/licenses', requireAuth, async (req, res) => {
        raw.max_devices ? parseInt(raw.max_devices) : 0]
     );
 
-    // Kaufhistorie eintragen
     if (raw.customer_id) {
       await db.query(
         `INSERT IGNORE INTO purchase_history (id, customer_id, license_key, plan, action, amount, note, created_by)
@@ -220,7 +219,6 @@ router.post('/licenses/:key/renew', requireAuth, async (req, res) => {
     await db.query("UPDATE licenses SET expires_at = ?, status = 'active' WHERE license_key = ?",
       [newExpiryStr, req.params.key]);
 
-    // Kaufhistorie: Verlängerung
     if (l.customer_id) {
       await db.query(
         `INSERT INTO purchase_history (id, customer_id, license_key, plan, action, amount, note, created_by)
@@ -387,7 +385,7 @@ router.delete('/purchase-history/:id', requireAuth, requireSuperAdmin, async (re
   }
 });
 
-// ── Login-Log (nur admin_login Events) ───────────────────────────────────────
+// ── Login-Log ─────────────────────────────────────────────────────────────────
 router.get('/login-log', requireAuth, async (req, res) => {
   try {
     const limit = Math.min(500, parseInt(req.query.limit) || 100);
@@ -503,13 +501,16 @@ router.get('/smtp', requireAuth, requireSuperAdmin, async (req, res) => {
   }
 });
 
+// ── SMTP speichern + Verbindung + Test-Mail ────────────────────────────────────
 router.post('/smtp', requireAuth, requireSuperAdmin, async (req, res) => {
-  const { host, port, secure, user, pass, from } = req.body;
+  const { host, port, secure, user, pass, from, test_to } = req.body;
   if (!host || !user || !pass)
     return res.status(400).json({ success: false, message: 'Host, Benutzer und Passwort sind Pflichtfelder' });
   try {
     const transporter = createSmtpTransporter({ host, port: port || '587', secure: secure || 'false', user, pass });
+    // 1) Verbindung prüfen
     await transporter.verify();
+    // 2) Konfiguration speichern
     await db.query(
       `INSERT INTO smtp_config (id, host, port, secure, smtp_user, smtp_pass, smtp_from)
        VALUES (1,?,?,?,?,?,?)
@@ -519,21 +520,61 @@ router.post('/smtp', requireAuth, requireSuperAdmin, async (req, res) => {
       [host, port || '587', secure || 'false', user, pass, from || user]
     );
     await addAuditLog('smtp_config_updated', { host, user, by: req.admin.username }, req.admin.username);
-    res.json({ success: true, message: 'SMTP-Konfiguration gespeichert und Verbindung erfolgreich getestet.' });
+    // 3) Optional: sofortige Test-Mail an angegebene Adresse
+    const recipient = test_to || null;
+    if (recipient) {
+      const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;padding:2rem">
+        <h2 style="color:#6c63ff">&#9889; OPA! Santorini Lizenzserver</h2>
+        <p>Die SMTP-Konfiguration wurde erfolgreich gespeichert und getestet.</p>
+        <hr style="border:none;border-top:1px solid #eee;margin:1.5rem 0">
+        <p style="color:#888;font-size:.85rem">Host: ${host} &nbsp;|&nbsp; Port: ${port || 587} &nbsp;|&nbsp; User: ${user}</p>
+      </body></html>`;
+      await transporter.sendMail({ from: from || user, to: recipient, subject: 'OPA! Santorini — SMTP Konfiguration gespeichert', html, text: 'SMTP-Konfiguration gespeichert. Server: ' + host });
+      return res.json({ success: true, message: `SMTP gespeichert. Test-Mail an ${recipient} gesendet.` });
+    }
+    res.json({ success: true, message: 'SMTP-Konfiguration gespeichert und Verbindung erfolgreich verifiziert.' });
   } catch (e) {
-    res.status(400).json({ success: false, message: `SMTP-Verbindungsfehler: ${e.message}` });
+    res.status(400).json({ success: false, message: `SMTP-Fehler: ${e.message}` });
   }
 });
 
+// ── SMTP Test-Mail (separater Endpoint) ───────────────────────────────────────
 router.post('/smtp/test', requireAuth, requireSuperAdmin, async (req, res) => {
   const { to } = req.body;
   if (!to) return res.status(400).json({ success: false, message: 'Empfänger-E-Mail fehlt' });
   try {
-    await sendMail(to, 'OPA! Santorini License Server — SMTP Test',
-      '\n\nDie SMTP-Konfiguration deines OPA! Santorini License Servers funktioniert korrekt.\n\n');
+    const smtp = await getActiveSmtp();
+    if (!smtp) return res.status(500).json({ success: false, message: 'SMTP nicht konfiguriert' });
+    const html = `<!DOCTYPE html>
+<html lang="de">
+<head><meta charset="UTF-8"></head>
+<body style="font-family:sans-serif;background:#f4f4f8;margin:0;padding:0">
+  <div style="max-width:480px;margin:2rem auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.1)">
+    <div style="background:#6c63ff;padding:1.5rem 2rem">
+      <h1 style="color:#fff;margin:0;font-size:1.3rem">&#9889; OPA! Santorini Lizenzserver</h1>
+    </div>
+    <div style="padding:2rem">
+      <h2 style="margin-top:0;font-size:1.1rem">SMTP Test erfolgreich &#9989;</h2>
+      <p style="color:#555;line-height:1.7">Diese E-Mail bestätigt, dass deine SMTP-Konfiguration korrekt eingerichtet ist und E-Mails erfolgreich zugestellt werden können.</p>
+      <p style="color:#888;font-size:.85rem;margin-top:1.5rem;border-top:1px solid #eee;padding-top:1rem">
+        Gesendet: ${new Date().toLocaleString('de-DE')}
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+    const text = 'OPA! Santorini Lizenzserver — SMTP Test erfolgreich.\n\nDiese E-Mail bestätigt, dass deine SMTP-Konfiguration korrekt eingerichtet ist.\n\nGesendet: ' + new Date().toLocaleString('de-DE');
+    await smtp.transporter.sendMail({
+      from: smtp.from,
+      to,
+      subject: 'OPA! Santorini — SMTP Test ✅',
+      html,
+      text
+    });
     res.json({ success: true, message: `Test-E-Mail an ${to} gesendet.` });
   } catch (e) {
-    res.status(500).json({ success: false, message: e.message });
+    console.error('SMTP test error:', e);
+    res.status(500).json({ success: false, message: `Fehler beim Senden: ${e.message}` });
   }
 });
 
