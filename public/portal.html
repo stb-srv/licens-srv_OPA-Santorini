@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OPA! Santorini &ndash; Kunden-Portal</title>
+  <style>
+    :root,[data-theme="dark"]{--bg:#0a0a0f;--bg2:#12121a;--bg3:#1a1a26;--border:#2a2a3a;--text:#e8e8f0;--text2:#9090b0;--accent:#6c63ff;--accent2:#ff6b6b;--accent3:#51cf66;--gold:#fcc419;--card:#16161f;--radius:12px;--shadow:0 4px 24px rgba(0,0,0,.4);}
+    [data-theme="light"]{--bg:#f4f4f8;--bg2:#fff;--bg3:#e8e8f0;--border:#d0d0e0;--text:#1a1a2e;--text2:#5a5a7a;--accent:#5a52e0;--accent2:#e03030;--accent3:#2eaa50;--gold:#d4a017;--card:#fff;--radius:12px;--shadow:0 4px 24px rgba(0,0,0,.1);}
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;line-height:1.6;min-height:100vh;}
+    nav{position:sticky;top:0;z-index:100;background:rgba(10,10,15,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-items:center;justify-content:space-between;height:60px;}
+    .nav-logo{font-size:1.05rem;font-weight:700;color:var(--accent);}
+    .nav-right{display:flex;gap:.8rem;align-items:center;}
+    .btn{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem 1.1rem;border-radius:8px;border:none;cursor:pointer;font-size:.88rem;font-weight:600;transition:all .2s;text-decoration:none;}
+    .btn-primary{background:var(--accent);color:#fff;}.btn-primary:hover{opacity:.88;}
+    .btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border);}.btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
+    .btn-danger{background:var(--accent2);color:#fff;}.btn-danger:hover{opacity:.85;}
+    .btn-sm{padding:.3rem .7rem;font-size:.8rem;}
+    .btn-success{background:var(--accent3);color:#fff;}.btn-success:hover{opacity:.85;}
+    .page{display:none;}.page.active{display:block;}
+    /* Login & Setup */
+    .center-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem;background:radial-gradient(ellipse 80% 60% at 50% -10%,rgba(108,99,255,.15),transparent);}
+    .auth-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:2.5rem 2rem;width:100%;max-width:400px;box-shadow:var(--shadow);}
+    .auth-card h2{text-align:center;margin-bottom:.4rem;font-size:1.3rem;}
+    .auth-card .sub{text-align:center;color:var(--text2);font-size:.85rem;margin-bottom:1.5rem;}
+    .form-group{margin-bottom:1rem;}
+    .form-group label{display:block;font-size:.85rem;color:var(--text2);margin-bottom:.4rem;}
+    .form-group input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:.6rem .9rem;color:var(--text);font-size:.9rem;outline:none;transition:border-color .2s;}
+    .form-group input:focus{border-color:var(--accent);}
+    .alert{padding:.7rem 1rem;border-radius:8px;font-size:.88rem;margin-bottom:1rem;}
+    .alert-error{background:rgba(255,107,107,.1);border:1px solid rgba(255,107,107,.3);color:var(--accent2);}
+    .alert-success{background:rgba(81,207,102,.1);border:1px solid rgba(81,207,102,.3);color:var(--accent3);}
+    .alert-info{background:rgba(108,99,255,.1);border:1px solid rgba(108,99,255,.3);color:var(--accent);}
+    /* Dashboard */
+    .dashboard{display:flex;min-height:calc(100vh - 60px);}
+    .sidebar{width:210px;background:var(--bg2);border-right:1px solid var(--border);padding:1rem 0;flex-shrink:0;}
+    .sidebar-brand{padding:.8rem 1.2rem 1rem;font-size:.9rem;font-weight:700;color:var(--accent);border-bottom:1px solid var(--border);margin-bottom:.5rem;}
+    .sidebar-user{padding:.4rem 1.2rem .8rem;font-size:.78rem;color:var(--text2);}
+    .sidebar-menu{list-style:none;}
+    .sidebar-menu li a{display:flex;align-items:center;gap:.6rem;padding:.6rem 1.2rem;color:var(--text2);text-decoration:none;font-size:.88rem;cursor:pointer;transition:all .15s;}
+    .sidebar-menu li a:hover,.sidebar-menu li a.active{background:rgba(108,99,255,.12);color:var(--text);}
+    .sidebar-menu li a.active{border-left:3px solid var(--accent);}
+    .main-area{flex:1;overflow-y:auto;padding:1.8rem 2rem;}
+    .tab-panel{display:none;}.tab-panel.active{display:block;}
+    .dash-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;}
+    .dash-header h2{font-size:1.15rem;}
+    /* Cards */
+    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;margin-bottom:1rem;}
+    .card-title{font-size:.8rem;font-weight:700;letter-spacing:.08em;color:var(--accent);text-transform:uppercase;margin-bottom:.8rem;}
+    /* License cards */
+    .lic-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.4rem 1.6rem;margin-bottom:1rem;transition:border-color .2s;}
+    .lic-card:hover{border-color:var(--accent);}
+    .lic-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.6rem;margin-bottom:1rem;}
+    .lic-key{font-family:monospace;font-size:.88rem;background:var(--bg3);padding:.3rem .7rem;border-radius:6px;color:var(--accent);letter-spacing:.04em;cursor:pointer;user-select:all;position:relative;}
+    .lic-key:hover::after{content:'Kopiert!';position:absolute;top:-24px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;font-size:.7rem;padding:.1rem .5rem;border-radius:4px;white-space:nowrap;pointer-events:none;}
+    .lic-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.8rem;margin-bottom:1rem;}
+    .lic-meta-item .lmi-label{font-size:.75rem;color:var(--text2);}
+    .lic-meta-item .lmi-value{font-size:.92rem;font-weight:600;}
+    .domain-form{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-top:.8rem;padding-top:.8rem;border-top:1px solid var(--border);}
+    .domain-form input{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:.45rem .8rem;color:var(--text);font-size:.88rem;outline:none;flex:1;min-width:180px;}
+    .domain-form input:focus{border-color:var(--accent);}
+    .domain-msg{font-size:.8rem;margin-top:.4rem;}
+    /* Table */
+    .table-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:auto;}
+    table.data-table{width:100%;border-collapse:collapse;font-size:.85rem;}
+    table.data-table th{background:var(--bg3);padding:.65rem 1rem;text-align:left;color:var(--text2);font-weight:600;white-space:nowrap;}
+    table.data-table td{padding:.6rem 1rem;border-bottom:1px solid var(--border);vertical-align:middle;}
+    table.data-table tr:last-child td{border:none;}
+    table.data-table tr:hover td{background:var(--bg3);}
+    .badge{display:inline-block;padding:.15rem .55rem;border-radius:999px;font-size:.72rem;font-weight:700;}
+    .badge-active{background:rgba(81,207,102,.15);color:var(--accent3);}
+    .badge-revoked,.badge-cancelled,.badge-suspended,.badge-expired{background:rgba(255,107,107,.15);color:var(--accent2);}
+    .badge-FREE{background:rgba(144,144,176,.15);color:var(--text2);}
+    .badge-BASIC,.badge-STARTER{background:rgba(81,207,102,.2);color:var(--accent3);}
+    .badge-PRO,.badge-PRO_PLUS{background:rgba(108,99,255,.2);color:var(--accent);}
+    .badge-ENTERPRISE{background:rgba(252,196,25,.15);color:var(--gold);}
+    .badge-purchase{background:rgba(81,207,102,.15);color:var(--accent3);}
+    .badge-renewal{background:rgba(108,99,255,.15);color:var(--accent);}
+    .badge-upgrade{background:rgba(252,196,25,.15);color:var(--gold);}
+    .badge-downgrade,.badge-cancellation{background:rgba(255,107,107,.15);color:var(--accent2);}
+    .loading{text-align:center;padding:3rem;color:var(--text2);}
+    .spinner{display:inline-block;width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    .theme-toggle{background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.3rem .6rem;font-size:.95rem;cursor:pointer;}
+    @media(max-width:650px){.sidebar{width:46px;}.sidebar-brand,.sidebar-user,.sidebar-menu li a span{display:none;}.sidebar-menu li a{justify-content:center;padding:.7rem;}.main-area{padding:1rem;}}
+  </style>
+</head>
+<body>
+
+<nav id="portal-nav" style="display:none">
+  <span class="nav-logo">&#9889; OPA! Santorini &mdash; Kunden-Portal</span>
+  <div class="nav-right">
+    <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn">&#9728;&#65039;</button>
+    <span id="nav-customer-name" style="font-size:.85rem;color:var(--text2)"></span>
+    <button class="btn btn-ghost btn-sm" onclick="doLogout()">&#128682; Logout</button>
+  </div>
+</nav>
+
+<!-- LOGIN PAGE -->
+<div id="page-login" class="page active">
+  <div class="center-wrap">
+    <div class="auth-card">
+      <h2>&#128272; Kunden-Portal</h2>
+      <p class="sub">OPA! Santorini Lizenzverwaltung</p>
+      <div id="login-alert"></div>
+      <div class="form-group"><label>E-Mail-Adresse</label><input type="email" id="login-email" placeholder="deine@email.de" autocomplete="email"></div>
+      <div class="form-group"><label>Passwort</label><input type="password" id="login-pass" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="current-password"></div>
+      <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Einloggen</button>
+    </div>
+  </div>
+</div>
+
+<!-- SETUP PASSWORD PAGE -->
+<div id="page-setup" class="page">
+  <div class="center-wrap">
+    <div class="auth-card">
+      <h2>&#128272; Passwort setzen</h2>
+      <p class="sub" id="setup-name-hint">Willkommen! Bitte setze ein Passwort für dein Konto.</p>
+      <div id="setup-alert"></div>
+      <div class="form-group"><label>Neues Passwort <span style="color:var(--text2);font-size:.78rem">(min. 10 Zeichen)</span></label><input type="password" id="setup-pass" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"></div>
+      <div class="form-group"><label>Passwort wiederholen</label><input type="password" id="setup-pass2" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"></div>
+      <button class="btn btn-primary" style="width:100%" onclick="doSetupPassword()">Passwort setzen &amp; einloggen</button>
+    </div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="page-dashboard" class="page">
+  <div class="dashboard">
+    <aside class="sidebar">
+      <div class="sidebar-brand">&#9889; Mein Portal</div>
+      <div class="sidebar-user" id="sb-customer"></div>
+      <ul class="sidebar-menu">
+        <li><a onclick="switchTab('licenses')" id="stab-licenses" class="active"><span>&#128273;</span> <span>Meine Lizenzen</span></a></li>
+        <li><a onclick="switchTab('history')" id="stab-history"><span>&#128717;</span> <span>Kaufhistorie</span></a></li>
+        <li><a onclick="switchTab('account')" id="stab-account"><span>&#128100;</span> <span>Mein Konto</span></a></li>
+        <hr style="border:none;border-top:1px solid var(--border);margin:.5rem 0">
+        <li><a onclick="doLogout()"><span>&#128682;</span> <span>Logout</span></a></li>
+      </ul>
+    </aside>
+    <main class="main-area">
+      <div id="tab-licenses" class="tab-panel active">
+        <div class="dash-header"><h2>&#128273; Meine Lizenzen</h2><button class="btn btn-ghost btn-sm" onclick="loadLicenses()">&#128260; Aktualisieren</button></div>
+        <div id="lic-list"><div class="loading"><div class="spinner"></div></div></div>
+      </div>
+      <div id="tab-history" class="tab-panel">
+        <div class="dash-header"><h2>&#128717; Kaufhistorie</h2></div>
+        <div class="table-wrap" id="hist-table"><div class="loading"><div class="spinner"></div></div></div>
+      </div>
+      <div id="tab-account" class="tab-panel">
+        <div class="dash-header"><h2>&#128100; Mein Konto</h2></div>
+        <div id="account-content"><div class="loading"><div class="spinner"></div></div></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+(function(){
+  var t=localStorage.getItem('portal_theme')||'dark';
+  document.documentElement.setAttribute('data-theme',t);
+  var btn=document.getElementById('theme-btn');
+  if(btn)btn.textContent=t==='dark'?'\u2600\uFE0F':'\uD83C\uDF19';
+})();
+function toggleTheme(){
+  var cur=document.documentElement.getAttribute('data-theme')||'dark';
+  var next=cur==='dark'?'light':'dark';
+  document.documentElement.setAttribute('data-theme',next);
+  localStorage.setItem('portal_theme',next);
+  var btn=document.getElementById('theme-btn');
+  if(btn)btn.textContent=next==='dark'?'\u2600\uFE0F':'\uD83C\uDF19';
+}
+
+var TOKEN=localStorage.getItem('portal_token')||'';
+var CUSTOMER=null;
+
+function API(path,opts){
+  opts=opts||{};
+  var headers={'Content-Type':'application/json'};
+  if(TOKEN)headers['Authorization']='Bearer '+TOKEN;
+  return fetch('/api/portal'+path,Object.assign({headers:headers},opts))
+    .then(function(r){return r.json().then(function(d){if(!r.ok)throw d;return d;});});
+}
+
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function fmtDate(d){return d?new Date(d).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';}
+function fmtDateShort(d){return d?new Date(d).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'}):'—';}
+function daysLeft(d){return Math.ceil((new Date(d)-Date.now())/86400000);}
+function fmtEur(v){return v!=null&&v!==''?parseFloat(v).toFixed(2)+' €':'—';}
+
+function showAlert(elId,msg,type){
+  var el=document.getElementById(elId);
+  if(el)el.innerHTML='<div class="alert alert-'+(type||'error')+'">'+msg+'</div>';
+}
+
+function showPage(name){
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
+  var pg=document.getElementById('page-'+name);
+  if(pg)pg.classList.add('active');
+  document.getElementById('portal-nav').style.display=name==='dashboard'?'':'none';
+}
+
+function switchTab(name){
+  document.querySelectorAll('.tab-panel').forEach(function(p){p.classList.remove('active');});
+  document.querySelectorAll('.sidebar-menu li a').forEach(function(a){a.classList.remove('active');});
+  var tp=document.getElementById('tab-'+name);if(tp)tp.classList.add('active');
+  var tb=document.getElementById('stab-'+name);if(tb)tb.classList.add('active');
+  if(name==='licenses')loadLicenses();
+  else if(name==='history')loadHistory();
+  else if(name==='account')loadAccount();
+}
+
+// ── Startup: invite token prüfen ──────────────────────────────────────────────
+function init(){
+  var params=new URLSearchParams(window.location.search);
+  var inviteToken=params.get('token');
+  if(inviteToken){
+    showPage('setup');
+    // Token vorab verifizieren
+    fetch('/api/portal/verify-invite-token?token='+encodeURIComponent(inviteToken))
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if(d.success){
+          document.getElementById('setup-name-hint').textContent='Willkommen, '+d.name+'! Bitte setze ein Passwort für '+d.email+'.';
+        } else {
+          showAlert('setup-alert',esc(d.message),'error');
+        }
+      });
+    window._inviteToken=inviteToken;
+    return;
+  }
+  if(TOKEN){
+    // Token noch gültig?
+    API('/me').then(function(d){
+      CUSTOMER=d.customer;
+      showDashboard();
+    }).catch(function(){
+      TOKEN='';
+      localStorage.removeItem('portal_token');
+      showPage('login');
+    });
+  } else {
+    showPage('login');
+  }
+}
+
+function showDashboard(){
+  document.getElementById('portal-nav').style.display='';
+  document.getElementById('nav-customer-name').textContent=CUSTOMER.name;
+  document.getElementById('sb-customer').textContent=CUSTOMER.name;
+  showPage('dashboard');
+  loadLicenses();
+}
+
+// ── Login ─────────────────────────────────────────────────────────────────────
+function doLogin(){
+  var email=document.getElementById('login-email').value.trim();
+  var pass=document.getElementById('login-pass').value;
+  if(!email||!pass){showAlert('login-alert','E-Mail und Passwort eingeben.','error');return;}
+  API('/login',{method:'POST',body:JSON.stringify({email:email,password:pass})})
+    .then(function(d){
+      TOKEN=d.token;
+      CUSTOMER=d.customer;
+      localStorage.setItem('portal_token',TOKEN);
+      document.getElementById('login-pass').value='';
+      showDashboard();
+    })
+    .catch(function(e){showAlert('login-alert',esc(e.message||'Login fehlgeschlagen.'),'error');});
+}
+document.addEventListener('keydown',function(e){
+  if(e.key==='Enter'&&document.getElementById('page-login').classList.contains('active'))doLogin();
+});
+
+// ── Setup Password ────────────────────────────────────────────────────────────
+function doSetupPassword(){
+  var pass=document.getElementById('setup-pass').value;
+  var pass2=document.getElementById('setup-pass2').value;
+  if(pass.length<10){showAlert('setup-alert','Passwort muss mindestens 10 Zeichen haben.','error');return;}
+  if(pass!==pass2){showAlert('setup-alert','Passwörter stimmen nicht überein.','error');return;}
+  showAlert('setup-alert','Passwort wird gesetzt&hellip;','info');
+  fetch('/api/portal/setup-password',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({token:window._inviteToken,password:pass})
+  }).then(function(r){return r.json();})
+    .then(function(d){
+      if(d.success){
+        showAlert('setup-alert','&#9989; '+esc(d.message)+' Du wirst weitergeleitet&hellip;','success');
+        setTimeout(function(){
+          // Direkt einloggen
+          document.getElementById('page-setup').classList.remove('active');
+          showPage('login');
+          window._inviteToken=null;
+          history.replaceState(null,'','/portal.html');
+        },2000);
+      } else {
+        showAlert('setup-alert',esc(d.message),'error');
+      }
+    })
+    .catch(function(e){showAlert('setup-alert',esc(e.message||'Fehler'),'error');});
+}
+
+// ── Logout ────────────────────────────────────────────────────────────────────
+function doLogout(){
+  if(TOKEN){
+    API('/logout',{method:'POST'}).catch(function(){});
+  }
+  TOKEN='';
+  CUSTOMER=null;
+  localStorage.removeItem('portal_token');
+  showPage('login');
+}
+
+// ── Lizenzen ──────────────────────────────────────────────────────────────────
+function loadLicenses(){
+  document.getElementById('lic-list').innerHTML='<div class="loading"><div class="spinner"></div></div>';
+  API('/licenses').then(function(d){
+    var lics=d.licenses||[];
+    if(!lics.length){
+      document.getElementById('lic-list').innerHTML='<div class="loading">Keine Lizenzen gefunden.</div>';
+      return;
+    }
+    document.getElementById('lic-list').innerHTML=lics.map(function(l){
+      var days=daysLeft(l.expires_at);
+      var daysColor=days<0?'color:var(--accent2)':days<30?'color:var(--gold)':'';
+      var statusBadge='<span class="badge badge-'+esc(l.status)+'">'+esc(l.status)+'</span>';
+      var typeBadge='<span class="badge badge-'+esc(l.type)+'">'+esc(l.type)+'</span>';
+      return '<div class="lic-card">'+
+        '<div class="lic-header">'+
+          '<div>'+
+            '<div style="font-size:.75rem;color:var(--text2);margin-bottom:.2rem">Lizenzschlüssel (klicken zum Kopieren)</div>'+
+            '<div class="lic-key" onclick="copyKey(this,\''+esc(l.license_key)+'\')" title="Klicken zum Kopieren">'+esc(l.license_key)+'</div>'+
+          '</div>'+
+          '<div style="display:flex;gap:.5rem;align-items:center">'+typeBadge+statusBadge+'</div>'+
+        '</div>'+
+        '<div class="lic-meta">'+
+          '<div class="lic-meta-item"><div class="lmi-label">Ablaufdatum</div><div class="lmi-value" style="'+daysColor+'">'+fmtDateShort(l.expires_at)+'</div></div>'+
+          '<div class="lic-meta-item"><div class="lmi-label">Verbleibend</div><div class="lmi-value" style="'+daysColor+'">'+(days>=0?days+' Tage':'Abgelaufen')+'</div></div>'+
+          '<div class="lic-meta-item"><div class="lmi-label">Domain</div><div class="lmi-value">'+esc(l.associated_domain||'*')+'</div></div>'+
+          '<div class="lic-meta-item"><div class="lmi-label">Validierungen</div><div class="lmi-value">'+esc(l.usage_count||0)+'</div></div>'+
+        '</div>'+
+        '<div class="domain-form">'+
+          '<span style="font-size:.82rem;color:var(--text2);white-space:nowrap">&#127758; Domain binden:</span>'+
+          '<input type="text" placeholder="meinrestaurant.de" id="dom-'+esc(l.license_key)+'" value="'+(l.associated_domain&&l.associated_domain!=='*'?esc(l.associated_domain):'')+'" style="max-width:280px">'+
+          '<button class="btn btn-primary btn-sm" onclick="saveDomain(\''+esc(l.license_key)+'\')" >Speichern</button>'+
+          '<span class="domain-msg" id="dom-msg-'+esc(l.license_key)+'"></span>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+  }).catch(function(e){
+    document.getElementById('lic-list').innerHTML='<div class="alert alert-error">'+esc(e.message||'Fehler beim Laden.')+'</div>';
+  });
+}
+
+function copyKey(el, key){
+  navigator.clipboard.writeText(key).then(function(){
+    var orig=el.textContent;
+    el.textContent='\u2705 Kopiert!';
+    setTimeout(function(){el.textContent=orig;},1500);
+  }).catch(function(){});
+}
+
+function saveDomain(key){
+  var input=document.getElementById('dom-'+key);
+  var msg=document.getElementById('dom-msg-'+key);
+  var domain=input?input.value.trim():'';
+  if(!domain){msg.style.color='var(--accent2)';msg.textContent='Bitte Domain eingeben.';return;}
+  msg.style.color='var(--text2)';msg.textContent='Speichert\u2026';
+  API('/licenses/'+encodeURIComponent(key)+'/domain',{method:'PATCH',body:JSON.stringify({domain:domain})})
+    .then(function(d){
+      msg.style.color='var(--accent3)';msg.textContent='\u2705 '+esc(d.domain)+' gespeichert.';
+    })
+    .catch(function(e){
+      msg.style.color='var(--accent2)';msg.textContent='\u274C '+esc(e.message||'Fehler');
+    });
+}
+
+// ── Kaufhistorie ──────────────────────────────────────────────────────────────
+function loadHistory(){
+  document.getElementById('hist-table').innerHTML='<div class="loading"><div class="spinner"></div></div>';
+  API('/history').then(function(d){
+    var hist=d.history||[];
+    document.getElementById('hist-table').innerHTML=hist.length?
+      '<table class="data-table"><thead><tr><th>Datum</th><th>Lizenz-Key</th><th>Plan</th><th>Aktion</th><th>Betrag</th><th>Notiz</th></tr></thead><tbody>'+
+      hist.map(function(h){
+        return '<tr>'+
+          '<td>'+fmtDate(h.created_at)+'</td>'+
+          '<td><code style="font-size:.8rem">'+esc((h.license_key||'').slice(0,18))+'&hellip;</code></td>'+
+          '<td><span class="badge badge-'+esc(h.plan)+'">'+esc(h.plan)+'</span></td>'+
+          '<td><span class="badge badge-'+esc(h.action)+'">'+esc(h.action)+'</span></td>'+
+          '<td style="font-weight:600;color:'+(h.amount?'var(--accent3)':'var(--text2)')+'">'+ fmtEur(h.amount)+'</td>'+
+          '<td style="font-size:.82rem;max-width:180px">'+esc(h.note||'—')+'</td>'+
+        '</tr>';
+      }).join('')+'</tbody></table>':'<div class="loading" style="padding:2rem">Keine Eintr\u00E4ge.</div>';
+  }).catch(function(e){
+    document.getElementById('hist-table').innerHTML='<div class="alert alert-error" style="margin:1rem">'+esc(e.message||'Fehler')+'</div>';
+  });
+}
+
+// ── Konto ─────────────────────────────────────────────────────────────────────
+function loadAccount(){
+  API('/me').then(function(d){
+    var c=d.customer;
+    document.getElementById('account-content').innerHTML=
+      '<div class="card">'+
+        '<div class="card-title">&#128100; Kontodaten</div>'+
+        '<table style="width:100%;border-collapse:collapse;font-size:.9rem">'+
+          '<tr><td style="padding:.5rem 0;color:var(--text2);width:140px">Name</td><td style="padding:.5rem 0;font-weight:600">'+esc(c.name)+'</td></tr>'+
+          '<tr><td style="padding:.5rem 0;color:var(--text2)">E-Mail</td><td style="padding:.5rem 0">'+esc(c.email)+'</td></tr>'+
+          (c.company?'<tr><td style="padding:.5rem 0;color:var(--text2)">Firma</td><td style="padding:.5rem 0">'+esc(c.company)+'</td></tr>':'')+
+          (c.phone?'<tr><td style="padding:.5rem 0;color:var(--text2)">Telefon</td><td style="padding:.5rem 0">'+esc(c.phone)+'</td></tr>':'')+
+          '<tr><td style="padding:.5rem 0;color:var(--text2)">Zahlungsstatus</td><td style="padding:.5rem 0"><span class="badge badge-'+(c.payment_status==='paid'?'active':'revoked')+'">'+esc(c.payment_status)+'</span></td></tr>'+
+          '<tr><td style="padding:.5rem 0;color:var(--text2)">Kunde seit</td><td style="padding:.5rem 0">'+fmtDateShort(c.created_at)+'</td></tr>'+
+        '</table>'+
+        '<p style="margin-top:1rem;font-size:.82rem;color:var(--text2)">Möchtest du deine Daten ändern? Bitte kontaktiere uns direkt.</p>'+
+      '</div>';
+  }).catch(function(e){
+    document.getElementById('account-content').innerHTML='<div class="alert alert-error">'+esc(e.message||'Fehler')+'</div>';
+  });
+}
+
+init();
+</script>
+</body>
+</html>
