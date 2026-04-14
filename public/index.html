@@ -460,7 +460,7 @@
       <option value="purchase">purchase &ndash; Kauf</option>
       <option value="renewal">renewal &ndash; Verl&auml;ngerung</option>
       <option value="upgrade">upgrade &ndash; Upgrade</option>
-      <option value="downgrade">downgrade &ndash; Downgrade</option>
+      <option value="downgrade">downgrade &ndash; Downgrade</button>
       <option value="cancellation">cancellation &ndash; K&uuml;ndigung</option>
     </select>
   </div>
@@ -887,38 +887,82 @@ function deleteUser(username){
   API('/admin/users/'+username,{method:'DELETE'}).then(function(){loadUsers();}).catch(function(e){alert('Fehler: '+(e.message||e));});
 }
 
+// ── SMTP ─────────────────────────────────────────────────────────────────────
 function loadSmtp(){
   API('/admin/smtp').then(function(d){
     var s=d.smtp||{};
     document.getElementById('smtp-content').innerHTML=
-      '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;max-width:480px">'+
-        '<div class="alert alert-'+(s.configured?'success':'info')+'" style="margin-bottom:1rem">'+(s.configured?'&#9989; SMTP konfiguriert':'&#8505;&#65039; SMTP nicht konfiguriert')+'</div>'+
-        '<div class="form-group"><label>Host</label><input type="text" id="smtp-host" value="'+esc(s.host||'')+'"></div>'+
+      '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;max-width:520px">'+
+        '<div id="smtp-alert"></div>'+
+        '<div class="alert alert-'+(s.configured?'success':'info')+'" style="margin-bottom:1rem">'+(s.configured?'&#9989; SMTP konfiguriert':'&#8505;&#65039; SMTP noch nicht konfiguriert')+'</div>'+
+        '<div class="form-group"><label>Host *</label><input type="text" id="smtp-host" value="'+esc(s.host||'')+'"></div>'+
         '<div class="form-group"><label>Port</label><input type="number" id="smtp-port" value="'+esc(s.port||'587')+'"></div>'+
-        '<div class="form-group"><label>Benutzer</label><input type="text" id="smtp-user" value="'+esc(s.user||'')+'"></div>'+
-        '<div class="form-group"><label>Passwort</label><input type="password" id="smtp-pass" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"></div>'+
-        '<div class="form-group"><label>Absender</label><input type="email" id="smtp-from" value="'+esc(s.from||'')+'"></div>'+
-        '<div style="display:flex;gap:.8rem;flex-wrap:wrap;margin-top:.5rem">'+
-          '<button class="btn btn-primary" onclick="saveSmtp()">Speichern &amp; Testen</button>'+
-          (s.configured?'<div style="display:flex;gap:.5rem;align-items:center"><input type="email" id="smtp-test-to" placeholder="test@mail.de" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:.45rem .8rem;color:var(--text);font-size:.88rem;outline:none"><button class="btn btn-ghost" onclick="testSmtp()">Test senden</button></div>':'')+
+        '<div class="form-group"><label>Verbindungstyp</label>'+
+          '<select id="smtp-secure">'+
+            '<option value="false"'+(s.secure==='false'||!s.secure?' selected':'')+'>STARTTLS (Port 587, empfohlen)</option>'+
+            '<option value="true"'+(s.secure==='true'?' selected':'')+'>SSL/TLS (Port 465)</option>'+
+          '</select>'+
         '</div>'+
+        '<div class="form-group"><label>Benutzer (E-Mail-Adresse) *</label><input type="text" id="smtp-user" value="'+esc(s.user||'')+'"></div>'+
+        '<div class="form-group"><label>Passwort * <span style="font-size:.78rem;color:var(--text2)">(Pflichtfeld beim ersten Speichern, danach nur bei \u00C4nderung)</span></label>'+
+          '<input type="password" id="smtp-pass" placeholder="Passwort eingeben"></div>'+
+        '<div class="form-group"><label>Absender-Adresse</label><input type="email" id="smtp-from" value="'+esc(s.from||'')+'"></div>'+
+        '<div style="display:flex;gap:.8rem;flex-wrap:wrap;margin-top:.8rem;align-items:flex-end">'+
+          '<button class="btn btn-primary" onclick="saveSmtp()">&#128190; Speichern &amp; Verbindung pr\u00FCfen</button>'+
+        '</div>'+
+        (s.configured?
+          '<div style="margin-top:1.2rem;padding-top:1rem;border-top:1px solid var(--border)">'+
+            '<p style="font-size:.85rem;color:var(--text2);margin-bottom:.6rem">Test-E-Mail senden:</p>'+
+            '<div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">'+
+              '<input type="email" id="smtp-test-to" placeholder="empfaenger@mail.de" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:.45rem .8rem;color:var(--text);font-size:.88rem;outline:none;min-width:220px">'+
+              '<button class="btn btn-ghost" onclick="testSmtp()">&#9993;&#65039; Test senden</button>'+
+            '</div>'+
+            '<div id="smtp-test-alert" style="margin-top:.6rem"></div>'+
+          '</div>':'')+
       '</div>';
-  }).catch(function(e){document.getElementById('smtp-content').innerHTML='<div class="alert alert-error">'+esc(e.message||'Fehler')+'</div>';});
+  }).catch(function(e){
+    document.getElementById('smtp-content').innerHTML='<div class="alert alert-error">'+esc(e.message||'Fehler beim Laden der SMTP-Konfiguration')+'</div>';
+  });
 }
+
 function saveSmtp(){
-  var body={host:document.getElementById('smtp-host').value,port:document.getElementById('smtp-port').value,
-    user:document.getElementById('smtp-user').value,pass:document.getElementById('smtp-pass').value,
-    from:document.getElementById('smtp-from').value};
+  var host=document.getElementById('smtp-host').value.trim();
+  var port=document.getElementById('smtp-port').value.trim();
+  var secure=document.getElementById('smtp-secure').value;
+  var user=document.getElementById('smtp-user').value.trim();
+  var pass=document.getElementById('smtp-pass').value;
+  var from=document.getElementById('smtp-from').value.trim();
+
+  if(!host){showAlert('smtp-alert','Host ist ein Pflichtfeld.','error');return;}
+  if(!user){showAlert('smtp-alert','Benutzername / E-Mail-Adresse ist ein Pflichtfeld.','error');return;}
+  if(!pass){showAlert('smtp-alert','Passwort eingeben. Das Passwort wird nicht angezeigt, muss aber beim Speichern immer eingegeben werden.','error');return;}
+
+  showAlert('smtp-alert','Verbinde mit SMTP-Server&hellip;','info');
+
+  var body={host:host,port:port||'587',secure:secure,user:user,pass:pass,from:from||user};
   API('/admin/smtp',{method:'POST',body:JSON.stringify(body)})
-    .then(function(d){alert(d.message);loadSmtp();})
-    .catch(function(e){alert('Fehler: '+(e.message||e));});
+    .then(function(d){
+      showAlert('smtp-alert',d.message||'SMTP gespeichert.','success');
+      setTimeout(function(){loadSmtp();},1500);
+    })
+    .catch(function(e){
+      var msg=e.message||JSON.stringify(e)||'Unbekannter Fehler';
+      showAlert('smtp-alert','&#10060; '+msg,'error');
+    });
 }
+
 function testSmtp(){
-  var to=document.getElementById('smtp-test-to')?document.getElementById('smtp-test-to').value:'';
-  if(!to){alert('Empf\u00E4nger eingeben.');return;}
+  var to=document.getElementById('smtp-test-to')?document.getElementById('smtp-test-to').value.trim():'';
+  if(!to){showAlert('smtp-test-alert','Bitte Empf\u00E4nger-E-Mail eingeben.','error');return;}
+  showAlert('smtp-test-alert','Sende Test-E-Mail an '+to+'&hellip;','info');
   API('/admin/smtp/test',{method:'POST',body:JSON.stringify({to:to})})
-    .then(function(d){alert(d.message);})
-    .catch(function(e){alert('Fehler: '+(e.message||e));});
+    .then(function(d){
+      showAlert('smtp-test-alert','&#9989; '+esc(d.message),'success');
+    })
+    .catch(function(e){
+      var msg=e.message||JSON.stringify(e)||'Unbekannter Fehler';
+      showAlert('smtp-test-alert','&#10060; Fehler: '+esc(msg),'error');
+    });
 }
 
 function loadWebhooks(){
