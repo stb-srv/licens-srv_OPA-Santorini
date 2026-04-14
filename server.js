@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import { testConnection } from './server/db.js';
@@ -21,15 +22,28 @@ const ADMIN_SECRET = process.env.ADMIN_SECRET || 'change-me-in-production';
 const HMAC_SECRET = process.env.HMAC_SECRET || 'hmac-change-me-in-production';
 const SETUP_TOKEN = process.env.SETUP_TOKEN || '';
 
-// ── Startup Warnings ─────────────────────────────────────────────────────────
+// ── Startup Security Checks ──────────────────────────────────────────────────
 if (!RSA_PRIVATE_KEY)   console.warn('⚠️  RSA_PRIVATE_KEY nicht gesetzt – JWT Signing deaktiviert!');
-if (ADMIN_SECRET === 'change-me-in-production') console.warn('⚠️  ADMIN_SECRET ist unsicher!');
-if (HMAC_SECRET === 'hmac-change-me-in-production') console.warn('⚠️  HMAC_SECRET ist unsicher!');
 if (!SETUP_TOKEN)       console.warn('⚠️  SETUP_TOKEN nicht gesetzt – POST /api/v1/setup ist deaktiviert!');
+
+// KRITISCH: Unsichere Default-Secrets → Server-Start verweigern
+if (ADMIN_SECRET === 'change-me-in-production') {
+    console.error('❌ FATAL: ADMIN_SECRET ist der unsichere Default-Wert! Bitte in .env setzen.');
+    process.exit(1);
+}
+if (HMAC_SECRET === 'hmac-change-me-in-production') {
+    console.error('❌ FATAL: HMAC_SECRET ist der unsichere Default-Wert! Bitte in .env setzen.');
+    process.exit(1);
+}
 
 // ── DB ───────────────────────────────────────────────────────────────────────
 try { await testConnection(); }
 catch (e) { console.error('❌  MySQL Verbindungsfehler:', e.message); process.exit(1); }
+
+// ── Security Headers (Helmet) ─────────────────────────────────────────────────
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' }
+}));
 
 // ── CORS (dynamisch aus DB + .env) ───────────────────────────────────────────
 const rawCorsOrigins = process.env.CORS_ORIGINS || '';
@@ -52,8 +66,17 @@ async function getDynamicAllowedOrigins() {
 app.set('trust proxy', 1);
 app.use(cors({
     origin: async (origin, callback) => {
+        // Kein Origin (z.B. Server-zu-Server oder direkte Anfragen): erlauben
         if (!origin) return callback(null, true);
-        if (staticAllowedOrigins.length === 0) return callback(null, true);
+
+        // Wenn CORS_ORIGINS nicht konfiguriert: alle Origins BLOCKIEREN (sicherer Default)
+        if (staticAllowedOrigins.length === 0) {
+            const dynamic = await getDynamicAllowedOrigins();
+            if (dynamic.includes(origin)) return callback(null, true);
+            console.error(`❌ CORS: Origin '${origin}' nicht erlaubt (kein CORS_ORIGINS konfiguriert).`);
+            return callback(new Error(`CORS: Origin '${origin}' nicht erlaubt.`), false);
+        }
+
         if (staticAllowedOrigins.includes(origin)) return callback(null, true);
         const dynamic = await getDynamicAllowedOrigins();
         if (dynamic.includes(origin)) return callback(null, true);
@@ -77,7 +100,7 @@ startCron();
 app.listen(PORT, () => {
     console.log(`\n🏛️  OPA! Santorini License Server v2.1 läuft auf http://localhost:${PORT}`);
     console.log(`📋  Pläne: ${Object.keys(PLAN_DEFINITIONS).join(' | ')}`);
-    console.log(`🌐  CORS: ${staticAllowedOrigins.length > 0 ? staticAllowedOrigins.join(', ') + ' + dynamisch aus DB' : 'alle Origins erlaubt'}`);
+    console.log(`🌐  CORS: ${staticAllowedOrigins.length > 0 ? staticAllowedOrigins.join(', ') + ' + dynamisch aus DB' : 'nur dynamisch aus DB (CORS_ORIGINS nicht gesetzt)'}`);
     console.log(`🔐  HMAC Signing: ${isHmacActive() ? 'AKTIV' : 'INAKTIV'}`);
     console.log(`🔑  RSA JWT Signing: ${RSA_PRIVATE_KEY ? 'AKTIV (RS256)' : 'INAKTIV'}`);
     console.log(`📧  SMTP: ${(envSmtp.host && envSmtp.user) ? `${envSmtp.host}:${envSmtp.port}` : 'nicht konfiguriert'}`);

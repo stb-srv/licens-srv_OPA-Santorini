@@ -7,7 +7,7 @@ import { PLAN_DEFINITIONS } from '../plans.js';
 import { createSmtpTransporter, getActiveSmtp, sendMail } from '../smtp.js';
 import { fireWebhook } from '../webhook.js';
 import { generateKey, getClientIp, addAuditLog, parseJsonField } from '../helpers.js';
-import { requireAuth, requireSuperAdmin, loginLimiter } from '../middleware.js';
+import { requireAuth, requireSuperAdmin, loginLimiter, MIN_PASSWORD_LENGTH } from '../middleware.js';
 
 const router = Router();
 const ADMIN_SECRET = process.env.ADMIN_SECRET || 'change-me-in-production';
@@ -47,7 +47,9 @@ router.get('/users', requireAuth, requireSuperAdmin, async (req, res) => {
 router.post('/users', requireAuth, requireSuperAdmin, async (req, res) => {
     const { username, password, role } = req.body;
     if (!username || !password) return res.status(400).json({ success: false, message: 'Username and password required' });
-    if (password.length < 8) return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
+    // Einheitliche Passwort-Mindestlänge: MIN_PASSWORD_LENGTH (12)
+    if (password.length < MIN_PASSWORD_LENGTH)
+        return res.status(400).json({ success: false, message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` });
     const assignedRole = ['admin', 'superadmin'].includes(role) ? role : 'admin';
     try {
         const hash = await bcrypt.hash(password, 12);
@@ -76,7 +78,8 @@ router.patch('/users/:username/password', requireAuth, async (req, res) => {
     const isSuperAdmin = req.admin.role === 'superadmin';
     if (!isSelf && !isSuperAdmin) return res.status(403).json({ success: false, message: 'Forbidden' });
     const { password } = req.body;
-    if (!password || password.length < 8) return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
+    if (!password || password.length < MIN_PASSWORD_LENGTH)
+        return res.status(400).json({ success: false, message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` });
     try {
         const hash = await bcrypt.hash(password, 12);
         await db.query('UPDATE admins SET password_hash = ? WHERE username = ?', [hash, req.params.username]);
@@ -166,6 +169,9 @@ router.post('/licenses', requireAuth, async (req, res) => {
 });
 
 router.patch('/licenses/:key/status', requireAuth, async (req, res) => {
+    const VALID_STATUSES = ['active', 'revoked', 'cancelled', 'expired', 'suspended'];
+    if (!req.body.status || !VALID_STATUSES.includes(req.body.status))
+        return res.status(400).json({ success: false, message: `Ungültiger Status. Erlaubt: ${VALID_STATUSES.join(', ')}` });
     try {
         const [rows] = await db.query('SELECT status FROM licenses WHERE license_key = ?', [req.params.key]);
         if (!rows[0]) return res.status(404).json({ success: false });
@@ -222,7 +228,7 @@ router.post('/customers', requireAuth, async (req, res) => {
     const { name, email, phone, contact_person, company, payment_status, notes } = req.body;
     if (!name) return res.status(400).json({ success: false, message: 'Name required' });
     if (!email) return res.status(400).json({ success: false, message: 'E-Mail ist ein Pflichtfeld' });
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ success: false, message: 'Ung\u00fcltige E-Mail-Adresse' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ success: false, message: 'Ungültige E-Mail-Adresse' });
     try {
         const id = crypto.randomUUID();
         await db.query(
@@ -242,7 +248,7 @@ router.patch('/customers/:id', requireAuth, async (req, res) => {
         const { name, email, phone, contact_person, company, payment_status, notes } = req.body;
         if (email !== undefined) {
             if (!email) return res.status(400).json({ success: false, message: 'E-Mail ist ein Pflichtfeld' });
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ success: false, message: 'Ung\u00fcltige E-Mail-Adresse' });
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ success: false, message: 'Ungültige E-Mail-Adresse' });
         }
         await db.query(`UPDATE customers SET name=COALESCE(?,name), email=COALESCE(?,email),
             phone=?, contact_person=?, company=COALESCE(?,company),
@@ -317,13 +323,16 @@ router.get('/analytics', requireAuth, async (req, res) => {
 
 // ── Audit Log ────────────────────────────────────────────────────────────────
 router.get('/audit-log', requireAuth, async (req, res) => {
-    const { limit = 100, action, license_key } = req.query;
+    // Limit auf max. 1000 Einträge begrenzen um DB-Dumps via API zu verhindern
+    const rawLimit = parseInt(req.query.limit) || 100;
+    const limit = Math.min(1000, Math.max(1, rawLimit));
+    const { action, license_key } = req.query;
     let query = 'SELECT * FROM audit_log WHERE 1=1';
     const params = [];
     if (action) { query += ' AND action = ?'; params.push(action); }
     if (license_key) { query += ' AND JSON_EXTRACT(details, "$.license_key") = ?'; params.push(license_key); }
     query += ' ORDER BY ts DESC LIMIT ?';
-    params.push(parseInt(limit));
+    params.push(limit);
     const [logs] = await db.query(query, params);
     res.json({ logs });
 });
@@ -353,10 +362,10 @@ router.post('/smtp', requireAuth, requireSuperAdmin, async (req, res) => {
 
 router.post('/smtp/test', requireAuth, requireSuperAdmin, async (req, res) => {
     const { to } = req.body;
-    if (!to) return res.status(400).json({ success: false, message: 'Empf\u00e4nger-E-Mail fehlt' });
+    if (!to) return res.status(400).json({ success: false, message: 'Empfänger-E-Mail fehlt' });
     try {
-        await sendMail(to, 'OPA! Santorini License Server \u2014 SMTP Test',
-            '<h2>\u2705 SMTP Test erfolgreich</h2><p>Die SMTP-Konfiguration deines OPA! Santorini License Servers funktioniert korrekt.</p>');
+        await sendMail(to, 'OPA! Santorini License Server — SMTP Test',
+            '<h2>✅ SMTP Test erfolgreich</h2><p>Die SMTP-Konfiguration deines OPA! Santorini License Servers funktioniert korrekt.</p>');
         res.json({ success: true, message: `Test-E-Mail an ${to} gesendet.` });
     } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
