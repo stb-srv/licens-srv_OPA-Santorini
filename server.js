@@ -41,8 +41,24 @@ try { await testConnection(); }
 catch (e) { console.error('❌  MySQL Verbindungsfehler:', e.message); process.exit(1); }
 
 // ── Security Headers (Helmet) ─────────────────────────────────────────────────
+// Die index.html ist eine Single-Page-App mit inline <script> und <style> Blöcken.
+// unsafe-inline wird daher für script-src und style-src benötigt.
+// Für eine noch sicherere Lösung könnten in Zukunft Nonces verwendet werden.
 app.use(helmet({
-    crossOriginResourcePolicy: { policy: 'cross-origin' }
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc:     ["'self'"],
+            scriptSrc:      ["'self'", "'unsafe-inline'"],
+            scriptSrcAttr:  ["'self'", "'unsafe-inline'"],
+            styleSrc:       ["'self'", "'unsafe-inline'"],
+            imgSrc:         ["'self'", "data:", "https:"],
+            connectSrc:     ["'self'"],
+            fontSrc:        ["'self'", "https:", "data:"],
+            objectSrc:      ["'none'"],
+            upgradeInsecureRequests: [],
+        },
+    },
 }));
 
 // ── CORS (dynamisch aus DB + .env) ───────────────────────────────────────────
