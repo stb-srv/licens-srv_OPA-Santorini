@@ -27,6 +27,7 @@
     .btn-danger{background:var(--accent2);color:#fff;}.btn-danger:hover{opacity:.85;}
     .btn-success{background:var(--accent3);color:#fff;}.btn-success:hover{opacity:.85;}
     .btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border);}.btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
+    .btn-warning{background:var(--gold);color:#1a1a2e;}.btn-warning:hover{opacity:.88;}
     .btn-sm{padding:.3rem .7rem;font-size:.8rem;}
     .theme-toggle{background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.35rem .7rem;font-size:1rem;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:.35rem;font-weight:600;}
     .theme-toggle:hover{border-color:var(--accent);color:var(--accent);}
@@ -115,6 +116,7 @@
     .badge-active{background:rgba(81,207,102,.15);color:var(--accent3);}
     .badge-revoked,.badge-cancelled{background:rgba(255,107,107,.15);color:var(--accent2);}
     .badge-expired,.badge-suspended{background:rgba(252,196,25,.15);color:var(--gold);}
+    .badge-archived{background:rgba(144,144,176,.15);color:var(--text2);}
     .badge-free{background:rgba(144,144,176,.15);color:var(--text2);}
     .badge-pro{background:rgba(108,99,255,.2);color:var(--accent);}
     .badge-enterprise{background:rgba(252,196,25,.15);color:var(--gold);}
@@ -169,7 +171,7 @@
       <span id="theme-icon">&#9728;&#65039;</span>
       <span class="toggle-label" id="theme-label">Light</span>
     </button>
-    <button class="btn btn-primary" onclick="openAdmin()">&#128272; Admin Login</button>
+    <button class="btn btn-primary" onclick="openAdmin()">&#128272; Login</button>
   </div>
 </nav>
 
@@ -181,7 +183,7 @@
       <h1>Sichere Lizenzverwaltung f&uuml;r <span>OPA Santorini</span></h1>
       <p>Ein dedizierter REST-API-Lizenzserver f&uuml;r die OPA-Santorini-Gastronomiesoftware &mdash; mit JWT-basierter Validierung, Offline-Unterst&uuml;tzung und zentralem Admin-Panel.</p>
       <div class="hero-btns">
-        <button class="btn btn-primary" onclick="openAdmin()">&#128272; Admin-Login</button>
+        <button class="btn btn-primary" onclick="openAdmin()">&#128272; Login</button>
         <button class="btn btn-ghost" onclick="showPublicPage('features')">&#9889; Funktionen entdecken</button>
         <button class="btn btn-ghost" onclick="showPublicPage('api')">&#128196; API-Dokumentation</button>
       </div>
@@ -234,6 +236,7 @@
           <tr><td><span class="method method-post">POST</span></td><td><code>/api/admin/login</code></td><td>Login &rarr; JWT</td></tr>
           <tr><td><span class="method method-get">GET</span></td><td><code>/api/admin/licenses</code></td><td>Lizenzen abrufen</td></tr>
           <tr><td><span class="method method-get">GET</span></td><td><code>/api/admin/customers</code></td><td>Kunden verwalten</td></tr>
+          <tr><td><span class="method method-patch">PATCH</span></td><td><code>/api/admin/customers/:id</code></td><td>Kunden bearbeiten</td></tr>
           <tr><td><span class="method method-get">GET</span></td><td><code>/api/admin/purchase-history</code></td><td>Kaufhistorie</td></tr>
           <tr><td><span class="method method-get">GET</span></td><td><code>/api/admin/login-log</code></td><td>Login-Protokoll</td></tr>
           <tr><td><span class="method method-get">GET</span></td><td><code>/api/admin/audit-log</code></td><td>System-Audit-Log</td></tr>
@@ -282,7 +285,7 @@
 <div id="page-admin">
   <div id="admin-login" class="login-wrap">
     <div class="login-card">
-      <h2>&#128272; Admin Login</h2>
+      <h2>&#128272; Login</h2>
       <div id="login-alert"></div>
       <div class="form-group"><label>Benutzername</label><input type="text" id="login-user" placeholder="admin" autocomplete="username"></div>
       <div class="form-group"><label>Passwort</label><input type="password" id="login-pass" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="current-password"></div>
@@ -332,7 +335,15 @@
       </div>
 
       <div id="tab-customers" class="tab-panel">
-        <div class="dash-header"><h2>&#128101; Kunden</h2><button class="btn btn-primary btn-sm" onclick="openModal('modal-new-customer')">+ Neuer Kunde</button></div>
+        <div class="dash-header">
+          <h2>&#128101; Kunden</h2>
+          <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
+            <label style="font-size:.82rem;color:var(--text2);display:flex;align-items:center;gap:.4rem;cursor:pointer">
+              <input type="checkbox" id="cust-show-archived" onchange="loadCustomers()" style="width:auto"> Archivierte anzeigen
+            </label>
+            <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-customer')">+ Neuer Kunde</button>
+          </div>
+        </div>
         <div class="table-wrap" id="cust-table"><div class="loading"><div class="spinner"></div></div></div>
       </div>
 
@@ -425,6 +436,30 @@
   </div>
 </div></div>
 
+<!-- Kunden bearbeiten Modal -->
+<div class="modal-overlay" id="modal-edit-customer"><div class="modal">
+  <h3>&#9999;&#65039; Kunden bearbeiten</h3>
+  <input type="hidden" id="ec-id">
+  <div id="ec-alert"></div>
+  <div class="form-group"><label>Name *</label><input type="text" id="ec-name"></div>
+  <div class="form-group"><label>E-Mail *</label><input type="email" id="ec-email"></div>
+  <div class="form-group"><label>Firma</label><input type="text" id="ec-company"></div>
+  <div class="form-group"><label>Telefon</label><input type="text" id="ec-phone"></div>
+  <div class="form-group"><label>Zahlungsstatus</label>
+    <select id="ec-payment">
+      <option value="unknown">Unbekannt</option>
+      <option value="paid">Bezahlt</option>
+      <option value="pending">Ausstehend</option>
+      <option value="overdue">&Uuml;berf&auml;llig</option>
+    </select>
+  </div>
+  <div class="form-group"><label>Notizen</label><textarea id="ec-notes"></textarea></div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal('modal-edit-customer')">Abbrechen</button>
+    <button class="btn btn-primary" onclick="saveCustomer()">Speichern</button>
+  </div>
+</div></div>
+
 <div class="modal-overlay" id="modal-new-user"><div class="modal">
   <h3>&#128100; Neuen Admin-User anlegen</h3>
   <div class="form-group"><label>Benutzername *</label><input type="text" id="nu-user" placeholder="admin2"></div>
@@ -460,7 +495,7 @@
       <option value="purchase">purchase &ndash; Kauf</option>
       <option value="renewal">renewal &ndash; Verl&auml;ngerung</option>
       <option value="upgrade">upgrade &ndash; Upgrade</option>
-      <option value="downgrade">downgrade &ndash; Downgrade</button>
+      <option value="downgrade">downgrade &ndash; Downgrade</option>
       <option value="cancellation">cancellation &ndash; K&uuml;ndigung</option>
     </select>
   </div>
@@ -514,7 +549,7 @@ function fmtEur(v){return v!=null?parseFloat(v).toFixed(2)+' \u20AC':'\u2014';}
 function showAlert(elId,msg,type){
   type=type||'error';
   var el=document.getElementById(elId);
-  if(el)el.innerHTML='<div class="alert alert-'+type+'">'+esc(msg)+'</div>';
+  if(el)el.innerHTML='<div class="alert alert-'+type+'">'+msg+'</div>';
 }
 
 function showPublicPage(name){
@@ -568,7 +603,7 @@ function doLogin(){
       localStorage.setItem('admin_user',USER);
       document.getElementById('login-pass').value='';
       showDashboard();
-    }).catch(function(e){showAlert('login-alert',e.message||'Login fehlgeschlagen.');});
+    }).catch(function(e){showAlert('login-alert',esc(e.message||'Login fehlgeschlagen.'));});
 }
 function doLogout(){
   TOKEN='';ROLE='';USER='';
@@ -716,23 +751,71 @@ function createLicense(){
     .catch(function(e){alert('Fehler: '+(e.message||e));});
 }
 
+// ── Customers ────────────────────────────────────────────────────────────────
 function loadCustomers(){
-  API('/admin/customers').then(function(d){
+  var showArchived=document.getElementById('cust-show-archived')&&document.getElementById('cust-show-archived').checked;
+  API('/admin/customers'+(showArchived?'?include_archived=1':'')).then(function(d){
     var custs=d.customers||[];
     document.getElementById('cust-table').innerHTML=custs.length?
-      '<table class="data-table"><thead><tr><th>Name</th><th>E-Mail</th><th>Firma</th><th>Telefon</th><th>Zahlung</th><th>Seit</th><th>Aktionen</th></tr></thead><tbody>'+
+      '<table class="data-table"><thead><tr><th>Name</th><th>E-Mail</th><th>Firma</th><th>Telefon</th><th>Zahlung</th><th>Status</th><th>Seit</th><th>Aktionen</th></tr></thead><tbody>'+
       custs.map(function(c){
-        return '<tr><td>'+esc(c.name)+'</td><td>'+esc(c.email||'\u2014')+'</td><td>'+esc(c.company||'\u2014')+'</td>'+
+        var isArchived=c.archived==1||c.archived===true;
+        return '<tr'+(isArchived?' style="opacity:.55"':'')+'>'+
+          '<td>'+esc(c.name)+(isArchived?' <span class="badge badge-archived">archiviert</span>':'')+'</td>'+
+          '<td>'+esc(c.email||'\u2014')+'</td>'+
+          '<td>'+esc(c.company||'\u2014')+'</td>'+
           '<td>'+esc(c.phone||'\u2014')+'</td>'+
           '<td><span class="badge '+(c.payment_status==='paid'?'badge-active':c.payment_status==='overdue'?'badge-revoked':'badge-free')+'">'+esc(c.payment_status||'\u2014')+'</span></td>'+
+          '<td>'+(isArchived?'<span class="badge badge-archived">Archiviert</span>':'<span class="badge badge-active">Aktiv</span>')+'</td>'+
           '<td>'+fmtDate(c.created_at)+'</td>'+
           '<td style="white-space:nowrap">'+
+            '<button class="btn btn-ghost btn-sm" onclick="openEditCustomer('+JSON.stringify(c)+')">&#9999;&#65039; Bearbeiten</button> '+
             '<button class="btn btn-ghost btn-sm" onclick="filterPurchaseByCustomer(\''+esc(c.id)+'\')" >&#128717; K\u00E4ufe</button> '+
-            '<button class="btn btn-danger btn-sm" onclick="deleteCustomer(\''+esc(c.id)+'\')" >&#128465;</button>'+
+            (isArchived
+              ? '<button class="btn btn-success btn-sm" onclick="toggleArchiveCustomer(\''+esc(c.id)+'\',false)" >&#8617; Reaktivieren</button>'
+              : '<button class="btn btn-warning btn-sm" onclick="toggleArchiveCustomer(\''+esc(c.id)+'\',true)" >&#128452; Archivieren</button>')+
+            ' <button class="btn btn-danger btn-sm" onclick="deleteCustomer(\''+esc(c.id)+'\')" >&#128465;</button>'+
           '</td></tr>';
       }).join('')+'</tbody></table>':'<div class="loading">Keine Kunden gefunden.</div>';
   }).catch(function(e){document.getElementById('cust-table').innerHTML='<div class="alert alert-error" style="margin:1rem">'+esc(e.message||'Fehler')+'</div>';});
 }
+
+function openEditCustomer(c){
+  document.getElementById('ec-id').value=c.id;
+  document.getElementById('ec-name').value=c.name||'';
+  document.getElementById('ec-email').value=c.email||'';
+  document.getElementById('ec-company').value=c.company||'';
+  document.getElementById('ec-phone').value=c.phone||'';
+  document.getElementById('ec-notes').value=c.notes||'';
+  var payEl=document.getElementById('ec-payment');
+  if(payEl)payEl.value=c.payment_status||'unknown';
+  document.getElementById('ec-alert').innerHTML='';
+  openModal('modal-edit-customer');
+}
+
+function saveCustomer(){
+  var id=document.getElementById('ec-id').value;
+  var body={
+    name:document.getElementById('ec-name').value,
+    email:document.getElementById('ec-email').value,
+    company:document.getElementById('ec-company').value||null,
+    phone:document.getElementById('ec-phone').value||null,
+    payment_status:document.getElementById('ec-payment').value,
+    notes:document.getElementById('ec-notes').value||''
+  };
+  API('/admin/customers/'+id,{method:'PATCH',body:JSON.stringify(body)})
+    .then(function(){closeModal('modal-edit-customer');loadCustomers();})
+    .catch(function(e){showAlert('ec-alert',esc(e.message||'Fehler beim Speichern.'),'error');});
+}
+
+function toggleArchiveCustomer(id,archive){
+  var msg=archive?'Kunden archivieren? Er wird nicht gel\u00F6scht, aber als inaktiv markiert.':'Kunden reaktivieren?';
+  if(!confirm(msg))return;
+  API('/admin/customers/'+id,{method:'PATCH',body:JSON.stringify({archived:archive?1:0})})
+    .then(function(){loadCustomers();})
+    .catch(function(e){alert('Fehler: '+(e.message||e));});
+}
+
 function createCustomer(){
   var body={name:document.getElementById('nc-name').value,email:document.getElementById('nc-email').value,
     company:document.getElementById('nc-company').value||null,phone:document.getElementById('nc-phone').value||null,
@@ -742,7 +825,7 @@ function createCustomer(){
     .catch(function(e){alert('Fehler: '+(e.message||e));});
 }
 function deleteCustomer(id){
-  if(!confirm('Kunden l\u00F6schen?'))return;
+  if(!confirm('Kunden unwiderruflich l\u00F6schen?'))return;
   API('/admin/customers/'+id,{method:'DELETE'}).then(function(){loadCustomers();}).catch(function(e){alert('Fehler: '+(e.message||e));});
 }
 function filterPurchaseByCustomer(customerId){
@@ -942,19 +1025,19 @@ function saveSmtp(){
   var body={host:host,port:port||'587',secure:secure,user:user,pass:pass,from:from||user};
   API('/admin/smtp',{method:'POST',body:JSON.stringify(body)})
     .then(function(d){
-      showAlert('smtp-alert',d.message||'SMTP gespeichert.','success');
+      showAlert('smtp-alert',esc(d.message||'SMTP gespeichert.'),'success');
       setTimeout(function(){loadSmtp();},1500);
     })
     .catch(function(e){
       var msg=e.message||JSON.stringify(e)||'Unbekannter Fehler';
-      showAlert('smtp-alert','&#10060; '+msg,'error');
+      showAlert('smtp-alert','&#10060; '+esc(msg),'error');
     });
 }
 
 function testSmtp(){
   var to=document.getElementById('smtp-test-to')?document.getElementById('smtp-test-to').value.trim():'';
   if(!to){showAlert('smtp-test-alert','Bitte Empf\u00E4nger-E-Mail eingeben.','error');return;}
-  showAlert('smtp-test-alert','Sende Test-E-Mail an '+to+'&hellip;','info');
+  showAlert('smtp-test-alert','Sende Test-E-Mail an '+esc(to)+'&hellip;','info');
   API('/admin/smtp/test',{method:'POST',body:JSON.stringify({to:to})})
     .then(function(d){
       showAlert('smtp-test-alert','&#9989; '+esc(d.message),'success');
