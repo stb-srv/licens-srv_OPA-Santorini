@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="de" data-theme="light">
+<html lang="de" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OPA! Santorini &ndash; Lizenzserver</title>
   <style>
-    :root {
+    /* ── DARK THEME (Default) ── */
+    :root, [data-theme="dark"] {
       --bg: #0a0a0f;
       --bg2: #12121a;
       --bg3: #1a1a26;
@@ -19,19 +20,39 @@
       --card: #16161f;
       --radius: 12px;
       --shadow: 0 4px 24px rgba(0,0,0,.4);
+      --nav-bg: rgba(10,10,15,.92);
     }
+
+    /* ── LIGHT THEME ── */
+    [data-theme="light"] {
+      --bg: #f4f4f8;
+      --bg2: #ffffff;
+      --bg3: #e8e8f0;
+      --border: #d0d0e0;
+      --text: #1a1a2e;
+      --text2: #5a5a7a;
+      --accent: #5a52e0;
+      --accent2: #e03030;
+      --accent3: #2eaa50;
+      --gold: #d4a017;
+      --card: #ffffff;
+      --radius: 12px;
+      --shadow: 0 4px 24px rgba(0,0,0,.10);
+      --nav-bg: rgba(244,244,248,.95);
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; line-height: 1.6; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; line-height: 1.6; transition: background .25s, color .25s; }
 
     /* ── NAV ── */
-    nav { position: sticky; top: 0; z-index: 100; background: rgba(10,10,15,.92); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 60px; }
+    nav { position: sticky; top: 0; z-index: 100; background: var(--nav-bg); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 60px; }
     .nav-logo { font-size: 1.1rem; font-weight: 700; color: var(--accent); letter-spacing: .03em; }
     .nav-links { display: flex; gap: 1.5rem; align-items: center; }
     .nav-links a { color: var(--text2); text-decoration: none; font-size: .9rem; transition: color .2s; cursor: pointer; }
     .nav-links a:hover { color: var(--text); }
     .btn { display: inline-flex; align-items: center; gap: .4rem; padding: .45rem 1.1rem; border-radius: 8px; border: none; cursor: pointer; font-size: .9rem; font-weight: 600; transition: all .2s; text-decoration: none; }
     .btn-primary { background: var(--accent); color: #fff; }
-    .btn-primary:hover { background: #7c74ff; }
+    .btn-primary:hover { opacity: .88; }
     .btn-danger { background: var(--accent2); color: #fff; }
     .btn-danger:hover { opacity: .85; }
     .btn-success { background: var(--accent3); color: #fff; }
@@ -40,12 +61,29 @@
     .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
     .btn-sm { padding: .3rem .7rem; font-size: .8rem; }
 
+    /* ── THEME TOGGLE ── */
+    .theme-toggle {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text2);
+      border-radius: 8px;
+      padding: .35rem .7rem;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all .2s;
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      font-weight: 600;
+    }
+    .theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
     /* ── PAGES ── */
     .page { display: none; }
     .page.active { display: block; }
 
     /* ── HERO ── */
-    .hero { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 4rem 2rem; background: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(108,99,255,.25), transparent); }
+    .hero { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 4rem 2rem; background: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(108,99,255,.18), transparent); }
     .hero-badge { display: inline-block; background: rgba(108,99,255,.15); border: 1px solid rgba(108,99,255,.4); color: var(--accent); border-radius: 999px; padding: .3rem .9rem; font-size: .8rem; margin-bottom: 1.5rem; letter-spacing: .06em; }
     .hero h1 { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 800; line-height: 1.15; max-width: 800px; }
     .hero h1 span { color: var(--accent); }
@@ -149,7 +187,7 @@
     table.data-table th { background: var(--bg3); padding: .65rem 1rem; text-align: left; color: var(--text2); font-weight: 600; white-space: nowrap; }
     table.data-table td { padding: .6rem 1rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
     table.data-table tr:last-child td { border: none; }
-    table.data-table tr:hover td { background: rgba(255,255,255,.02); }
+    table.data-table tr:hover td { background: var(--bg3); }
     .badge { display: inline-block; padding: .15rem .55rem; border-radius: 999px; font-size: .72rem; font-weight: 700; }
     .badge-active { background: rgba(81,207,102,.15); color: var(--accent3); }
     .badge-revoked, .badge-cancelled { background: rgba(255,107,107,.15); color: var(--accent2); }
@@ -198,6 +236,7 @@
       .sidebar-brand, .sidebar-user, .sidebar-menu li a span { display: none; }
       .sidebar-menu li a { justify-content: center; padding: .7rem; }
       .main-area { padding: 1rem; }
+      .theme-toggle .toggle-label { display: none; }
     }
   </style>
 </head>
@@ -211,6 +250,10 @@
     <a onclick="showPublicPage('features')">Funktionen</a>
     <a onclick="showPublicPage('api')">API</a>
     <a onclick="showPublicPage('legal')">Rechtliches</a>
+    <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn" title="Theme wechseln">
+      <span id="theme-icon">☀️</span>
+      <span class="toggle-label" id="theme-label">Light</span>
+    </button>
     <button class="btn btn-primary" onclick="openAdmin()">🔐 Admin Login</button>
   </div>
 </nav>
@@ -580,6 +623,34 @@
 
 <!-- ██████████ JAVASCRIPT ██████████ -->
 <script>
+// ─── Theme Toggle ─────────────────────────────────────────────────────────────
+(function() {
+  const saved = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved);
+  updateThemeBtn(saved);
+})();
+
+function updateThemeBtn(theme) {
+  const icon  = document.getElementById('theme-icon');
+  const label = document.getElementById('theme-label');
+  if (!icon) return;
+  if (theme === 'dark') {
+    icon.textContent  = '☀️';
+    label.textContent = 'Light';
+  } else {
+    icon.textContent  = '🌙';
+    label.textContent = 'Dark';
+  }
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = current === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('theme', next);
+  updateThemeBtn(next);
+}
+
 // ─── State ───────────────────────────────────────────────────────────────────
 let TOKEN = localStorage.getItem('admin_token') || '';
 let ROLE  = localStorage.getItem('admin_role')  || '';
@@ -746,7 +817,6 @@ async function loadLicenses() {
         </tr>`;
       }).join('')}
       </tbody></table>` : '<div class="loading">Keine Lizenzen gefunden.</div>';
-    // Pagination
     let pgHtml = `<span>Seite ${pg.page||1} / ${pg.pages||1} (${pg.total||0} gesamt)</span>`;
     pgHtml += `<button onclick="changeLicPage(-1)" ${licPage<=1?'disabled':''}>◀</button>`;
     pgHtml += `<button onclick="changeLicPage(1)" ${licPage>=(pg.pages||1)?'disabled':''}>▶</button>`;
@@ -991,7 +1061,6 @@ async function deleteWebhook(id) {
 }
 
 // ─── Auto-Login Check ────────────────────────────────────────────────────────
-// Wenn Token vorhanden und URL-Hash #admin → direkt Dashboard
 if (TOKEN && window.location.hash === '#admin') openAdmin();
 </script>
 </body>
