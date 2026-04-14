@@ -309,6 +309,38 @@ router.patch('/licenses/:key/customer', requireAuth, async (req, res) => {
 });
 
 // ── Customers ────────────────────────────────────────────────────────────────
+
+/**
+ * Generiert einen Portal-Benutzernamen aus dem Kundennamen.
+ * Beispiel: "Max Müller" → "max.mueller"
+ */
+function buildPortalUsername(name) {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')   // Umlaute: ä→a, ö→o, ü→u
+    .replace(/ß/gi, 'ss')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')        // Sonderzeichen entfernen
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .reduce((acc, part, i, arr) =>
+      arr.length >= 2 && i === 0 ? part : i === arr.length - 1 ? (acc ? acc + '.' + part : part) : acc
+    , '');
+}
+
+/** Gibt einen eindeutigen portal_username zurück (fügt ggf. Zahl-Suffix an). */
+async function uniquePortalUsername(baseName) {
+  const base = buildPortalUsername(baseName) || 'kunde';
+  for (let i = 0; i < 100; i++) {
+    const attempt = i === 0 ? base : `${base}${i}`;
+    const [[{ n }]] = await db.query(
+      'SELECT COUNT(*) AS n FROM customers WHERE portal_username = ?', [attempt]
+    );
+    if (n === 0) return attempt;
+  }
+  return `${base}${Date.now()}`;
+}
 router.get('/customers', requireAuth, async (req, res) => {
   const includeArchived = req.query.include_archived === '1';
   const query = includeArchived
@@ -327,32 +359,34 @@ router.post('/customers', requireAuth, async (req, res) => {
   try {
     const id = crypto.randomUUID();
 
-    // Temporäres Passwort generieren + hashen
-    const tempPassword = generateTempPassword();
-    const passwordHash = await bcrypt.hash(tempPassword, 12);
+    // Temporäres Passwort + eindeutigen Benutzernamen generieren
+    const tempPassword   = generateTempPassword();
+    const passwordHash   = await bcrypt.hash(tempPassword, 12);
+    const portalUsername = await uniquePortalUsername(name);
 
     await db.query(
       `INSERT INTO customers
          (id, name, email, phone, contact_person, company, payment_status, notes,
-          password_hash, must_change_password)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+          password_hash, must_change_password, portal_username)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
       [id, name, email, phone || null, contact_person || null,
        company || null, payment_status || 'unknown', notes || '',
-       passwordHash]
+       passwordHash, portalUsername]
     );
 
-    await addAuditLog('customer_created', { customer_id: id, name, email, by: req.admin.username }, req.admin.username);
+    await addAuditLog('customer_created', { customer_id: id, name, email, portal_username: portalUsername, by: req.admin.username }, req.admin.username);
 
     // Willkommens-Mail mit Login-Daten senden
-    const portalUrl = (process.env.PORTAL_URL || `http://localhost:${process.env.PORT || 4000}`).replace(/\/$/, '');
+    const portalUrl = (process.env.PORTAL_URL || 'https://licens-prod.stb-srv.de').replace(/\/$/, '');
     try {
       await sendTemplateMail('accountCreated', email, {
         name,
         email,
+        username:  portalUsername,
         password:  tempPassword,
         login_url: `${portalUrl}/portal.html`
       });
-      console.log(`[customers] Willkommens-Mail gesendet an ${email}`);
+      console.log(`[customers] Willkommens-Mail gesendet an ${email} (username: ${portalUsername})`);
     } catch (mailErr) {
       console.error('[customers] Willkommens-Mail fehlgeschlagen (nicht kritisch):', mailErr.message);
     }
@@ -362,6 +396,7 @@ router.post('/customers', requireAuth, async (req, res) => {
     const { password_hash: _, ...safeCustomer } = rows[0];
     res.json({ success: true, customer: safeCustomer });
   } catch (e) {
+    console.error('[customers/create]', e);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });

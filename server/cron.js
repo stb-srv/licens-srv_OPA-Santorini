@@ -1,5 +1,5 @@
 import db from './db.js';
-import { sendMail } from './smtp.js';
+import { sendTemplateMail } from './mailer/index.js';
 import { addAuditLog } from './helpers.js';
 import { fireWebhook } from './webhook.js';
 
@@ -17,16 +17,13 @@ export async function runExpiryCron() {
             if (!lic.email) continue;
             const daysLeft = Math.ceil((new Date(lic.expires_at) - new Date()) / 86400000);
             try {
-                await sendMail(
-                    lic.email,
-                    `⏰ OPA! Santorini Lizenz läuft in ${daysLeft} Tagen ab`,
-                    `<h2>🏛️ OPA! Santorini – Lizenzablauf</h2>
-                    <p>Hallo ${lic.customer_name},</p>
-                    <p>deine <strong>${lic.type}</strong>-Lizenz (<code>${lic.license_key}</code>) läuft am
-                    <strong>${new Date(lic.expires_at).toLocaleDateString('de-DE')}</strong> ab (in ${daysLeft} Tagen).</p>
-                    <p>Bitte wende dich an deinen Administrator, um die Lizenz zu verlängern.</p>
-                    <p style="color:#888;font-size:12px">OPA! Santorini License Server</p>`
-                );
+                await sendTemplateMail('licenseExpiringSoon', lic.email, {
+                    customer_name: lic.customer_name,
+                    license_key:   lic.license_key,
+                    type:          lic.type,
+                    expires_at:    lic.expires_at,
+                    days_left:     daysLeft
+                });
                 await addAuditLog('expiry_notification_sent', { license_key: lic.license_key, days_left: daysLeft, email: lic.email });
             } catch (e) {
                 console.warn(`📧 Ablauf-Mail fehlgeschlagen für ${lic.license_key}:`, e.message);

@@ -60,18 +60,23 @@ async function requirePortalAuth(req, res, next) {
 router.post('/login', portalLoginLimiter, async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password)
-        return res.status(400).json({ success: false, message: 'E-Mail und Passwort erforderlich.' });
+        return res.status(400).json({ success: false, message: 'Benutzername/E-Mail und Passwort erforderlich.' });
     if (!PORTAL_SECRET)
         return res.status(500).json({ success: false, message: 'Portal nicht konfiguriert (PORTAL_SECRET fehlt).' });
     try {
-        const [rows] = await db.query('SELECT * FROM customers WHERE email = ?', [email.toLowerCase().trim()]);
+        // Login per E-Mail ODER Benutzername
+        const login = email.toLowerCase().trim();
+        const [rows] = await db.query(
+            'SELECT * FROM customers WHERE email = ? OR portal_username = ?',
+            [login, login]
+        );
         const customer = rows[0];
         if (!customer || !customer.password_hash) {
-            return res.status(401).json({ success: false, message: 'E-Mail oder Passwort falsch.' });
+            return res.status(401).json({ success: false, message: 'Benutzername/E-Mail oder Passwort falsch.' });
         }
         const valid = await bcrypt.compare(password, customer.password_hash);
         if (!valid)
-            return res.status(401).json({ success: false, message: 'E-Mail oder Passwort falsch.' });
+            return res.status(401).json({ success: false, message: 'Benutzername/E-Mail oder Passwort falsch.' });
 
         // JWT erstellen (24h)
         const token = jwt.sign(
@@ -96,10 +101,11 @@ router.post('/login', portalLoginLimiter, async (req, res) => {
             success: true,
             token,
             customer: {
-                id: customer.id,
-                name: customer.name,
-                email: customer.email,
-                company: customer.company || null
+                id:       customer.id,
+                name:     customer.name,
+                email:    customer.email,
+                username: customer.portal_username || null,
+                company:  customer.company || null
             }
         });
     } catch (e) {

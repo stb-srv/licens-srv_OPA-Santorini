@@ -40,7 +40,11 @@ ALTER TABLE customers
     ADD COLUMN IF NOT EXISTS must_change_password TINYINT(1) DEFAULT 0,
     ADD COLUMN IF NOT EXISTS portal_token VARCHAR(80),
     ADD COLUMN IF NOT EXISTS portal_token_expires DATETIME,
-    ADD COLUMN IF NOT EXISTS contact_person VARCHAR(255);
+    ADD COLUMN IF NOT EXISTS contact_person VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS portal_username VARCHAR(64);
+
+-- Index für schnellen Username-Login
+CREATE INDEX IF NOT EXISTS idx_portal_username ON customers (portal_username);
 
 -- 4. licenses – ENUM für cancelled-Status erweitern
 -- Falls diese Abfrage fehlschlägt, ist der Status schon korrekt
