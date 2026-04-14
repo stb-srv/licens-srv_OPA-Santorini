@@ -1,5 +1,23 @@
-import nodemailer from 'nodemailer';
-import db from './db.js';
+/**
+ * server/smtp.js
+ * Legacy-Kompatibilitäts-Wrapper.
+ * Alle echten Funktionen liegen in server/mailer/index.js
+ */
+import {
+    buildTransporter as createSmtpTransporter,
+    getActiveSmtpConfig,
+    sendMail,
+    sendTemplateMail,
+    verifySmtp
+} from './mailer/index.js';
+
+// getActiveSmtp wird an einigen Stellen im alten Code noch verwendet
+async function getActiveSmtp() {
+    const cfg = await getActiveSmtpConfig();
+    if (!cfg) return null;
+    const transporter = createSmtpTransporter(cfg);
+    return { transporter, from: cfg.from };
+}
 
 const envSmtp = {
     host: process.env.SMTP_HOST || '',
@@ -10,37 +28,12 @@ const envSmtp = {
     from: process.env.SMTP_FROM || ''
 };
 
-export function createSmtpTransporter(config) {
-    if (!config.host || !config.user || !config.pass) return null;
-    return nodemailer.createTransport({
-        host: config.host,
-        port: parseInt(config.port) || 587,
-        secure: config.secure === 'true' || config.secure === true,
-        auth: { user: config.user, pass: config.pass }
-    });
-}
-
-let envTransporter = null;
-if (envSmtp.host && envSmtp.user && envSmtp.pass) {
-    envTransporter = createSmtpTransporter(envSmtp);
-    console.log('📧  SMTP: Konfiguriert über .env');
-}
-
-export async function getActiveSmtp() {
-    const [rows] = await db.query('SELECT * FROM smtp_config WHERE id = 1 LIMIT 1');
-    const cfg = rows[0];
-    if (cfg?.host && cfg?.smtp_user && cfg?.smtp_pass) {
-        const t = createSmtpTransporter({ host: cfg.host, port: cfg.port, secure: cfg.secure, user: cfg.smtp_user, pass: cfg.smtp_pass });
-        return { transporter: t, from: cfg.smtp_from || cfg.smtp_user };
-    }
-    if (envTransporter) return { transporter: envTransporter, from: envSmtp.from || envSmtp.user };
-    return null;
-}
-
-export async function sendMail(to, subject, html) {
-    const smtp = await getActiveSmtp();
-    if (!smtp) throw new Error('SMTP nicht konfiguriert');
-    await smtp.transporter.sendMail({ from: smtp.from, to, subject, html });
-}
-
-export { envSmtp };
+export {
+    createSmtpTransporter,
+    getActiveSmtp,
+    getActiveSmtpConfig,
+    sendMail,
+    sendTemplateMail,
+    verifySmtp,
+    envSmtp
+};
