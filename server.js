@@ -108,6 +108,26 @@ app.use('/api/portal', portalRoutes);
 // ── Static Files (nach API-Routen) ───────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ── API 404-Handler (verhindert dass Express eine HTML-Seite zurückgibt) ──────
+app.use('/api', (req, res) => {
+    res.status(404).json({ success: false, message: `Route ${req.method} /api${req.path} nicht gefunden.` });
+});
+
+// ── Globaler Fehler-Handler ───────────────────────────────────────────────────
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+    console.error('❌ Unbehandelter Fehler:', err.message || err);
+    if (res.headersSent) return;
+    // CORS-Fehler
+    if (err.message && err.message.startsWith('CORS:')) {
+        return res.status(403).json({ success: false, message: err.message });
+    }
+    res.status(err.status || 500).json({
+        success: false,
+        message: err.message || 'Interner Serverfehler'
+    });
+});
+
 // ── Cron ─────────────────────────────────────────────────────────────────────
 startCron();
 
