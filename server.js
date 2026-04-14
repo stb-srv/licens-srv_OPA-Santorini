@@ -99,12 +99,14 @@ app.use(cors({
 }));
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
 
-// ── Routes ───────────────────────────────────────────────────────────────────
+// ── Routes (vor express.static, damit API-Routen nie durch Static-Files überschattet werden) ──
 app.use('/api/v1', publicRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/portal', portalRoutes);
+
+// ── Static Files (nach API-Routen) ───────────────────────────────────────────
+app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Cron ─────────────────────────────────────────────────────────────────────
 startCron();
