@@ -5,7 +5,7 @@ import db from '../db.js';
 import { PLAN_DEFINITIONS } from '../plans.js';
 import { RSA_PUBLIC_KEY, createSignedLicenseToken, signResponse, isHmacActive, HMAC_SECRET } from '../crypto.js';
 import { domainMatches, getClientIp, addAuditLog, parseJsonField } from '../helpers.js';
-import { validateLimiter, setupLimiter } from '../middleware.js';
+import { validateLimiter, setupLimiter, MIN_PASSWORD_LENGTH } from '../middleware.js';
 
 const router = Router();
 const SETUP_TOKEN = process.env.SETUP_TOKEN || '';
@@ -24,8 +24,8 @@ router.post('/setup', setupLimiter, async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password)
         return res.status(400).json({ success: false, message: 'Username und Passwort sind Pflichtfelder.' });
-    if (password.length < 12)
-        return res.status(400).json({ success: false, message: 'Passwort muss mindestens 12 Zeichen haben.' });
+    if (password.length < MIN_PASSWORD_LENGTH)
+        return res.status(400).json({ success: false, message: `Passwort muss mindestens ${MIN_PASSWORD_LENGTH} Zeichen haben.` });
 
     try {
         const [existing] = await db.query('SELECT COUNT(*) as count FROM admins');
@@ -36,7 +36,7 @@ router.post('/setup', setupLimiter, async (req, res) => {
         const hash = await bcrypt.hash(password, 12);
         await db.query('INSERT INTO admins (username, password_hash, role) VALUES (?, ?, ?)', [username, hash, 'superadmin']);
         await addAuditLog('setup_completed', { username, ip: getClientIp(req) });
-        console.log(`\u2705  Setup abgeschlossen: Superadmin '${username}' erstellt.`);
+        console.log(`✅  Setup abgeschlossen: Superadmin '${username}' erstellt.`);
         res.json({ success: true, message: `Superadmin '${username}' erfolgreich erstellt. SETUP_TOKEN kann jetzt aus .env entfernt werden.` });
     } catch (e) {
         console.error('Setup-Fehler:', e.message);
@@ -68,7 +68,7 @@ router.post('/validate', validateLimiter, async (req, res) => {
         }
         if (!domainMatches(l.associated_domain, domain)) {
             await addAuditLog('validate_failed', { license_key, reason: 'domain_mismatch', domain, ip: clientIp });
-            return res.status(403).json({ status: 'domain_mismatch', message: `Lizenz ist nicht f\u00fcr Domain "${domain}" g\u00fcltig.` });
+            return res.status(403).json({ status: 'domain_mismatch', message: `Lizenz ist nicht für Domain "${domain}" gültig.` });
         }
 
         if (nonce) {
@@ -87,7 +87,7 @@ router.post('/validate', validateLimiter, async (req, res) => {
             if (!existing) {
                 if (maxDevices > 0 && licDevices.length >= maxDevices) {
                     await addAuditLog('validate_failed', { license_key, reason: 'device_limit', device_id, ip: clientIp });
-                    return res.status(403).json({ status: 'device_limit', message: `Maximale Ger\u00e4teanzahl (${maxDevices}) erreicht.` });
+                    return res.status(403).json({ status: 'device_limit', message: `Maximale Geräteanzahl (${maxDevices}) erreicht.` });
                 }
                 await db.query(
                     'INSERT INTO devices (id, license_key, device_id, device_type, ip) VALUES (?, ?, ?, ?, ?)',
@@ -107,7 +107,7 @@ router.post('/validate', validateLimiter, async (req, res) => {
         const cutoff = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
         for (const d of Object.keys(dailyAnalytics)) { if (d < cutoff) delete dailyAnalytics[d]; }
         if (features_used && Array.isArray(features_used)) {
-            for (const f of features_used) featuresAnalytics[f] = (featuresAnalytics[f] || 0) + 1;
+            for (const f of features_used) featuresAnalytics[f] = (featuresAnalytics[f] || 0) + count;
         }
 
         const validatedDomains = parseJsonField(l.validated_domains, []);
@@ -154,7 +154,8 @@ router.post('/validate', validateLimiter, async (req, res) => {
         if (signedToken) {
             finalResponse.license_token = signedToken;
             finalResponse.token = signedToken;
-            finalResponse.license_token_public_key = RSA_PUBLIC_KEY;
+            // license_token_public_key wird NICHT mehr im Response mitgesendet.
+            // Der Public Key ist über GET /api/v1/public-key abrufbar.
         }
 
         return res.json(isHmacActive() ? signResponse(finalResponse) : finalResponse);
@@ -180,11 +181,11 @@ router.post('/heartbeat', validateLimiter, async (req, res) => {
         const l = rows[0];
         if (!l || l.status !== 'active' || new Date(l.expires_at) < new Date()) {
             await addAuditLog('heartbeat_failed', { license_key, reason: 'invalid_or_expired', ip: clientIp });
-            return res.status(403).json({ status: 'invalid', message: 'Lizenz ung\u00fcltig oder abgelaufen.' });
+            return res.status(403).json({ status: 'invalid', message: 'Lizenz ungültig oder abgelaufen.' });
         }
         if (domain && !domainMatches(l.associated_domain, domain)) {
             await addAuditLog('heartbeat_failed', { license_key, reason: 'domain_mismatch', domain, ip: clientIp });
-            return res.status(403).json({ status: 'domain_mismatch', message: 'Domain stimmt nicht \u00fcberein.' });
+            return res.status(403).json({ status: 'domain_mismatch', message: 'Domain stimmt nicht überein.' });
         }
 
         await db.query('UPDATE licenses SET last_heartbeat = NOW() WHERE license_key = ?', [license_key]);
@@ -235,7 +236,7 @@ router.post('/refresh', validateLimiter, async (req, res) => {
         }
         if (domain && !domainMatches(l.associated_domain, domain)) {
             await addAuditLog('refresh_failed', { license_key, reason: 'domain_mismatch', domain, ip: clientIp });
-            return res.status(403).json({ status: 'domain_mismatch', message: 'Domain stimmt nicht \u00fcberein.' });
+            return res.status(403).json({ status: 'domain_mismatch', message: 'Domain stimmt nicht überein.' });
         }
 
         await db.query('UPDATE licenses SET last_heartbeat = NOW() WHERE license_key = ?', [license_key]);
@@ -277,7 +278,7 @@ router.post('/verify-license-token', validateLimiter, (req, res) => {
         const decoded = jwt.verify(license_token, RSA_PUBLIC_KEY, { algorithms: ['RS256'] });
         res.json({ valid: true, payload: decoded });
     } catch (e) {
-        res.status(401).json({ valid: false, message: 'Ung\u00fcltiges oder abgelaufenes Token: ' + e.message });
+        res.status(401).json({ valid: false, message: 'Ungültiges oder abgelaufenes Token: ' + e.message });
     }
 });
 

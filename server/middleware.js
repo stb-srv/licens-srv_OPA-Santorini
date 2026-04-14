@@ -3,6 +3,8 @@ import rateLimit from 'express-rate-limit';
 
 const ADMIN_SECRET = process.env.ADMIN_SECRET || 'change-me-in-production';
 
+export const MIN_PASSWORD_LENGTH = 12;
+
 export const requireAuth = (req, res, next) => {
     const token = req.headers['authorization']?.startsWith('Bearer ')
         ? req.headers['authorization'].slice(7) : null;
