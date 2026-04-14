@@ -177,6 +177,8 @@
 </nav>
 
 <div id="public-pages">
+
+  <!-- ── HOME ── -->
   <div id="pub-home" class="page active">
     <div class="hero">
       <span class="hero-badge">🏛️ OPA! SANTORINI LIZENZSERVER v2.1</span>
@@ -184,10 +186,15 @@
       <p>Ein dedizierter REST-API-Lizenzserver für die OPA-Santorini-Gastronomiesoftware — mit JWT-basierter Validierung, Offline-Unterstützung und zentralem Admin-Panel.</p>
       <div class="hero-btns">
         <button class="btn btn-primary" onclick="openAdmin()">🔐 Admin-Login</button>
+        <button class="btn btn-ghost" onclick="showPublicPage('features')">⚡ Funktionen entdecken</button>
         <button class="btn btn-ghost" onclick="showPublicPage('api')">📄 API-Dokumentation</button>
       </div>
     </div>
-    <section id="sec-features">
+  </div>
+
+  <!-- ── FEATURES ── -->
+  <div id="pub-features" class="page">
+    <section>
       <div class="section-label">Funktionen</div>
       <div class="section-title">Alles, was ein Lizenzserver braucht</div>
       <p class="section-sub">Von der Online-Validierung bis zum Offline-Token — entwickelt für den Einsatz in Gastronomiebetrieben.</p>
@@ -212,6 +219,7 @@
     </section>
   </div>
 
+  <!-- ── API ── -->
   <div id="pub-api" class="page">
     <section style="max-width:1000px;margin:0 auto;padding:4rem 2rem">
       <div class="section-label">Dokumentation</div>
@@ -241,6 +249,7 @@
     </section>
   </div>
 
+  <!-- ── LEGAL ── -->
   <div id="pub-legal" class="page">
     <section style="max-width:800px;margin:0 auto;padding:4rem 2rem">
       <div class="section-title">Rechtliches</div>
@@ -267,6 +276,7 @@
       </div>
     </section>
   </div>
+
 </div>
 
 <footer id="main-footer">
