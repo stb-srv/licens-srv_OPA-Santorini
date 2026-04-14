@@ -331,6 +331,47 @@ router.delete('/customers/:id', requireAuth, async (req, res) => {
   }
 });
 
+// ── Portal-Einladung senden ───────────────────────────────────────────────────
+// POST /api/admin/customers/:id/send-portal-invite
+// Generiert einen Einmal-Token (24h gültig) und schickt dem Kunden eine Einladungsmail.
+router.post('/customers/:id/send-portal-invite', requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM customers WHERE id = ?', [req.params.id]);
+    const customer = rows[0];
+    if (!customer) return res.status(404).json({ success: false, message: 'Kunde nicht gefunden.' });
+    if (!customer.email) return res.status(400).json({ success: false, message: 'Kunde hat keine E-Mail-Adresse.' });
+
+    // Einmal-Token generieren (gültig 24h)
+    const token = crypto.randomBytes(40).toString('hex');
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000)
+      .toISOString().slice(0, 19).replace('T', ' ');
+    await db.query(
+      'UPDATE customers SET portal_token = ?, portal_token_expires = ? WHERE id = ?',
+      [token, expires, customer.id]
+    );
+
+    // Invite-URL zusammenbauen
+    const baseUrl = (process.env.PORTAL_URL || `http://localhost:${process.env.PORT || 4000}`).replace(/\/$/, '');
+    const inviteUrl = `${baseUrl}/portal.html?token=${token}`;
+
+    // Mail senden
+    await sendTemplateMail('portalInvite', customer.email, {
+      name: customer.name,
+      email: customer.email,
+      invite_url: inviteUrl
+    });
+
+    await addAuditLog('portal_invite_sent',
+      { customer_id: customer.id, email: customer.email, by: req.admin.username },
+      req.admin.username);
+
+    res.json({ success: true, message: `Einladungsmail an ${customer.email} gesendet.` });
+  } catch (e) {
+    console.error('[portal-invite]', e.message);
+    res.status(500).json({ success: false, message: `Fehler: ${e.message}` });
+  }
+});
+
 // ── Purchase History ──────────────────────────────────────────────────────────
 router.get('/purchase-history', requireAuth, async (req, res) => {
   try {
@@ -501,16 +542,13 @@ router.get('/smtp', requireAuth, requireSuperAdmin, async (req, res) => {
   }
 });
 
-// SMTP Konfiguration speichern (+ optional direkte Test-Mail)
 router.post('/smtp', requireAuth, requireSuperAdmin, async (req, res) => {
   const { host, port, secure, user, pass, from, test_to } = req.body;
   if (!host || !user || !pass)
     return res.status(400).json({ success: false, message: 'Host, Benutzer und Passwort sind Pflichtfelder' });
   try {
-    // 1) Verbindung prüfen
     const transporter = buildTransporter({ host, port: port || '587', secure: secure || 'false', user, pass });
     await transporter.verify();
-    // 2) Konfiguration speichern
     await db.query(
       `INSERT INTO smtp_config (id, host, port, secure, smtp_user, smtp_pass, smtp_from)
        VALUES (1,?,?,?,?,?,?)
@@ -520,7 +558,6 @@ router.post('/smtp', requireAuth, requireSuperAdmin, async (req, res) => {
       [host, port || '587', secure || 'false', user, pass, from || user]
     );
     await addAuditLog('smtp_config_updated', { host, user, by: req.admin.username }, req.admin.username);
-    // 3) Optional: Test-Mail senden
     if (test_to) {
       const { subject, html, text } = (await import('../mailer/templates.js')).renderTemplate('test', { host });
       await transporter.sendMail({ from: from || user, to: test_to, subject, html, text });
@@ -533,7 +570,6 @@ router.post('/smtp', requireAuth, requireSuperAdmin, async (req, res) => {
   }
 });
 
-// SMTP Test-Mail (separater Endpoint)
 router.post('/smtp/test', requireAuth, requireSuperAdmin, async (req, res) => {
   const { to } = req.body;
   if (!to) return res.status(400).json({ success: false, message: 'Empfänger-E-Mail fehlt' });
