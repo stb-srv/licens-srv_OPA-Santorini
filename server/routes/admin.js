@@ -310,7 +310,11 @@ router.patch('/licenses/:key/customer', requireAuth, async (req, res) => {
 
 // ── Customers ────────────────────────────────────────────────────────────────
 router.get('/customers', requireAuth, async (req, res) => {
-  const [rows] = await db.query('SELECT * FROM customers ORDER BY created_at DESC');
+  const includeArchived = req.query.include_archived === '1';
+  const query = includeArchived
+    ? 'SELECT * FROM customers ORDER BY archived ASC, created_at DESC'
+    : 'SELECT * FROM customers WHERE archived = 0 OR archived IS NULL ORDER BY created_at DESC';
+  const [rows] = await db.query(query);
   res.json({ customers: rows });
 });
 
@@ -366,29 +370,47 @@ router.patch('/customers/:id', requireAuth, async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM customers WHERE id = ?', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ success: false, message: 'Customer not found' });
-    const { name, email, phone, contact_person, company, payment_status, notes } = req.body;
+    const { name, email, phone, contact_person, company, payment_status, notes, archived } = req.body;
     if (email !== undefined) {
       if (!email) return res.status(400).json({ success: false, message: 'E-Mail ist ein Pflichtfeld' });
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
         return res.status(400).json({ success: false, message: 'Ungültige E-Mail-Adresse' });
     }
+
+    // archived-Feld separat behandeln (TINYINT)
+    const archivedVal = archived !== undefined ? (archived ? 1 : 0) : null;
+
     await db.query(
       `UPDATE customers SET
         name=COALESCE(?,name), email=COALESCE(?,email), phone=?, contact_person=?,
-        company=COALESCE(?,company), payment_status=COALESCE(?,payment_status), notes=COALESCE(?,notes)
+        company=COALESCE(?,company), payment_status=COALESCE(?,payment_status), notes=COALESCE(?,notes),
+        archived=COALESCE(?,archived)
        WHERE id=?`,
       [name || null, email || null,
        phone !== undefined ? phone : rows[0].phone,
        contact_person !== undefined ? contact_person : rows[0].contact_person,
        company || null, payment_status || null,
        notes !== undefined ? notes : rows[0].notes,
+       archivedVal,
        req.params.id]
     );
-    await addAuditLog('customer_updated', { customer_id: req.params.id, by: req.admin.username }, req.admin.username);
+
+    // Audit-Log: bei Archivierung spezifischer Eintrag
+    if (archived !== undefined) {
+      await addAuditLog(
+        archived ? 'customer_archived' : 'customer_unarchived',
+        { customer_id: req.params.id, name: rows[0].name, by: req.admin.username },
+        req.admin.username
+      );
+    } else {
+      await addAuditLog('customer_updated', { customer_id: req.params.id, by: req.admin.username }, req.admin.username);
+    }
+
     const [updated] = await db.query('SELECT * FROM customers WHERE id = ?', [req.params.id]);
     const { password_hash: _, ...safeCustomer } = updated[0];
     res.json({ success: true, customer: safeCustomer });
   } catch (e) {
+    console.error(e);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
