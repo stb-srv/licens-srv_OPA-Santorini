@@ -329,17 +329,23 @@ function buildPortalUsername(name) {
     , '');
 }
 
-/** Gibt einen eindeutigen portal_username zurück (fügt ggf. Zahl-Suffix an). */
+/** Gibt einen eindeutigen portal_username zurück (fügt ggf. Zahl-Suffix an).
+ *  Fällt still auf null zurück wenn die Spalte noch nicht existiert. */
 async function uniquePortalUsername(baseName) {
   const base = buildPortalUsername(baseName) || 'kunde';
-  for (let i = 0; i < 100; i++) {
-    const attempt = i === 0 ? base : `${base}${i}`;
-    const [[{ n }]] = await db.query(
-      'SELECT COUNT(*) AS n FROM customers WHERE portal_username = ?', [attempt]
-    );
-    if (n === 0) return attempt;
+  try {
+    for (let i = 0; i < 100; i++) {
+      const attempt = i === 0 ? base : `${base}${i}`;
+      const [[{ n }]] = await db.query(
+        'SELECT COUNT(*) AS n FROM customers WHERE portal_username = ?', [attempt]
+      );
+      if (n === 0) return attempt;
+    }
+    return `${base}${Date.now()}`;
+  } catch {
+    // Spalte existiert noch nicht (Migration noch nicht ausgeführt)
+    return base;
   }
-  return `${base}${Date.now()}`;
 }
 router.get('/customers', requireAuth, async (req, res) => {
   const includeArchived = req.query.include_archived === '1';
@@ -359,24 +365,39 @@ router.post('/customers', requireAuth, async (req, res) => {
   try {
     const id = crypto.randomUUID();
 
-    // Temporäres Passwort + eindeutigen Benutzernamen generieren
-    const tempPassword   = generateTempPassword();
-    const passwordHash   = await bcrypt.hash(tempPassword, 12);
+    // Temporäres Passwort hashen
+    const tempPassword = generateTempPassword();
+    const passwordHash = await bcrypt.hash(tempPassword, 12);
+
+    // Benutzernamen generieren (unabhängig von DB-Spalte)
     const portalUsername = await uniquePortalUsername(name);
 
+    // ── Schritt 1: Kunde anlegen (ohne portal_username – immer kompatibel) ──
     await db.query(
       `INSERT INTO customers
          (id, name, email, phone, contact_person, company, payment_status, notes,
-          password_hash, must_change_password, portal_username)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+          password_hash, must_change_password)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [id, name, email, phone || null, contact_person || null,
        company || null, payment_status || 'unknown', notes || '',
-       passwordHash, portalUsername]
+       passwordHash]
     );
 
-    await addAuditLog('customer_created', { customer_id: id, name, email, portal_username: portalUsername, by: req.admin.username }, req.admin.username);
+    // ── Schritt 2: portal_username setzen (nur wenn Spalte existiert) ────────
+    try {
+      await db.query(
+        'UPDATE customers SET portal_username = ? WHERE id = ?',
+        [portalUsername, id]
+      );
+    } catch (colErr) {
+      console.warn('[customers] portal_username konnte nicht gesetzt werden (Migration ausstehend?):', colErr.message);
+    }
 
-    // Willkommens-Mail mit Login-Daten senden
+    await addAuditLog('customer_created',
+      { customer_id: id, name, email, portal_username: portalUsername, by: req.admin.username },
+      req.admin.username);
+
+    // ── Schritt 3: Willkommens-Mail senden ───────────────────────────────────
     const portalUrl = (process.env.PORTAL_URL || 'https://licens-prod.stb-srv.de').replace(/\/$/, '');
     try {
       await sendTemplateMail('accountCreated', email, {
@@ -392,12 +413,11 @@ router.post('/customers', requireAuth, async (req, res) => {
     }
 
     const [rows] = await db.query('SELECT * FROM customers WHERE id = ?', [id]);
-    // password_hash nie im Response zurückgeben
     const { password_hash: _, ...safeCustomer } = rows[0];
     res.json({ success: true, customer: safeCustomer });
   } catch (e) {
     console.error('[customers/create]', e);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    res.status(500).json({ success: false, message: `Fehler beim Anlegen: ${e.message}` });
   }
 });
 
