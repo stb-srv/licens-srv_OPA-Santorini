@@ -11,6 +11,7 @@ import { startCron } from './server/cron.js';
 import { PLAN_DEFINITIONS } from './server/plans.js';
 import publicRoutes from './server/routes/public.js';
 import adminRoutes from './server/routes/admin.js';
+import portalRoutes from './server/routes/customer-portal.js';
 import { envSmtp } from './server/smtp.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -20,11 +21,13 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 const ADMIN_SECRET = process.env.ADMIN_SECRET || 'change-me-in-production';
 const HMAC_SECRET = process.env.HMAC_SECRET || 'hmac-change-me-in-production';
+const PORTAL_SECRET = process.env.PORTAL_SECRET || '';
 const SETUP_TOKEN = process.env.SETUP_TOKEN || '';
 
 // ── Startup Security Checks ──────────────────────────────────────────────────
 if (!RSA_PRIVATE_KEY)   console.warn('⚠️  RSA_PRIVATE_KEY nicht gesetzt – JWT Signing deaktiviert!');
 if (!SETUP_TOKEN)       console.warn('⚠️  SETUP_TOKEN nicht gesetzt – POST /api/v1/setup ist deaktiviert!');
+if (!PORTAL_SECRET)     console.warn('⚠️  PORTAL_SECRET nicht gesetzt – Kunden-Portal ist deaktiviert!');
 
 // KRITISCH: Unsichere Default-Secrets → Server-Start verweigern
 if (ADMIN_SECRET === 'change-me-in-production') {
@@ -41,9 +44,6 @@ try { await testConnection(); }
 catch (e) { console.error('❌  MySQL Verbindungsfehler:', e.message); process.exit(1); }
 
 // ── Security Headers (Helmet) ─────────────────────────────────────────────────
-// Die index.html ist eine Single-Page-App mit inline <script> und <style> Blöcken.
-// unsafe-inline wird daher für script-src und style-src benötigt.
-// Für eine noch sicherere Lösung könnten in Zukunft Nonces verwendet werden.
 app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     contentSecurityPolicy: {
@@ -82,17 +82,13 @@ async function getDynamicAllowedOrigins() {
 app.set('trust proxy', 1);
 app.use(cors({
     origin: async (origin, callback) => {
-        // Kein Origin (z.B. Server-zu-Server oder direkte Anfragen): erlauben
         if (!origin) return callback(null, true);
-
-        // Wenn CORS_ORIGINS nicht konfiguriert: alle Origins BLOCKIEREN (sicherer Default)
         if (staticAllowedOrigins.length === 0) {
             const dynamic = await getDynamicAllowedOrigins();
             if (dynamic.includes(origin)) return callback(null, true);
             console.error(`❌ CORS: Origin '${origin}' nicht erlaubt (kein CORS_ORIGINS konfiguriert).`);
             return callback(new Error(`CORS: Origin '${origin}' nicht erlaubt.`), false);
         }
-
         if (staticAllowedOrigins.includes(origin)) return callback(null, true);
         const dynamic = await getDynamicAllowedOrigins();
         if (dynamic.includes(origin)) return callback(null, true);
@@ -108,6 +104,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/v1', publicRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/portal', portalRoutes);
 
 // ── Cron ─────────────────────────────────────────────────────────────────────
 startCron();
@@ -120,5 +117,6 @@ app.listen(PORT, () => {
     console.log(`🔐  HMAC Signing: ${isHmacActive() ? 'AKTIV' : 'INAKTIV'}`);
     console.log(`🔑  RSA JWT Signing: ${RSA_PRIVATE_KEY ? 'AKTIV (RS256)' : 'INAKTIV'}`);
     console.log(`📧  SMTP: ${(envSmtp.host && envSmtp.user) ? `${envSmtp.host}:${envSmtp.port}` : 'nicht konfiguriert'}`);
-    console.log(`🔒  Setup-Endpoint: ${SETUP_TOKEN ? 'AKTIV' : 'DEAKTIVIERT'}\n`);
+    console.log(`🔒  Setup-Endpoint: ${SETUP_TOKEN ? 'AKTIV' : 'DEAKTIVIERT'}`);
+    console.log(`🧑‍💼  Kunden-Portal: ${PORTAL_SECRET ? 'AKTIV (/portal.html)' : 'DEAKTIVIERT (PORTAL_SECRET fehlt)'}\n`);
 });
