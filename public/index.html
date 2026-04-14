@@ -55,7 +55,7 @@
     .plan-features{list-style:none;margin-top:1.2rem;}
     .plan-features li{font-size:.85rem;color:var(--text2);padding:.3rem 0;border-bottom:1px solid var(--border);}
     .plan-features li:last-child{border:none;}
-    .plan-features li::before{content:'✓ ';color:var(--accent3);}
+    .plan-features li::before{content:'&#10003; ';color:var(--accent3);}
     .api-table{width:100%;border-collapse:collapse;font-size:.88rem;}
     .api-table th{background:var(--bg3);padding:.75rem 1rem;text-align:left;color:var(--text2);font-weight:600;}
     .api-table td{padding:.65rem 1rem;border-bottom:1px solid var(--border);}
@@ -75,8 +75,6 @@
     footer{border-top:1px solid var(--border);padding:2rem;text-align:center;color:var(--text2);font-size:.85rem;}
     footer a{color:var(--text2);cursor:pointer;text-decoration:underline;margin:0 .5rem;}
     footer a:hover{color:var(--text);}
-
-    /* ── ADMIN ── */
     #page-admin{display:none;min-height:100vh;background:var(--bg);}
     #page-admin.active{display:flex;flex-direction:column;}
     .login-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:2rem;}
@@ -147,7 +145,6 @@
     .spinner{display:inline-block;width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
     @keyframes spin{to{transform:rotate(360deg);}}
     .tab-panel{display:none;}.tab-panel.active{display:block;}
-    /* Sub-tabs für Logs */
     .subtabs{display:flex;gap:.5rem;margin-bottom:1.2rem;flex-wrap:wrap;}
     .subtab-btn{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:.35rem .9rem;color:var(--text2);font-size:.85rem;cursor:pointer;font-weight:600;transition:all .2s;}
     .subtab-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
@@ -162,69 +159,66 @@
 <body>
 
 <nav id="main-nav">
-  <span class="nav-logo">⚡ OPA! Santorini</span>
+  <span class="nav-logo">&#9889; OPA! Santorini</span>
   <div class="nav-links">
     <a onclick="showPublicPage('home')">Start</a>
     <a onclick="showPublicPage('features')">Funktionen</a>
     <a onclick="showPublicPage('api')">API</a>
     <a onclick="showPublicPage('legal')">Rechtliches</a>
     <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn" title="Theme wechseln">
-      <span id="theme-icon">☀️</span>
+      <span id="theme-icon">&#9728;&#65039;</span>
       <span class="toggle-label" id="theme-label">Light</span>
     </button>
-    <button class="btn btn-primary" onclick="openAdmin()">🔐 Admin Login</button>
+    <button class="btn btn-primary" onclick="openAdmin()">&#128272; Admin Login</button>
   </div>
 </nav>
 
 <div id="public-pages">
 
-  <!-- ── HOME ── -->
   <div id="pub-home" class="page active">
     <div class="hero">
-      <span class="hero-badge">🏛️ OPA! SANTORINI LIZENZSERVER v2.1</span>
-      <h1>Sichere Lizenzverwaltung für <span>OPA Santorini</span></h1>
-      <p>Ein dedizierter REST-API-Lizenzserver für die OPA-Santorini-Gastronomiesoftware — mit JWT-basierter Validierung, Offline-Unterstützung und zentralem Admin-Panel.</p>
+      <span class="hero-badge">&#127963;&#65039; OPA! SANTORINI LIZENZSERVER v2.1</span>
+      <h1>Sichere Lizenzverwaltung f&uuml;r <span>OPA Santorini</span></h1>
+      <p>Ein dedizierter REST-API-Lizenzserver f&uuml;r die OPA-Santorini-Gastronomiesoftware &mdash; mit JWT-basierter Validierung, Offline-Unterst&uuml;tzung und zentralem Admin-Panel.</p>
       <div class="hero-btns">
-        <button class="btn btn-primary" onclick="openAdmin()">🔐 Admin-Login</button>
-        <button class="btn btn-ghost" onclick="showPublicPage('features')">⚡ Funktionen entdecken</button>
-        <button class="btn btn-ghost" onclick="showPublicPage('api')">📄 API-Dokumentation</button>
+        <button class="btn btn-primary" onclick="openAdmin()">&#128272; Admin-Login</button>
+        <button class="btn btn-ghost" onclick="showPublicPage('features')">&#9889; Funktionen entdecken</button>
+        <button class="btn btn-ghost" onclick="showPublicPage('api')">&#128196; API-Dokumentation</button>
       </div>
     </div>
   </div>
 
-  <!-- ── FEATURES ── -->
   <div id="pub-features" class="page">
     <section>
       <div class="section-label">Funktionen</div>
       <div class="section-title">Alles, was ein Lizenzserver braucht</div>
-      <p class="section-sub">Von der Online-Validierung bis zum Offline-Token — entwickelt für den Einsatz in Gastronomiebetrieben.</p>
+      <p class="section-sub">Von der Online-Validierung bis zum Offline-Token &mdash; entwickelt f&uuml;r den Einsatz in Gastronomiebetrieben.</p>
       <div class="feature-grid">
-        <div class="feature-card"><div class="feat-icon">🔐</div><h3>RSA RS256 Signing</h3><p>Alle License-Tokens werden mit dem privaten RSA-Key signiert. Clients validieren nur mit dem Public Key.</p></div>
-        <div class="feature-card"><div class="feat-icon">📴</div><h3>Offline-Tokens</h3><p>Zeitgebundene Offline-Tokens für Betriebe ohne stabiles Internet. Nonce-basierter Replay-Schutz.</p></div>
-        <div class="feature-card"><div class="feat-icon">📋</div><h3>Audit-Log</h3><p>Vollständige Ereignisprotokollierung aller Validierungen und Admin-Aktionen mit IP und Zeitstempel.</p></div>
-        <div class="feature-card"><div class="feat-icon">🛡️</div><h3>Rate Limiting</h3><p>Eingebauter Schutz gegen Brute-Force auf Login, Validierungs- und Setup-Endpunkte.</p></div>
-        <div class="feature-card"><div class="feat-icon">👤</div><h3>Multi-Admin</h3><p>Mehrere Admin-Accounts mit separaten Rollen. Passwort-Hashing mit bcrypt (Cost 12).</p></div>
-        <div class="feature-card"><div class="feat-icon">📧</div><h3>SMTP & Webhooks</h3><p>E-Mail-Benachrichtigungen und Webhook-Events für Lizenzänderungen und Ablauferinnerungen.</p></div>
+        <div class="feature-card"><div class="feat-icon">&#128272;</div><h3>RSA RS256 Signing</h3><p>Alle License-Tokens werden mit dem privaten RSA-Key signiert. Clients validieren nur mit dem Public Key.</p></div>
+        <div class="feature-card"><div class="feat-icon">&#128244;</div><h3>Offline-Tokens</h3><p>Zeitgebundene Offline-Tokens f&uuml;r Betriebe ohne stabiles Internet. Nonce-basierter Replay-Schutz.</p></div>
+        <div class="feature-card"><div class="feat-icon">&#128203;</div><h3>Audit-Log</h3><p>Vollst&auml;ndige Ereignisprotokollierung aller Validierungen und Admin-Aktionen mit IP und Zeitstempel.</p></div>
+        <div class="feature-card"><div class="feat-icon">&#128737;&#65039;</div><h3>Rate Limiting</h3><p>Eingebauter Schutz gegen Brute-Force auf Login, Validierungs- und Setup-Endpunkte.</p></div>
+        <div class="feature-card"><div class="feat-icon">&#128100;</div><h3>Multi-Admin</h3><p>Mehrere Admin-Accounts mit separaten Rollen. Passwort-Hashing mit bcrypt (Cost 12).</p></div>
+        <div class="feature-card"><div class="feat-icon">&#128231;</div><h3>SMTP &amp; Webhooks</h3><p>E-Mail-Benachrichtigungen und Webhook-Events f&uuml;r Lizenz&auml;nderungen und Ablauferinnerungen.</p></div>
       </div>
     </section>
     <section style="max-width:1100px;margin:0 auto;padding:3rem 2rem">
       <div class="section-label">Lizenztypen</div>
-      <div class="section-title">Unterstützte Lizenzmodelle</div>
+      <div class="section-title">Unterst&uuml;tzte Lizenzmodelle</div>
       <div class="plans-grid">
-        <div class="plan-card"><div class="plan-name">FREE</div><ul class="plan-features"><li>1 Gerät</li><li>Online-Validierung</li><li>30 Tage</li><li>Offline-Token</li></ul></div>
-        <div class="plan-card featured"><div class="plan-badge">Beliebt</div><div class="plan-name">BASIC</div><ul class="plan-features"><li>Bis zu 5 Geräte</li><li>Online + Offline</li><li>365 Tage</li><li>Priority Validierung</li></ul></div>
+        <div class="plan-card"><div class="plan-name">FREE</div><ul class="plan-features"><li>1 Ger&auml;t</li><li>Online-Validierung</li><li>30 Tage</li><li>Offline-Token</li></ul></div>
+        <div class="plan-card featured"><div class="plan-badge">Beliebt</div><div class="plan-name">BASIC</div><ul class="plan-features"><li>Bis zu 5 Ger&auml;te</li><li>Online + Offline</li><li>365 Tage</li><li>Priority Validierung</li></ul></div>
         <div class="plan-card"><div class="plan-name">PRO</div><ul class="plan-features"><li>Unbegrenzte Devices</li><li>Online + Offline</li><li>365 Tage</li><li>Custom-Feature-Flags</li></ul></div>
-        <div class="plan-card"><div class="plan-name">ENTERPRISE</div><ul class="plan-features"><li>Unbegrenzte Geräte</li><li>730 Tage</li><li>Ablaufdatum + Erneuerung</li><li>Dedizierter Support</li></ul></div>
+        <div class="plan-card"><div class="plan-name">ENTERPRISE</div><ul class="plan-features"><li>Unbegrenzte Ger&auml;te</li><li>730 Tage</li><li>Ablaufdatum + Erneuerung</li><li>Dedizierter Support</li></ul></div>
       </div>
     </section>
   </div>
 
-  <!-- ── API ── -->
   <div id="pub-api" class="page">
     <section style="max-width:1000px;margin:0 auto;padding:4rem 2rem">
       <div class="section-label">Dokumentation</div>
       <div class="section-title">API-Referenz</div>
-      <h3 style="margin-bottom:.8rem;color:var(--text2);font-size:.95rem">Öffentliche Endpunkte</h3>
+      <h3 style="margin-bottom:.8rem;color:var(--text2);font-size:.95rem">&Ouml;ffentliche Endpunkte</h3>
       <div class="table-wrap" style="margin-bottom:2rem">
         <table class="api-table"><thead><tr><th>Methode</th><th>Pfad</th><th>Beschreibung</th></tr></thead><tbody>
           <tr><td><span class="method method-post">POST</span></td><td><code>/api/v1/validate</code></td><td>Lizenz validieren</td></tr>
@@ -237,42 +231,41 @@
       <h3 style="margin-bottom:.8rem;color:var(--text2);font-size:.95rem">Admin-Endpunkte</h3>
       <div class="table-wrap">
         <table class="api-table"><thead><tr><th>Methode</th><th>Pfad</th><th>Beschreibung</th></tr></thead><tbody>
-          <tr><td><span class="method method-post">POST</span></td><td><code>/api/admin/login</code></td><td>Login → JWT</td></tr>
+          <tr><td><span class="method method-post">POST</span></td><td><code>/api/admin/login</code></td><td>Login &rarr; JWT</td></tr>
           <tr><td><span class="method method-get">GET</span></td><td><code>/api/admin/licenses</code></td><td>Lizenzen abrufen</td></tr>
           <tr><td><span class="method method-get">GET</span></td><td><code>/api/admin/customers</code></td><td>Kunden verwalten</td></tr>
           <tr><td><span class="method method-get">GET</span></td><td><code>/api/admin/purchase-history</code></td><td>Kaufhistorie</td></tr>
           <tr><td><span class="method method-get">GET</span></td><td><code>/api/admin/login-log</code></td><td>Login-Protokoll</td></tr>
           <tr><td><span class="method method-get">GET</span></td><td><code>/api/admin/audit-log</code></td><td>System-Audit-Log</td></tr>
-          <tr><td><span class="method method-get">GET</span></td><td><code>/api/admin/devices</code></td><td>Geräte-Liste</td></tr>
+          <tr><td><span class="method method-get">GET</span></td><td><code>/api/admin/devices</code></td><td>Ger&auml;te-Liste</td></tr>
         </tbody></table>
       </div>
     </section>
   </div>
 
-  <!-- ── LEGAL ── -->
   <div id="pub-legal" class="page">
     <section style="max-width:800px;margin:0 auto;padding:4rem 2rem">
       <div class="section-title">Rechtliches</div>
       <div class="tabs-row">
         <button class="btn btn-primary btn-sm" onclick="showLegalTab('impressum')">Impressum</button>
-        <button class="btn btn-ghost btn-sm" onclick="showLegalTab('datenschutz')">Datenschutzerklärung</button>
+        <button class="btn btn-ghost btn-sm" onclick="showLegalTab('datenschutz')">Datenschutzerkl&auml;rung</button>
       </div>
       <div id="tab-impressum" class="tab-panel active legal-content">
         <h2>Verantwortlich</h2>
-        <p><strong>[Ihr vollständiger Name]</strong><br>[Straße und Hausnummer]<br>[PLZ] [Ort]<br>Deutschland</p>
+        <p><strong>[Ihr vollst&auml;ndiger Name]</strong><br>[Stra&szlig;e und Hausnummer]<br>[PLZ] [Ort]<br>Deutschland</p>
         <h2>Kontakt</h2><p>E-Mail: kontakt@beispiel.de</p>
         <h2>Streitschlichtung</h2>
-        <p>Die Europäische Kommission stellt eine Plattform zur Online-Streitbeilegung bereit: <a href="https://ec.europa.eu/consumers/odr/" target="_blank" style="color:var(--accent)">https://ec.europa.eu/consumers/odr/</a></p>
+        <p>Die Europ&auml;ische Kommission stellt eine Plattform zur Online-Streitbeilegung bereit: <a href="https://ec.europa.eu/consumers/odr/" target="_blank" style="color:var(--accent)">https://ec.europa.eu/consumers/odr/</a></p>
       </div>
       <div id="tab-datenschutz" class="tab-panel legal-content">
         <h2>1. Datenschutz auf einen Blick</h2>
         <p>Hinweise zur Verarbeitung personenbezogener Daten bei Nutzung dieses Lizenzservers.</p>
         <h2>2. Verarbeitete Daten</h2>
-        <p>IP-Adresse, Hardware-ID-Hash, Lizenzschlüssel, Zeitstempel, Validierungsergebnis. Rechtsgrundlage: Art. 6 Abs. 1 lit. b + f DSGVO.</p>
+        <p>IP-Adresse, Hardware-ID-Hash, Lizenzschl&uuml;ssel, Zeitstempel, Validierungsergebnis. Rechtsgrundlage: Art. 6 Abs. 1 lit. b + f DSGVO.</p>
         <h2>3. Aufbewahrungsfristen</h2>
         <ul><li>Audit-Logs: 12 Monate</li><li>Lizenzaktivierungsdaten: Vertragslaufzeit + 3 Jahre</li></ul>
-        <h2>4. Aufsichtsbehörde</h2>
-        <p>Unabhängiges Landeszentrum für Datenschutz Schleswig-Holstein, Holstenstraße 98, 24103 Kiel</p>
+        <h2>4. Aufsichtsbeh&ouml;rde</h2>
+        <p>Unabh&auml;ngiges Landeszentrum f&uuml;r Datenschutz Schleswig-Holstein, Holstenstra&szlig;e 98, 24103 Kiel</p>
       </div>
     </section>
   </div>
@@ -286,43 +279,41 @@
   <a onclick="openAdmin()">Admin</a>
 </footer>
 
-<!-- ██████████ ADMIN ██████████ -->
 <div id="page-admin">
   <div id="admin-login" class="login-wrap">
     <div class="login-card">
-      <h2>🔐 Admin Login</h2>
+      <h2>&#128272; Admin Login</h2>
       <div id="login-alert"></div>
       <div class="form-group"><label>Benutzername</label><input type="text" id="login-user" placeholder="admin" autocomplete="username"></div>
-      <div class="form-group"><label>Passwort</label><input type="password" id="login-pass" placeholder="••••••••••••" autocomplete="current-password"></div>
+      <div class="form-group"><label>Passwort</label><input type="password" id="login-pass" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="current-password"></div>
       <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Einloggen</button>
-      <button class="btn btn-ghost" style="width:100%;margin-top:.6rem" onclick="closeAdmin()">← Zurück</button>
+      <button class="btn btn-ghost" style="width:100%;margin-top:.6rem" onclick="closeAdmin()">&larr; Zur&uuml;ck</button>
     </div>
   </div>
 
   <div id="admin-dashboard" class="dashboard" style="display:none">
     <aside class="sidebar">
-      <div class="sidebar-brand">⚡ OPA! Admin</div>
+      <div class="sidebar-brand">&#9889; OPA! Admin</div>
       <div class="sidebar-user" id="sb-user"></div>
       <ul class="sidebar-menu">
-        <li><a onclick="switchTab('overview')" id="tab-btn-overview" class="active"><span>📊</span> <span>Übersicht</span></a></li>
-        <li><a onclick="switchTab('licenses')" id="tab-btn-licenses"><span>🔑</span> <span>Lizenzen</span></a></li>
-        <li><a onclick="switchTab('customers')" id="tab-btn-customers"><span>👥</span> <span>Kunden</span></a></li>
-        <li><a onclick="switchTab('devices')" id="tab-btn-devices"><span>📱</span> <span>Geräte</span></a></li>
-        <li><a onclick="switchTab('logs')" id="tab-btn-logs"><span>📜</span> <span>Logs &amp; Historie</span></a></li>
+        <li><a onclick="switchTab('overview')" id="tab-btn-overview" class="active"><span>&#128202;</span> <span>&Uuml;bersicht</span></a></li>
+        <li><a onclick="switchTab('licenses')" id="tab-btn-licenses"><span>&#128273;</span> <span>Lizenzen</span></a></li>
+        <li><a onclick="switchTab('customers')" id="tab-btn-customers"><span>&#128101;</span> <span>Kunden</span></a></li>
+        <li><a onclick="switchTab('devices')" id="tab-btn-devices"><span>&#128241;</span> <span>Ger&auml;te</span></a></li>
+        <li><a onclick="switchTab('logs')" id="tab-btn-logs"><span>&#128220;</span> <span>Logs &amp; Historie</span></a></li>
         <hr class="sidebar-sep">
-        <li><a onclick="switchTab('users')" id="tab-btn-users"><span>👤</span> <span>Admin-User</span></a></li>
-        <li><a onclick="switchTab('smtp')" id="tab-btn-smtp"><span>📧</span> <span>SMTP</span></a></li>
-        <li><a onclick="switchTab('webhooks')" id="tab-btn-webhooks"><span>🔗</span> <span>Webhooks</span></a></li>
+        <li><a onclick="switchTab('users')" id="tab-btn-users"><span>&#128100;</span> <span>Admin-User</span></a></li>
+        <li><a onclick="switchTab('smtp')" id="tab-btn-smtp"><span>&#128231;</span> <span>SMTP</span></a></li>
+        <li><a onclick="switchTab('webhooks')" id="tab-btn-webhooks"><span>&#128279;</span> <span>Webhooks</span></a></li>
         <hr class="sidebar-sep">
-        <li><a onclick="closeAdmin()"><span>🏠</span> <span>Startseite</span></a></li>
-        <li><a onclick="doLogout()"><span>🚪</span> <span>Logout</span></a></li>
+        <li><a onclick="closeAdmin()"><span>&#127968;</span> <span>Startseite</span></a></li>
+        <li><a onclick="doLogout()"><span>&#128682;</span> <span>Logout</span></a></li>
       </ul>
     </aside>
 
     <main class="main-area">
-      <!-- OVERVIEW -->
       <div id="tab-overview" class="tab-panel active">
-        <div class="dash-header"><h2>📊 Übersicht</h2></div>
+        <div class="dash-header"><h2>&#128202; &Uuml;bersicht</h2></div>
         <div class="stats-row" id="stats-row"><div class="loading"><div class="spinner"></div></div></div>
         <div style="margin-top:1.5rem">
           <h3 style="margin-bottom:.8rem;font-size:.95rem">Top 10 Lizenzen nach Nutzung</h3>
@@ -330,80 +321,67 @@
         </div>
       </div>
 
-      <!-- LICENSES -->
       <div id="tab-licenses" class="tab-panel">
-        <div class="dash-header"><h2>🔑 Lizenzen</h2><button class="btn btn-primary btn-sm" onclick="openModal('modal-new-license')">+ Neue Lizenz</button></div>
+        <div class="dash-header"><h2>&#128273; Lizenzen</h2><button class="btn btn-primary btn-sm" onclick="openModal('modal-new-license')">+ Neue Lizenz</button></div>
         <div class="toolbar">
-          <input type="text" id="lic-search" placeholder="Suche nach Key oder Name…" oninput="debounceSearch()">
-          <button class="btn btn-ghost btn-sm" onclick="loadLicenses()">🔄 Neu laden</button>
+          <input type="text" id="lic-search" placeholder="Suche nach Key oder Name&hellip;" oninput="debounceSearch()">
+          <button class="btn btn-ghost btn-sm" onclick="loadLicenses()">&#128260; Neu laden</button>
         </div>
         <div class="table-wrap" id="lic-table"><div class="loading"><div class="spinner"></div></div></div>
         <div class="pagination" id="lic-pagination"></div>
       </div>
 
-      <!-- CUSTOMERS -->
       <div id="tab-customers" class="tab-panel">
-        <div class="dash-header"><h2>👥 Kunden</h2><button class="btn btn-primary btn-sm" onclick="openModal('modal-new-customer')">+ Neuer Kunde</button></div>
+        <div class="dash-header"><h2>&#128101; Kunden</h2><button class="btn btn-primary btn-sm" onclick="openModal('modal-new-customer')">+ Neuer Kunde</button></div>
         <div class="table-wrap" id="cust-table"><div class="loading"><div class="spinner"></div></div></div>
       </div>
 
-      <!-- DEVICES -->
       <div id="tab-devices" class="tab-panel">
-        <div class="dash-header"><h2>📱 Geräte</h2><button class="btn btn-ghost btn-sm" onclick="loadDevices()">🔄 Neu laden</button></div>
+        <div class="dash-header"><h2>&#128241; Ger&auml;te</h2><button class="btn btn-ghost btn-sm" onclick="loadDevices()">&#128260; Neu laden</button></div>
         <div class="table-wrap" id="dev-table"><div class="loading"><div class="spinner"></div></div></div>
       </div>
 
-      <!-- LOGS & HISTORIE -->
       <div id="tab-logs" class="tab-panel">
-        <div class="dash-header"><h2>📜 Logs &amp; Historie</h2>
-          <button class="btn btn-ghost btn-sm" onclick="reloadActiveLogs()">🔄 Neu laden</button>
+        <div class="dash-header"><h2>&#128220; Logs &amp; Historie</h2>
+          <button class="btn btn-ghost btn-sm" onclick="reloadActiveLogs()">&#128260; Neu laden</button>
         </div>
         <div class="subtabs">
-          <button class="subtab-btn active" onclick="switchSubTab('login-log')" id="stab-btn-login-log">🔐 Login-Protokoll</button>
-          <button class="subtab-btn" onclick="switchSubTab('audit-log')" id="stab-btn-audit-log">🛡️ System-Audit</button>
-          <button class="subtab-btn" onclick="switchSubTab('purchase-history')" id="stab-btn-purchase-history">🛒 Kaufhistorie</button>
+          <button class="subtab-btn active" onclick="switchSubTab('login-log')" id="stab-btn-login-log">&#128272; Login-Protokoll</button>
+          <button class="subtab-btn" onclick="switchSubTab('audit-log')" id="stab-btn-audit-log">&#128737;&#65039; System-Audit</button>
+          <button class="subtab-btn" onclick="switchSubTab('purchase-history')" id="stab-btn-purchase-history">&#128717; Kaufhistorie</button>
         </div>
-
-        <!-- Login-Log -->
         <div id="subtab-login-log" class="subtab-panel active">
           <div id="login-log-list"><div class="loading"><div class="spinner"></div></div></div>
         </div>
-
-        <!-- System-Audit -->
         <div id="subtab-audit-log" class="subtab-panel">
           <div class="toolbar" style="margin-bottom:.8rem">
-            <input type="text" id="audit-search" placeholder="Action filtern (z.B. license_created)…" style="max-width:300px">
-            <button class="btn btn-ghost btn-sm" onclick="loadAudit()">🔍 Filtern</button>
+            <input type="text" id="audit-search" placeholder="Action filtern (z.B. license_created)&hellip;" style="max-width:300px">
+            <button class="btn btn-ghost btn-sm" onclick="loadAudit()">&#128269; Filtern</button>
           </div>
           <div id="audit-list"><div class="loading"><div class="spinner"></div></div></div>
         </div>
-
-        <!-- Kaufhistorie -->
         <div id="subtab-purchase-history" class="subtab-panel">
           <div class="toolbar" style="margin-bottom:.8rem">
-            <input type="text" id="ph-search-customer" placeholder="Kunden-ID oder Lizenz-Key…" style="max-width:340px">
-            <button class="btn btn-ghost btn-sm" onclick="loadPurchaseHistory()">🔍 Filtern</button>
-            <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-ph')">+ Eintrag hinzufügen</button>
+            <input type="text" id="ph-search-customer" placeholder="Kunden-ID oder Lizenz-Key&hellip;" style="max-width:340px">
+            <button class="btn btn-ghost btn-sm" onclick="loadPurchaseHistory()">&#128269; Filtern</button>
+            <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-ph')">+ Eintrag hinzuf&uuml;gen</button>
           </div>
           <div class="table-wrap" id="ph-table"><div class="loading"><div class="spinner"></div></div></div>
         </div>
       </div>
 
-      <!-- ADMIN USERS -->
       <div id="tab-users" class="tab-panel">
-        <div class="dash-header"><h2>👤 Admin-User</h2><button class="btn btn-primary btn-sm" onclick="openModal('modal-new-user')">+ Neuer User</button></div>
+        <div class="dash-header"><h2>&#128100; Admin-User</h2><button class="btn btn-primary btn-sm" onclick="openModal('modal-new-user')">+ Neuer User</button></div>
         <div class="table-wrap" id="users-table"><div class="loading"><div class="spinner"></div></div></div>
       </div>
 
-      <!-- SMTP -->
       <div id="tab-smtp" class="tab-panel">
-        <div class="dash-header"><h2>📧 SMTP-Konfiguration</h2></div>
+        <div class="dash-header"><h2>&#128231; SMTP-Konfiguration</h2></div>
         <div id="smtp-content"><div class="loading"><div class="spinner"></div></div></div>
       </div>
 
-      <!-- WEBHOOKS -->
       <div id="tab-webhooks" class="tab-panel">
-        <div class="dash-header"><h2>🔗 Webhooks</h2><button class="btn btn-primary btn-sm" onclick="openModal('modal-new-webhook')">+ Neuer Webhook</button></div>
+        <div class="dash-header"><h2>&#128279; Webhooks</h2><button class="btn btn-primary btn-sm" onclick="openModal('modal-new-webhook')">+ Neuer Webhook</button></div>
         <div class="table-wrap" id="webhooks-table"><div class="loading"><div class="spinner"></div></div></div>
       </div>
     </main>
@@ -412,15 +390,15 @@
 
 <!-- MODALS -->
 <div class="modal-overlay" id="modal-new-license"><div class="modal">
-  <h3>🔑 Neue Lizenz erstellen</h3>
+  <h3>&#128273; Neue Lizenz erstellen</h3>
   <div class="form-group"><label>Lizenztyp</label>
     <select id="nl-type"><option value="FREE">FREE</option><option value="BASIC">BASIC</option><option value="PRO" selected>PRO</option><option value="ENTERPRISE">ENTERPRISE</option></select>
   </div>
   <div class="form-group"><label>Kundenname</label><input type="text" id="nl-name" placeholder="Max Mustermann GmbH"></div>
   <div class="form-group"><label>Domain (z.B. meinrestaurant.de oder *)</label><input type="text" id="nl-domain" placeholder="meinrestaurant.de"></div>
   <div class="form-group"><label>Ablaufdatum (leer = Plan-Standard)</label><input type="datetime-local" id="nl-expires"></div>
-  <div class="form-group"><label>Max. Geräte (0 = unbegrenzt)</label><input type="number" id="nl-devices" value="0" min="0"></div>
-  <div class="form-group"><label>Kunden-ID (optional, für Kaufhistorie)</label><input type="text" id="nl-customer-id" placeholder="UUID des Kunden"></div>
+  <div class="form-group"><label>Max. Ger&auml;te (0 = unbegrenzt)</label><input type="number" id="nl-devices" value="0" min="0"></div>
+  <div class="form-group"><label>Kunden-ID (optional)</label><input type="text" id="nl-customer-id" placeholder="UUID des Kunden"></div>
   <div class="form-group"><label>Betrag in EUR (optional)</label><input type="number" step="0.01" id="nl-amount" placeholder="49.99"></div>
   <div class="modal-footer">
     <button class="btn btn-ghost" onclick="closeModal('modal-new-license')">Abbrechen</button>
@@ -429,13 +407,13 @@
 </div></div>
 
 <div class="modal-overlay" id="modal-edit-license"><div class="modal">
-  <h3>✏️ Lizenz bearbeiten</h3>
+  <h3>&#9999;&#65039; Lizenz bearbeiten</h3>
   <div id="modal-edit-license-content"></div>
-  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-edit-license')">Schließen</button></div>
+  <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-edit-license')">Schlie&szlig;en</button></div>
 </div></div>
 
 <div class="modal-overlay" id="modal-new-customer"><div class="modal">
-  <h3>👥 Neuen Kunden anlegen</h3>
+  <h3>&#128101; Neuen Kunden anlegen</h3>
   <div class="form-group"><label>Name *</label><input type="text" id="nc-name" placeholder="Max Mustermann"></div>
   <div class="form-group"><label>E-Mail *</label><input type="email" id="nc-email" placeholder="max@beispiel.de"></div>
   <div class="form-group"><label>Firma</label><input type="text" id="nc-company" placeholder="Muster GmbH"></div>
@@ -448,9 +426,9 @@
 </div></div>
 
 <div class="modal-overlay" id="modal-new-user"><div class="modal">
-  <h3>👤 Neuen Admin-User anlegen</h3>
+  <h3>&#128100; Neuen Admin-User anlegen</h3>
   <div class="form-group"><label>Benutzername *</label><input type="text" id="nu-user" placeholder="admin2"></div>
-  <div class="form-group"><label>Passwort * (min. 12 Zeichen)</label><input type="password" id="nu-pass" placeholder="••••••••••••"></div>
+  <div class="form-group"><label>Passwort * (min. 12 Zeichen)</label><input type="password" id="nu-pass" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"></div>
   <div class="form-group"><label>Rolle</label>
     <select id="nu-role"><option value="admin">Admin</option><option value="superadmin">Superadmin</option></select>
   </div>
@@ -461,7 +439,7 @@
 </div></div>
 
 <div class="modal-overlay" id="modal-new-webhook"><div class="modal">
-  <h3>🔗 Neuen Webhook anlegen</h3>
+  <h3>&#128279; Neuen Webhook anlegen</h3>
   <div class="form-group"><label>URL *</label><input type="url" id="nw-url" placeholder="https://dein-server.de/webhook"></div>
   <div class="form-group"><label>Secret (optional)</label><input type="text" id="nw-secret" placeholder="webhook-secret"></div>
   <div class="modal-footer">
@@ -470,9 +448,8 @@
   </div>
 </div></div>
 
-<!-- Neuer Kaufhistorie-Eintrag -->
 <div class="modal-overlay" id="modal-new-ph"><div class="modal">
-  <h3>🛒 Kaufhistorie-Eintrag hinzufügen</h3>
+  <h3>&#128717; Kaufhistorie-Eintrag hinzuf&uuml;gen</h3>
   <div class="form-group"><label>Kunden-ID *</label><input type="text" id="ph-customer-id" placeholder="UUID des Kunden"></div>
   <div class="form-group"><label>Lizenz-Key *</label><input type="text" id="ph-license-key" placeholder="OPA-PRO-XXXX-2025"></div>
   <div class="form-group"><label>Plan *</label>
@@ -480,15 +457,15 @@
   </div>
   <div class="form-group"><label>Aktion</label>
     <select id="ph-action">
-      <option value="purchase">purchase – Kauf</option>
-      <option value="renewal">renewal – Verlängerung</option>
-      <option value="upgrade">upgrade – Upgrade</option>
-      <option value="downgrade">downgrade – Downgrade</option>
-      <option value="cancellation">cancellation – Kündigung</option>
+      <option value="purchase">purchase &ndash; Kauf</option>
+      <option value="renewal">renewal &ndash; Verl&auml;ngerung</option>
+      <option value="upgrade">upgrade &ndash; Upgrade</option>
+      <option value="downgrade">downgrade &ndash; Downgrade</option>
+      <option value="cancellation">cancellation &ndash; K&uuml;ndigung</option>
     </select>
   </div>
   <div class="form-group"><label>Betrag in EUR (optional)</label><input type="number" step="0.01" id="ph-amount" placeholder="49.99"></div>
-  <div class="form-group"><label>Notiz</label><textarea id="ph-note" placeholder="z.B. Zahlung per Überweisung eingegangen"></textarea></div>
+  <div class="form-group"><label>Notiz</label><textarea id="ph-note" placeholder="z.B. Zahlung per &Uuml;berweisung eingegangen"></textarea></div>
   <div class="modal-footer">
     <button class="btn btn-ghost" onclick="closeModal('modal-new-ph')">Abbrechen</button>
     <button class="btn btn-primary" onclick="createPurchaseEntry()">Speichern</button>
@@ -496,53 +473,54 @@
 </div></div>
 
 <script>
-// ─── Theme ────────────────────────────────────────────────────────────────────
 (function(){
-  const saved=localStorage.getItem('theme')||'dark';
+  var saved=localStorage.getItem('theme')||'dark';
   document.documentElement.setAttribute('data-theme',saved);
   updateThemeBtn(saved);
 })();
 function updateThemeBtn(theme){
-  const icon=document.getElementById('theme-icon'),label=document.getElementById('theme-label');
+  var icon=document.getElementById('theme-icon'),label=document.getElementById('theme-label');
   if(!icon)return;
-  if(theme==='dark'){icon.textContent='☀️';label.textContent='Light';}
-  else{icon.textContent='🌙';label.textContent='Dark';}
+  if(theme==='dark'){icon.textContent='\u2600\uFE0F';label.textContent='Light';}
+  else{icon.textContent='\uD83C\uDF19';label.textContent='Dark';}
 }
 function toggleTheme(){
-  const cur=document.documentElement.getAttribute('data-theme')||'dark';
-  const next=cur==='dark'?'light':'dark';
+  var cur=document.documentElement.getAttribute('data-theme')||'dark';
+  var next=cur==='dark'?'light':'dark';
   document.documentElement.setAttribute('data-theme',next);
   localStorage.setItem('theme',next);
   updateThemeBtn(next);
 }
 
-// ─── State ────────────────────────────────────────────────────────────────────
-let TOKEN=localStorage.getItem('admin_token')||'';
-let ROLE=localStorage.getItem('admin_role')||'';
-let USER=localStorage.getItem('admin_user')||'';
-let licPage=1,licSearch='',searchTimer;
-let activeSubTab='login-log';
+var TOKEN=localStorage.getItem('admin_token')||'';
+var ROLE=localStorage.getItem('admin_role')||'';
+var USER=localStorage.getItem('admin_user')||'';
+var licPage=1,licSearch='',searchTimer;
+var activeSubTab='login-log';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-const API=(path,opts={})=>fetch('/api'+path,{
-  headers:{'Content-Type':'application/json',...(TOKEN?{Authorization:'Bearer '+TOKEN}:{})},
-  ...opts
-}).then(async r=>{const d=await r.json();if(!r.ok)throw d;return d;});
-
-const fmtDate=d=>d?new Date(d).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
-const daysLeft=d=>Math.ceil((new Date(d)-Date.now())/86400000);
-const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-const fmt€=v=>v!=null?parseFloat(v).toFixed(2)+' €':'—';
-
-function showAlert(elId,msg,type='error'){
-  const el=document.getElementById(elId);
-  if(el)el.innerHTML=`<div class="alert alert-${type}">${esc(msg)}</div>`;
+function API(path,opts){
+  opts=opts||{};
+  var headers={'Content-Type':'application/json'};
+  if(TOKEN)headers['Authorization']='Bearer '+TOKEN;
+  return fetch('/api'+path,Object.assign({headers:headers},opts))
+    .then(function(r){return r.json().then(function(d){if(!r.ok)throw d;return d;});});
 }
 
-// ─── Navigation ───────────────────────────────────────────────────────────────
+function fmtDate(d){return d?new Date(d).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'\u2014';}
+function daysLeft(d){return Math.ceil((new Date(d)-Date.now())/86400000);}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function fmtEur(v){return v!=null?parseFloat(v).toFixed(2)+' \u20AC':'\u2014';}
+
+function showAlert(elId,msg,type){
+  type=type||'error';
+  var el=document.getElementById(elId);
+  if(el)el.innerHTML='<div class="alert alert-'+type+'">'+esc(msg)+'</div>';
+}
+
 function showPublicPage(name){
-  document.querySelectorAll('#public-pages .page').forEach(p=>p.classList.remove('active'));
-  document.getElementById('pub-'+name)?.classList.add('active');
+  document.querySelectorAll('#public-pages .page').forEach(function(p){p.classList.remove('active');});
+  var pg=document.getElementById('pub-'+name);
+  if(pg)pg.classList.add('active');
   document.getElementById('public-pages').style.display='';
   document.getElementById('main-footer').style.display='';
   document.getElementById('main-nav').style.display='';
@@ -550,8 +528,9 @@ function showPublicPage(name){
   window.scrollTo(0,0);
 }
 function showLegalTab(name){
-  document.querySelectorAll('.tab-panel').forEach(p=>{if(p.closest('#pub-legal'))p.classList.remove('active');});
-  document.getElementById('tab-'+name)?.classList.add('active');
+  document.querySelectorAll('.tab-panel').forEach(function(p){if(p.closest('#pub-legal'))p.classList.remove('active');});
+  var t=document.getElementById('tab-'+name);
+  if(t)t.classList.add('active');
 }
 function openAdmin(){
   document.getElementById('public-pages').style.display='none';
@@ -577,20 +556,19 @@ function showDashboard(){
   switchTab('overview');
 }
 
-// ─── Auth ─────────────────────────────────────────────────────────────────────
-async function doLogin(){
-  const username=document.getElementById('login-user').value.trim();
-  const password=document.getElementById('login-pass').value;
-  if(!username||!password)return showAlert('login-alert','Benutzername und Passwort eingeben.');
-  try{
-    const d=await API('/admin/login',{method:'POST',body:JSON.stringify({username,password})});
-    TOKEN=d.token;ROLE=d.role;USER=d.username;
-    localStorage.setItem('admin_token',TOKEN);
-    localStorage.setItem('admin_role',ROLE);
-    localStorage.setItem('admin_user',USER);
-    document.getElementById('login-pass').value='';
-    showDashboard();
-  }catch(e){showAlert('login-alert',e.message||'Login fehlgeschlagen.');}
+function doLogin(){
+  var username=document.getElementById('login-user').value.trim();
+  var password=document.getElementById('login-pass').value;
+  if(!username||!password){showAlert('login-alert','Benutzername und Passwort eingeben.');return;}
+  API('/admin/login',{method:'POST',body:JSON.stringify({username:username,password:password})})
+    .then(function(d){
+      TOKEN=d.token;ROLE=d.role;USER=d.username;
+      localStorage.setItem('admin_token',TOKEN);
+      localStorage.setItem('admin_role',ROLE);
+      localStorage.setItem('admin_user',USER);
+      document.getElementById('login-pass').value='';
+      showDashboard();
+    }).catch(function(e){showAlert('login-alert',e.message||'Login fehlgeschlagen.');});
 }
 function doLogout(){
   TOKEN='';ROLE='';USER='';
@@ -599,365 +577,375 @@ function doLogout(){
   localStorage.removeItem('admin_user');
   showLogin();
 }
-document.addEventListener('keydown',e=>{if(e.key==='Enter'&&document.getElementById('admin-login').style.display!=='none')doLogin();});
+document.addEventListener('keydown',function(e){
+  if(e.key==='Enter'&&document.getElementById('admin-login').style.display!=='none')doLogin();
+});
 
-// ─── Tab Switch ───────────────────────────────────────────────────────────────
 function switchTab(name){
-  document.querySelectorAll('#admin-dashboard .tab-panel').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('.sidebar-menu li a').forEach(a=>a.classList.remove('active'));
-  document.getElementById('tab-'+name)?.classList.add('active');
-  document.getElementById('tab-btn-'+name)?.classList.add('active');
-  const loaders={overview:loadOverview,licenses:loadLicenses,customers:loadCustomers,
-    devices:loadDevices,logs:()=>switchSubTab(activeSubTab),
+  document.querySelectorAll('#admin-dashboard .tab-panel').forEach(function(p){p.classList.remove('active');});
+  document.querySelectorAll('.sidebar-menu li a').forEach(function(a){a.classList.remove('active');});
+  var tp=document.getElementById('tab-'+name);if(tp)tp.classList.add('active');
+  var tb=document.getElementById('tab-btn-'+name);if(tb)tb.classList.add('active');
+  var loaders={overview:loadOverview,licenses:loadLicenses,customers:loadCustomers,
+    devices:loadDevices,logs:function(){switchSubTab(activeSubTab);},
     users:loadUsers,smtp:loadSmtp,webhooks:loadWebhooks};
-  loaders[name]?.();
+  if(loaders[name])loaders[name]();
 }
 
-// ─── Sub-Tab Switch (Logs) ────────────────────────────────────────────────────
 function switchSubTab(name){
   activeSubTab=name;
-  document.querySelectorAll('.subtab-panel').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('.subtab-btn').forEach(b=>b.classList.remove('active'));
-  document.getElementById('subtab-'+name)?.classList.add('active');
-  document.getElementById('stab-btn-'+name)?.classList.add('active');
+  document.querySelectorAll('.subtab-panel').forEach(function(p){p.classList.remove('active');});
+  document.querySelectorAll('.subtab-btn').forEach(function(b){b.classList.remove('active');});
+  var sp=document.getElementById('subtab-'+name);if(sp)sp.classList.add('active');
+  var sb=document.getElementById('stab-btn-'+name);if(sb)sb.classList.add('active');
   if(name==='login-log')loadLoginLog();
   else if(name==='audit-log')loadAudit();
   else if(name==='purchase-history')loadPurchaseHistory();
 }
 function reloadActiveLogs(){switchSubTab(activeSubTab);}
 
-// ─── Modal ────────────────────────────────────────────────────────────────────
-function openModal(id){document.getElementById(id)?.classList.add('open');}
-function closeModal(id){document.getElementById(id)?.classList.remove('open');}
-document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+function openModal(id){var m=document.getElementById(id);if(m)m.classList.add('open');}
+function closeModal(id){var m=document.getElementById(id);if(m)m.classList.remove('open');}
+document.querySelectorAll('.modal-overlay').forEach(function(m){
+  m.addEventListener('click',function(e){if(e.target===m)m.classList.remove('open');});
+});
 
-// ─── OVERVIEW ─────────────────────────────────────────────────────────────────
-async function loadOverview(){
-  try{
-    const[lic,ana]=await Promise.all([API('/admin/licenses?limit=10'),API('/admin/analytics')]);
-    const s=lic.stats||{};
-    document.getElementById('stats-row').innerHTML=`
-      <div class="stat-card"><div class="stat-label">Gesamt Lizenzen</div><div class="stat-value">${s.total||0}</div></div>
-      <div class="stat-card"><div class="stat-label">Aktiv</div><div class="stat-value" style="color:var(--accent3)">${s.active||0}</div></div>
-      <div class="stat-card"><div class="stat-label">Läuft bald ab</div><div class="stat-value" style="color:var(--gold)">${s.expiring||0}</div></div>
-      <div class="stat-card"><div class="stat-label">Validierungen</div><div class="stat-value">${s.total_usage||0}</div></div>
-      <div class="stat-card"><div class="stat-label">Aktive Geräte</div><div class="stat-value">${ana.active_devices||0}</div></div>`;
-    const top=ana.top_licenses||[];
-    document.getElementById('top-licenses').innerHTML=top.length?`
-      <table class="data-table"><thead><tr><th>Lizenz-Key</th><th>Kunde</th><th>Typ</th><th>Validierungen</th><th>Zuletzt</th></tr></thead><tbody>
-      ${top.map(l=>`<tr><td><code>${esc(l.license_key.slice(0,18))}…</code></td><td>${esc(l.customer_name||'—')}</td><td>${typeBadge(l.type)}</td><td>${l.usage_count}</td><td>${fmtDate(l.last_validated)}</td></tr>`).join('')}
-      </tbody></table>`:'<div class="loading">Keine Daten</div>';
-  }catch(e){document.getElementById('stats-row').innerHTML=`<div class="alert alert-error">${esc(e.message||'Fehler')}</div>`;}
+function typeBadge(t){
+  var map={FREE:'badge-free',BASIC:'badge-active',PRO:'badge-pro',ENTERPRISE:'badge-enterprise'};
+  return '<span class="badge '+(map[t]||'')+'">'+ esc(t)+'</span>';
+}
+function statusBadge(s){return '<span class="badge badge-'+esc(s)+'">'+ esc(s)+'</span>';}
+
+function loadOverview(){
+  API('/admin/licenses?limit=10').then(function(lic){
+    return API('/admin/analytics').then(function(ana){
+      var s=lic.stats||{};
+      document.getElementById('stats-row').innerHTML=
+        '<div class="stat-card"><div class="stat-label">Gesamt Lizenzen</div><div class="stat-value">'+(s.total||0)+'</div></div>'+
+        '<div class="stat-card"><div class="stat-label">Aktiv</div><div class="stat-value" style="color:var(--accent3)">'+(s.active||0)+'</div></div>'+
+        '<div class="stat-card"><div class="stat-label">L\u00E4uft bald ab</div><div class="stat-value" style="color:var(--gold)">'+(s.expiring||0)+'</div></div>'+
+        '<div class="stat-card"><div class="stat-label">Validierungen</div><div class="stat-value">'+(s.total_usage||0)+'</div></div>'+
+        '<div class="stat-card"><div class="stat-label">Aktive Ger\u00E4te</div><div class="stat-value">'+(ana.active_devices||0)+'</div></div>';
+      var top=ana.top_licenses||[];
+      document.getElementById('top-licenses').innerHTML=top.length?
+        '<table class="data-table"><thead><tr><th>Lizenz-Key</th><th>Kunde</th><th>Typ</th><th>Validierungen</th><th>Zuletzt</th></tr></thead><tbody>'+
+        top.map(function(l){return'<tr><td><code>'+esc(l.license_key.slice(0,18))+'&hellip;</code></td><td>'+esc(l.customer_name||'\u2014')+'</td><td>'+typeBadge(l.type)+'</td><td>'+l.usage_count+'</td><td>'+fmtDate(l.last_validated)+'</td></tr>';}).join('')+
+        '</tbody></table>':'<div class="loading">Keine Daten</div>';
+    });
+  }).catch(function(e){document.getElementById('stats-row').innerHTML='<div class="alert alert-error">'+esc(e.message||'Fehler')+'</div>';});
 }
 
-// ─── LICENSES ─────────────────────────────────────────────────────────────────
-function typeBadge(t){const map={FREE:'badge-free',BASIC:'badge-active',PRO:'badge-pro',ENTERPRISE:'badge-enterprise'};return`<span class="badge ${map[t]||''}">${esc(t)}</span>`;}
-function statusBadge(s){return`<span class="badge badge-${esc(s)}">${esc(s)}</span>`;}
-
-async function loadLicenses(){
+function loadLicenses(){
   document.getElementById('lic-table').innerHTML='<div class="loading"><div class="spinner"></div></div>';
-  try{
-    const url=`/admin/licenses?page=${licPage}&limit=25${licSearch?'&search='+encodeURIComponent(licSearch):''}`;
-    const d=await API(url);const licenses=d.licenses||[];const pg=d.pagination||{};
-    document.getElementById('lic-table').innerHTML=licenses.length?`
-      <table class="data-table"><thead><tr><th>Key</th><th>Typ</th><th>Kunde</th><th>Domain</th><th>Status</th><th>Läuft ab</th><th>Aktionen</th></tr></thead><tbody>
-      ${licenses.map(l=>{
-        const days=daysLeft(l.expires_at);
-        const expClass=days<0?'color:var(--accent2)':days<30?'color:var(--gold)':'';
-        return`<tr>
-          <td><code title="${esc(l.license_key)}">${esc(l.license_key.slice(0,16))}…</code></td>
-          <td>${typeBadge(l.type)}</td><td>${esc(l.customer_name||'—')}</td>
-          <td>${esc(l.associated_domain||'—')}</td><td>${statusBadge(l.status)}</td>
-          <td style="${expClass}">${fmtDate(l.expires_at)}</td>
-          <td style="white-space:nowrap">
-            <button class="btn btn-ghost btn-sm" onclick="viewLicense('${esc(l.license_key)}')">Details</button>
-            <button class="btn btn-success btn-sm" onclick="renewLicense('${esc(l.license_key)}')">+365d</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteLicense('${esc(l.license_key)}')">🗑</button>
-          </td></tr>`;
-      }).join('')}
-      </tbody></table>`:'<div class="loading">Keine Lizenzen gefunden.</div>';
-    let pgHtml=`<span>Seite ${pg.page||1} / ${pg.pages||1} (${pg.total||0} gesamt)</span>`;
-    pgHtml+=`<button onclick="changeLicPage(-1)" ${licPage<=1?'disabled':''}>◀</button>`;
-    pgHtml+=`<button onclick="changeLicPage(1)" ${licPage>=(pg.pages||1)?'disabled':''}>▶</button>`;
+  var url='/admin/licenses?page='+licPage+'&limit=25'+(licSearch?'&search='+encodeURIComponent(licSearch):'');
+  API(url).then(function(d){
+    var licenses=d.licenses||[],pg=d.pagination||{};
+    document.getElementById('lic-table').innerHTML=licenses.length?
+      '<table class="data-table"><thead><tr><th>Key</th><th>Typ</th><th>Kunde</th><th>Domain</th><th>Status</th><th>L\u00E4uft ab</th><th>Aktionen</th></tr></thead><tbody>'+
+      licenses.map(function(l){
+        var days=daysLeft(l.expires_at);
+        var expClass=days<0?'color:var(--accent2)':days<30?'color:var(--gold)':'';
+        return '<tr>'+
+          '<td><code title="'+esc(l.license_key)+'">'+esc(l.license_key.slice(0,16))+'&hellip;</code></td>'+
+          '<td>'+typeBadge(l.type)+'</td><td>'+esc(l.customer_name||'\u2014')+'</td>'+
+          '<td>'+esc(l.associated_domain||'\u2014')+'</td><td>'+statusBadge(l.status)+'</td>'+
+          '<td style="'+expClass+'">'+fmtDate(l.expires_at)+'</td>'+
+          '<td style="white-space:nowrap">'+
+            '<button class="btn btn-ghost btn-sm" onclick="viewLicense(\''+esc(l.license_key)+'\')" >Details</button> '+
+            '<button class="btn btn-success btn-sm" onclick="renewLicense(\''+esc(l.license_key)+'\')" >+365d</button> '+
+            '<button class="btn btn-danger btn-sm" onclick="deleteLicense(\''+esc(l.license_key)+'\')" >&#128465;</button>'+
+          '</td></tr>';
+      }).join('')+'</tbody></table>':'<div class="loading">Keine Lizenzen gefunden.</div>';
+    var pgHtml='<span>Seite '+(pg.page||1)+' / '+(pg.pages||1)+' ('+(pg.total||0)+' gesamt)</span>';
+    pgHtml+='<button onclick="changeLicPage(-1)"'+(licPage<=1?' disabled':'')+'>&#9664;</button>';
+    pgHtml+='<button onclick="changeLicPage(1)"'+(licPage>=(pg.pages||1)?' disabled':'')+'>&#9654;</button>';
     document.getElementById('lic-pagination').innerHTML=pgHtml;
-  }catch(e){document.getElementById('lic-table').innerHTML=`<div class="alert alert-error" style="margin:1rem">${esc(e.message||'Fehler')}</div>`;}
+  }).catch(function(e){document.getElementById('lic-table').innerHTML='<div class="alert alert-error" style="margin:1rem">'+esc(e.message||'Fehler')+'</div>';});
 }
 function changeLicPage(dir){licPage=Math.max(1,licPage+dir);loadLicenses();}
-function debounceSearch(){clearTimeout(searchTimer);searchTimer=setTimeout(()=>{licSearch=document.getElementById('lic-search').value;licPage=1;loadLicenses();},350);}
+function debounceSearch(){clearTimeout(searchTimer);searchTimer=setTimeout(function(){licSearch=document.getElementById('lic-search').value;licPage=1;loadLicenses();},350);}
 
-async function viewLicense(key){
-  try{
-    const d=await API('/admin/licenses/'+encodeURIComponent(key));const l=d.license;
-    const statuses=['active','revoked','cancelled','expired','suspended'];
-    document.getElementById('modal-edit-license-content').innerHTML=`
-      <div class="form-group"><label>Lizenz-Key</label><input readonly value="${esc(l.license_key)}"></div>
-      <div class="form-group"><label>Typ</label><input readonly value="${esc(l.type)}"></div>
-      <div class="form-group"><label>Kundenname</label><input readonly value="${esc(l.customer_name||'')}"></div>
-      <div class="form-group"><label>Domain</label><input readonly value="${esc(l.associated_domain||'')}"></div>
-      <div class="form-group"><label>Ablaufdatum</label><input readonly value="${esc(fmtDate(l.expires_at))}"></div>
-      <div class="form-group"><label>Validierungen gesamt</label><input readonly value="${esc(l.usage_count||0)}"></div>
-      <div class="form-group"><label>Letzter Check</label><input readonly value="${esc(fmtDate(l.last_validated))}"></div>
-      <div class="form-group"><label>Status ändern</label>
-        <select id="edit-status-sel">${statuses.map(s=>`<option value="${s}"${s===l.status?' selected':''}>${s}</option>`).join('')}</select>
-      </div>
-      <button class="btn btn-primary btn-sm" onclick="saveStatus('${esc(l.license_key)}')">Status speichern</button>`;
+function viewLicense(key){
+  API('/admin/licenses/'+encodeURIComponent(key)).then(function(d){
+    var l=d.license;
+    var statuses=['active','revoked','cancelled','expired','suspended'];
+    document.getElementById('modal-edit-license-content').innerHTML=
+      '<div class="form-group"><label>Lizenz-Key</label><input readonly value="'+esc(l.license_key)+'"></div>'+
+      '<div class="form-group"><label>Typ</label><input readonly value="'+esc(l.type)+'"></div>'+
+      '<div class="form-group"><label>Kundenname</label><input readonly value="'+esc(l.customer_name||'')+'"></div>'+
+      '<div class="form-group"><label>Domain</label><input readonly value="'+esc(l.associated_domain||'')+'"></div>'+
+      '<div class="form-group"><label>Ablaufdatum</label><input readonly value="'+esc(fmtDate(l.expires_at))+'"></div>'+
+      '<div class="form-group"><label>Validierungen</label><input readonly value="'+esc(l.usage_count||0)+'"></div>'+
+      '<div class="form-group"><label>Letzter Check</label><input readonly value="'+esc(fmtDate(l.last_validated))+'"></div>'+
+      '<div class="form-group"><label>Status \u00E4ndern</label>'+
+        '<select id="edit-status-sel">'+statuses.map(function(s){return'<option value="'+s+'"'+(s===l.status?' selected':'')+'>'+s+'</option>';}).join('')+'</select>'+
+      '</div>'+
+      '<button class="btn btn-primary btn-sm" onclick="saveStatus(\''+esc(l.license_key)+'\')" >Status speichern</button>';
     openModal('modal-edit-license');
-  }catch(e){alert('Fehler: '+(e.message||e));}
+  }).catch(function(e){alert('Fehler: '+(e.message||e));});
 }
-async function saveStatus(key){
-  const status=document.getElementById('edit-status-sel').value;
-  try{await API('/admin/licenses/'+encodeURIComponent(key)+'/status',{method:'PATCH',body:JSON.stringify({status})});closeModal('modal-edit-license');loadLicenses();}
-  catch(e){alert('Fehler: '+(e.message||e));}
+function saveStatus(key){
+  var status=document.getElementById('edit-status-sel').value;
+  API('/admin/licenses/'+encodeURIComponent(key)+'/status',{method:'PATCH',body:JSON.stringify({status:status})})
+    .then(function(){closeModal('modal-edit-license');loadLicenses();})
+    .catch(function(e){alert('Fehler: '+(e.message||e));});
 }
-async function renewLicense(key){
-  if(!confirm('Lizenz um 365 Tage verlängern?'))return;
-  try{await API('/admin/licenses/'+encodeURIComponent(key)+'/renew',{method:'POST',body:JSON.stringify({days:365})});loadLicenses();}
-  catch(e){alert('Fehler: '+(e.message||e));}
+function renewLicense(key){
+  if(!confirm('Lizenz um 365 Tage verl\u00E4ngern?'))return;
+  API('/admin/licenses/'+encodeURIComponent(key)+'/renew',{method:'POST',body:JSON.stringify({days:365})})
+    .then(function(){loadLicenses();}).catch(function(e){alert('Fehler: '+(e.message||e));});
 }
-async function deleteLicense(key){
-  if(!confirm('Lizenz '+key+' unwiderruflich löschen?'))return;
-  try{await API('/admin/licenses/'+encodeURIComponent(key),{method:'DELETE'});loadLicenses();}
-  catch(e){alert('Fehler: '+(e.message||e));}
+function deleteLicense(key){
+  if(!confirm('Lizenz '+key+' unwiderruflich l\u00F6schen?'))return;
+  API('/admin/licenses/'+encodeURIComponent(key),{method:'DELETE'})
+    .then(function(){loadLicenses();}).catch(function(e){alert('Fehler: '+(e.message||e));});
 }
-async function createLicense(){
-  const body={type:document.getElementById('nl-type').value,customer_name:document.getElementById('nl-name').value||null,
+function createLicense(){
+  var body={
+    type:document.getElementById('nl-type').value,
+    customer_name:document.getElementById('nl-name').value||null,
     associated_domain:document.getElementById('nl-domain').value||'*',
     max_devices:parseInt(document.getElementById('nl-devices').value)||0,
     customer_id:document.getElementById('nl-customer-id').value||null,
-    amount:document.getElementById('nl-amount').value||null};
-  const exp=document.getElementById('nl-expires').value;
+    amount:document.getElementById('nl-amount').value||null
+  };
+  var exp=document.getElementById('nl-expires').value;
   if(exp)body.expires_at=new Date(exp).toISOString().slice(0,19).replace('T',' ');
-  try{await API('/admin/licenses',{method:'POST',body:JSON.stringify(body)});closeModal('modal-new-license');loadLicenses();}
-  catch(e){alert('Fehler: '+(e.message||e));}
+  API('/admin/licenses',{method:'POST',body:JSON.stringify(body)})
+    .then(function(){closeModal('modal-new-license');loadLicenses();})
+    .catch(function(e){alert('Fehler: '+(e.message||e));});
 }
 
-// ─── CUSTOMERS ────────────────────────────────────────────────────────────────
-async function loadCustomers(){
-  try{
-    const d=await API('/admin/customers');const custs=d.customers||[];
-    document.getElementById('cust-table').innerHTML=custs.length?`
-      <table class="data-table"><thead><tr><th>Name</th><th>E-Mail</th><th>Firma</th><th>Telefon</th><th>Zahlung</th><th>Seit</th><th>Aktionen</th></tr></thead><tbody>
-      ${custs.map(c=>`<tr>
-        <td>${esc(c.name)}</td><td>${esc(c.email||'—')}</td><td>${esc(c.company||'—')}</td>
-        <td>${esc(c.phone||'—')}</td>
-        <td><span class="badge ${c.payment_status==='paid'?'badge-active':c.payment_status==='overdue'?'badge-revoked':'badge-free'}">${esc(c.payment_status||'—')}</span></td>
-        <td>${fmtDate(c.created_at)}</td>
-        <td style="white-space:nowrap">
-          <button class="btn btn-ghost btn-sm" onclick="filterPurchaseByCustomer('${esc(c.id)}')">🛒 Käufe</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteCustomer('${esc(c.id)}')">🗑</button>
-        </td>
-      </tr>`).join('')}</tbody></table>`:'<div class="loading">Keine Kunden gefunden.</div>';
-  }catch(e){document.getElementById('cust-table').innerHTML=`<div class="alert alert-error" style="margin:1rem">${esc(e.message||'Fehler')}</div>`;}
+function loadCustomers(){
+  API('/admin/customers').then(function(d){
+    var custs=d.customers||[];
+    document.getElementById('cust-table').innerHTML=custs.length?
+      '<table class="data-table"><thead><tr><th>Name</th><th>E-Mail</th><th>Firma</th><th>Telefon</th><th>Zahlung</th><th>Seit</th><th>Aktionen</th></tr></thead><tbody>'+
+      custs.map(function(c){
+        return '<tr><td>'+esc(c.name)+'</td><td>'+esc(c.email||'\u2014')+'</td><td>'+esc(c.company||'\u2014')+'</td>'+
+          '<td>'+esc(c.phone||'\u2014')+'</td>'+
+          '<td><span class="badge '+(c.payment_status==='paid'?'badge-active':c.payment_status==='overdue'?'badge-revoked':'badge-free')+'">'+esc(c.payment_status||'\u2014')+'</span></td>'+
+          '<td>'+fmtDate(c.created_at)+'</td>'+
+          '<td style="white-space:nowrap">'+
+            '<button class="btn btn-ghost btn-sm" onclick="filterPurchaseByCustomer(\''+esc(c.id)+'\')" >&#128717; K\u00E4ufe</button> '+
+            '<button class="btn btn-danger btn-sm" onclick="deleteCustomer(\''+esc(c.id)+'\')" >&#128465;</button>'+
+          '</td></tr>';
+      }).join('')+'</tbody></table>':'<div class="loading">Keine Kunden gefunden.</div>';
+  }).catch(function(e){document.getElementById('cust-table').innerHTML='<div class="alert alert-error" style="margin:1rem">'+esc(e.message||'Fehler')+'</div>';});
 }
-async function createCustomer(){
-  const body={name:document.getElementById('nc-name').value,email:document.getElementById('nc-email').value,
+function createCustomer(){
+  var body={name:document.getElementById('nc-name').value,email:document.getElementById('nc-email').value,
     company:document.getElementById('nc-company').value||null,phone:document.getElementById('nc-phone').value||null,
     notes:document.getElementById('nc-notes').value||''};
-  try{await API('/admin/customers',{method:'POST',body:JSON.stringify(body)});closeModal('modal-new-customer');loadCustomers();}
-  catch(e){alert('Fehler: '+(e.message||e));}
+  API('/admin/customers',{method:'POST',body:JSON.stringify(body)})
+    .then(function(){closeModal('modal-new-customer');loadCustomers();})
+    .catch(function(e){alert('Fehler: '+(e.message||e));});
 }
-async function deleteCustomer(id){
-  if(!confirm('Kunden löschen?'))return;
-  try{await API('/admin/customers/'+id,{method:'DELETE'});loadCustomers();}
-  catch(e){alert('Fehler: '+(e.message||e));}
+function deleteCustomer(id){
+  if(!confirm('Kunden l\u00F6schen?'))return;
+  API('/admin/customers/'+id,{method:'DELETE'}).then(function(){loadCustomers();}).catch(function(e){alert('Fehler: '+(e.message||e));});
 }
 function filterPurchaseByCustomer(customerId){
   switchTab('logs');
-  setTimeout(()=>{
+  setTimeout(function(){
     switchSubTab('purchase-history');
     document.getElementById('ph-search-customer').value=customerId;
     loadPurchaseHistory();
   },100);
 }
 
-// ─── DEVICES ──────────────────────────────────────────────────────────────────
-async function loadDevices(){
-  try{
-    const d=await API('/admin/devices');const devs=d.devices||[];
-    document.getElementById('dev-table').innerHTML=devs.length?`
-      <table class="data-table"><thead><tr><th>Device-ID</th><th>Lizenz-Key</th><th>Typ</th><th>IP</th><th>Zuletzt</th><th>Status</th><th>Aktionen</th></tr></thead><tbody>
-      ${devs.map(dv=>`<tr>
-        <td><code title="${esc(dv.device_id)}">${esc((dv.device_id||'').slice(0,14))}…</code></td>
-        <td><code>${esc((dv.license_key||'').slice(0,14))}…</code></td>
-        <td>${esc(dv.device_type||'—')}</td><td>${esc(dv.ip||'—')}</td>
-        <td>${fmtDate(dv.last_seen)}</td>
-        <td><span class="badge ${dv.active?'badge-active':'badge-revoked'}">${dv.active?'aktiv':'inaktiv'}</span></td>
-        <td style="white-space:nowrap">
-          ${dv.active?`<button class="btn btn-ghost btn-sm" onclick="deactivateDevice('${esc(dv.id)}')">Deaktivieren</button>`:''}
-          <button class="btn btn-danger btn-sm" onclick="deleteDevice('${esc(dv.id)}')">🗑</button>
-        </td>
-      </tr>`).join('')}</tbody></table>`:'<div class="loading">Keine Geräte gefunden.</div>';
-  }catch(e){document.getElementById('dev-table').innerHTML=`<div class="alert alert-error" style="margin:1rem">${esc(e.message||'Fehler')}</div>`;}
+function loadDevices(){
+  API('/admin/devices').then(function(d){
+    var devs=d.devices||[];
+    document.getElementById('dev-table').innerHTML=devs.length?
+      '<table class="data-table"><thead><tr><th>Device-ID</th><th>Lizenz-Key</th><th>Typ</th><th>IP</th><th>Zuletzt</th><th>Status</th><th>Aktionen</th></tr></thead><tbody>'+
+      devs.map(function(dv){
+        return '<tr>'+
+          '<td><code title="'+esc(dv.device_id)+'">'+esc((dv.device_id||'').slice(0,14))+'&hellip;</code></td>'+
+          '<td><code>'+esc((dv.license_key||'').slice(0,14))+'&hellip;</code></td>'+
+          '<td>'+esc(dv.device_type||'\u2014')+'</td><td>'+esc(dv.ip||'\u2014')+'</td>'+
+          '<td>'+fmtDate(dv.last_seen)+'</td>'+
+          '<td><span class="badge '+(dv.active?'badge-active':'badge-revoked')+'">'+(dv.active?'aktiv':'inaktiv')+'</span></td>'+
+          '<td style="white-space:nowrap">'+
+            (dv.active?'<button class="btn btn-ghost btn-sm" onclick="deactivateDevice(\''+esc(dv.id)+'\')" >Deaktivieren</button> ':'')+
+            '<button class="btn btn-danger btn-sm" onclick="deleteDevice(\''+esc(dv.id)+'\')" >&#128465;</button>'+
+          '</td></tr>';
+      }).join('')+'</tbody></table>':'<div class="loading">Keine Ger\u00E4te gefunden.</div>';
+  }).catch(function(e){document.getElementById('dev-table').innerHTML='<div class="alert alert-error" style="margin:1rem">'+esc(e.message||'Fehler')+'</div>';});
 }
-async function deactivateDevice(id){try{await API('/admin/devices/'+id+'/deactivate',{method:'PATCH'});loadDevices();}catch(e){alert('Fehler: '+(e.message||e));}}
-async function deleteDevice(id){if(!confirm('Gerät löschen?'))return;try{await API('/admin/devices/'+id,{method:'DELETE'});loadDevices();}catch(e){alert('Fehler: '+(e.message||e));}}
+function deactivateDevice(id){
+  API('/admin/devices/'+id+'/deactivate',{method:'PATCH'}).then(function(){loadDevices();}).catch(function(e){alert('Fehler: '+(e.message||e));});
+}
+function deleteDevice(id){
+  if(!confirm('Ger\u00E4t l\u00F6schen?'))return;
+  API('/admin/devices/'+id,{method:'DELETE'}).then(function(){loadDevices();}).catch(function(e){alert('Fehler: '+(e.message||e));});
+}
 
-// ─── LOGIN-LOG ─────────────────────────────────────────────────────────────────
-async function loadLoginLog(){
+function loadLoginLog(){
   document.getElementById('login-log-list').innerHTML='<div class="loading"><div class="spinner"></div></div>';
-  try{
-    const d=await API('/admin/login-log?limit=200');const logs=d.logs||[];
-    document.getElementById('login-log-list').innerHTML=logs.length?`
-      <div class="table-wrap">
-      <table class="data-table"><thead><tr><th>Zeitpunkt</th><th>Benutzer</th><th>Aktion</th><th>IP</th></tr></thead><tbody>
-      ${logs.map(l=>{
-        let det={};try{det=typeof l.details==='string'?JSON.parse(l.details):l.details||{};}catch{}
-        const isOk=l.action==='admin_login';
-        return`<tr>
-          <td>${fmtDate(l.ts)}</td>
-          <td><strong>${esc(det.username||l.actor||'—')}</strong></td>
-          <td><span class="badge ${isOk?'badge-active':'badge-revoked'}">${isOk?'✅ Login':'❌ Fehlgeschlagen'}</span></td>
-          <td><code>${esc(det.ip||'—')}</code></td>
-        </tr>`;
-      }).join('')}
-      </tbody></table></div>`:'<div class="loading">Keine Login-Einträge gefunden.</div>';
-  }catch(e){document.getElementById('login-log-list').innerHTML=`<div class="alert alert-error">${esc(e.message||'Fehler')}</div>`;}
+  API('/admin/login-log?limit=200').then(function(d){
+    var logs=d.logs||[];
+    document.getElementById('login-log-list').innerHTML=logs.length?
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Zeitpunkt</th><th>Benutzer</th><th>Aktion</th><th>IP</th></tr></thead><tbody>'+
+      logs.map(function(l){
+        var det={};try{det=typeof l.details==='string'?JSON.parse(l.details):l.details||{};}catch(ex){}
+        var isOk=l.action==='admin_login';
+        return '<tr><td>'+fmtDate(l.ts)+'</td><td><strong>'+esc(det.username||l.actor||'\u2014')+'</strong></td>'+
+          '<td><span class="badge '+(isOk?'badge-active':'badge-revoked')+'">'+(isOk?'&#9989; Login':'&#10060; Fehlgeschlagen')+'</span></td>'+
+          '<td><code>'+esc(det.ip||'\u2014')+'</code></td></tr>';
+      }).join('')+'</tbody></table></div>':'<div class="loading">Keine Login-Eintr\u00E4ge gefunden.</div>';
+  }).catch(function(e){document.getElementById('login-log-list').innerHTML='<div class="alert alert-error">'+esc(e.message||'Fehler')+'</div>';});
 }
 
-// ─── SYSTEM-AUDIT ─────────────────────────────────────────────────────────────
-async function loadAudit(){
+function loadAudit(){
   document.getElementById('audit-list').innerHTML='<div class="loading"><div class="spinner"></div></div>';
-  try{
-    const action=document.getElementById('audit-search')?.value||'';
-    const url='/admin/audit-log?limit=200'+(action?'&action='+encodeURIComponent(action):'');
-    const d=await API(url);const logs=d.logs||[];
-    const colors={validate_success:'success',admin_login:'success',license_created:'success',
+  var action=document.getElementById('audit-search')?document.getElementById('audit-search').value:'';
+  var url='/admin/audit-log?limit=200'+(action?'&action='+encodeURIComponent(action):'');
+  API(url).then(function(d){
+    var logs=d.logs||[];
+    var colors={validate_success:'success',admin_login:'success',license_created:'success',
       license_renewed:'success',customer_created:'success',purchase_history_added:'success',
       validate_failed:'warn',heartbeat_failed:'warn',refresh_failed:'warn',
       admin_login_failed:'error',replay_attack:'error',license_deleted:'error'};
-    document.getElementById('audit-list').innerHTML=logs.length?logs.map(l=>{
-      const cls=colors[l.action]||'';
-      let details='';
-      try{const obj=typeof l.details==='string'?JSON.parse(l.details):l.details;
-        details=Object.entries(obj||{}).map(([k,v])=>`<span style="color:var(--text2)">${esc(k)}: </span>${esc(v)}`).join(' &nbsp; ');}catch{}
-      return`<div class="log-entry ${cls}">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.4rem">
-          <div><strong>${esc(l.action)}</strong> <span style="color:var(--text2);font-size:.78rem">von ${esc(l.actor||'system')}</span></div>
-          <div class="log-time">${fmtDate(l.ts)}</div>
-        </div>
-        <div style="margin-top:.3rem;font-size:.8rem">${details}</div>
-      </div>`;
-    }).join(''):'<div class="loading">Keine Einträge gefunden.</div>';
-  }catch(e){document.getElementById('audit-list').innerHTML=`<div class="alert alert-error">${esc(e.message||'Fehler')}</div>`;}
+    document.getElementById('audit-list').innerHTML=logs.length?logs.map(function(l){
+      var cls=colors[l.action]||'';
+      var details='';
+      try{
+        var obj=typeof l.details==='string'?JSON.parse(l.details):l.details;
+        details=Object.entries(obj||{}).map(function(kv){return'<span style="color:var(--text2)">'+esc(kv[0])+': </span>'+esc(kv[1]);}).join(' &nbsp; ');
+      }catch(ex){}
+      return '<div class="log-entry '+cls+'">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.4rem">'+
+          '<div><strong>'+esc(l.action)+'</strong> <span style="color:var(--text2);font-size:.78rem">von '+esc(l.actor||'system')+'</span></div>'+
+          '<div class="log-time">'+fmtDate(l.ts)+'</div>'+
+        '</div>'+
+        '<div style="margin-top:.3rem;font-size:.8rem">'+details+'</div>'+
+      '</div>';
+    }).join(''):'<div class="loading">Keine Eintr\u00E4ge gefunden.</div>';
+  }).catch(function(e){document.getElementById('audit-list').innerHTML='<div class="alert alert-error">'+esc(e.message||'Fehler')+'</div>';});
 }
 
-// ─── KAUFHISTORIE ──────────────────────────────────────────────────────────────
-async function loadPurchaseHistory(){
+function loadPurchaseHistory(){
   document.getElementById('ph-table').innerHTML='<div class="loading"><div class="spinner"></div></div>';
-  try{
-    const search=document.getElementById('ph-search-customer')?.value||'';
-    let url='/admin/purchase-history?';
-    if(search.includes('-')&&search.length>30)url+='customer_id='+encodeURIComponent(search);
-    else if(search)url+='license_key='+encodeURIComponent(search);
-    const d=await API(url);const history=d.history||[];
-    document.getElementById('ph-table').innerHTML=history.length?`
-      <table class="data-table"><thead><tr><th>Datum</th><th>Kunde</th><th>Lizenz-Key</th><th>Plan</th><th>Aktion</th><th>Betrag</th><th>Notiz</th><th>Von</th></tr></thead><tbody>
-      ${history.map(h=>`<tr>
-        <td>${fmtDate(h.created_at)}</td>
-        <td><strong>${esc(h.customer_name||'—')}</strong><br><span style="font-size:.75rem;color:var(--text2)">${esc(h.customer_email||'')}</span></td>
-        <td><code title="${esc(h.license_key)}">${esc((h.license_key||'').slice(0,16))}…</code></td>
-        <td>${typeBadge(h.plan)}</td>
-        <td><span class="badge badge-${esc(h.action)}">${esc(h.action)}</span></td>
-        <td style="font-weight:700;color:${h.amount?'var(--accent3)':'var(--text2)'}">${fmt€(h.amount)}</td>
-        <td style="max-width:180px;font-size:.8rem">${esc(h.note||'—')}</td>
-        <td style="font-size:.78rem;color:var(--text2)">${esc(h.created_by||'—')}</td>
-      </tr>`).join('')}
-      </tbody></table>`:'<div class="loading">Keine Kaufhistorie gefunden.</div>';
-  }catch(e){document.getElementById('ph-table').innerHTML=`<div class="alert alert-error" style="margin:1rem">${esc(e.message||'Fehler')}</div>`;}
+  var search=document.getElementById('ph-search-customer')?document.getElementById('ph-search-customer').value:'';
+  var url='/admin/purchase-history?';
+  if(search.indexOf('-')>=0&&search.length>30)url+='customer_id='+encodeURIComponent(search);
+  else if(search)url+='license_key='+encodeURIComponent(search);
+  API(url).then(function(d){
+    var history=d.history||[];
+    document.getElementById('ph-table').innerHTML=history.length?
+      '<table class="data-table"><thead><tr><th>Datum</th><th>Kunde</th><th>Lizenz-Key</th><th>Plan</th><th>Aktion</th><th>Betrag</th><th>Notiz</th><th>Von</th></tr></thead><tbody>'+
+      history.map(function(h){
+        return '<tr>'+
+          '<td>'+fmtDate(h.created_at)+'</td>'+
+          '<td><strong>'+esc(h.customer_name||'\u2014')+'</strong><br><span style="font-size:.75rem;color:var(--text2)">'+esc(h.customer_email||'')+'</span></td>'+
+          '<td><code title="'+esc(h.license_key)+'">'+esc((h.license_key||'').slice(0,16))+'&hellip;</code></td>'+
+          '<td>'+typeBadge(h.plan)+'</td>'+
+          '<td><span class="badge badge-'+esc(h.action)+'">'+esc(h.action)+'</span></td>'+
+          '<td style="font-weight:700;color:'+(h.amount?'var(--accent3)':'var(--text2)')+'">'+ fmtEur(h.amount)+'</td>'+
+          '<td style="max-width:180px;font-size:.8rem">'+esc(h.note||'\u2014')+'</td>'+
+          '<td style="font-size:.78rem;color:var(--text2)">'+esc(h.created_by||'\u2014')+'</td>'+
+        '</tr>';
+      }).join('')+'</tbody></table>':'<div class="loading">Keine Kaufhistorie gefunden.</div>';
+  }).catch(function(e){document.getElementById('ph-table').innerHTML='<div class="alert alert-error" style="margin:1rem">'+esc(e.message||'Fehler')+'</div>';});
 }
-async function createPurchaseEntry(){
-  const body={customer_id:document.getElementById('ph-customer-id').value,
+function createPurchaseEntry(){
+  var body={customer_id:document.getElementById('ph-customer-id').value,
     license_key:document.getElementById('ph-license-key').value,
     plan:document.getElementById('ph-plan').value,
     action:document.getElementById('ph-action').value,
     amount:document.getElementById('ph-amount').value||null,
     note:document.getElementById('ph-note').value||null};
-  try{await API('/admin/purchase-history',{method:'POST',body:JSON.stringify(body)});closeModal('modal-new-ph');loadPurchaseHistory();}
-  catch(e){alert('Fehler: '+(e.message||e));}
+  API('/admin/purchase-history',{method:'POST',body:JSON.stringify(body)})
+    .then(function(){closeModal('modal-new-ph');loadPurchaseHistory();})
+    .catch(function(e){alert('Fehler: '+(e.message||e));});
 }
 
-// ─── ADMIN USERS ──────────────────────────────────────────────────────────────
-async function loadUsers(){
-  try{
-    const d=await API('/admin/users');const users=d.users||[];
-    document.getElementById('users-table').innerHTML=users.length?`
-      <table class="data-table"><thead><tr><th>Benutzername</th><th>Rolle</th><th>Erstellt</th><th>Aktionen</th></tr></thead><tbody>
-      ${users.map(u=>`<tr>
-        <td>${esc(u.username)}</td>
-        <td><span class="badge ${u.role==='superadmin'?'badge-superadmin':'badge-active'}">${esc(u.role)}</span></td>
-        <td>${fmtDate(u.created_at)}</td>
-        <td>${u.username!==USER?`<button class="btn btn-danger btn-sm" onclick="deleteUser('${esc(u.username)}')">🗑 Löschen</button>`:''}</td>
-      </tr>`).join('')}</tbody></table>`:'<div class="loading">Keine User gefunden.</div>';
-  }catch(e){document.getElementById('users-table').innerHTML=`<div class="alert alert-error" style="margin:1rem">${esc(e.message||'Fehler')}</div>`;}
+function loadUsers(){
+  API('/admin/users').then(function(d){
+    var users=d.users||[];
+    document.getElementById('users-table').innerHTML=users.length?
+      '<table class="data-table"><thead><tr><th>Benutzername</th><th>Rolle</th><th>Erstellt</th><th>Aktionen</th></tr></thead><tbody>'+
+      users.map(function(u){
+        return '<tr>'+
+          '<td>'+esc(u.username)+'</td>'+
+          '<td><span class="badge '+(u.role==='superadmin'?'badge-superadmin':'badge-active')+'">'+esc(u.role)+'</span></td>'+
+          '<td>'+fmtDate(u.created_at)+'</td>'+
+          '<td>'+(u.username!==USER?'<button class="btn btn-danger btn-sm" onclick="deleteUser(\''+esc(u.username)+'\')" >&#128465; L\u00F6schen</button>':'')+'</td>'+
+        '</tr>';
+      }).join('')+'</tbody></table>':'<div class="loading">Keine User gefunden.</div>';
+  }).catch(function(e){document.getElementById('users-table').innerHTML='<div class="alert alert-error" style="margin:1rem">'+esc(e.message||'Fehler')+'</div>';});
 }
-async function createAdminUser(){
-  const body={username:document.getElementById('nu-user').value,password:document.getElementById('nu-pass').value,role:document.getElementById('nu-role').value};
-  try{await API('/admin/users',{method:'POST',body:JSON.stringify(body)});closeModal('modal-new-user');loadUsers();}
-  catch(e){alert('Fehler: '+(e.message||e));}
+function createAdminUser(){
+  var body={username:document.getElementById('nu-user').value,password:document.getElementById('nu-pass').value,role:document.getElementById('nu-role').value};
+  API('/admin/users',{method:'POST',body:JSON.stringify(body)})
+    .then(function(){closeModal('modal-new-user');loadUsers();})
+    .catch(function(e){alert('Fehler: '+(e.message||e));});
 }
-async function deleteUser(username){
-  if(!confirm('Admin-User '+username+' löschen?'))return;
-  try{await API('/admin/users/'+username,{method:'DELETE'});loadUsers();}
-  catch(e){alert('Fehler: '+(e.message||e));}
+function deleteUser(username){
+  if(!confirm('Admin-User '+username+' l\u00F6schen?'))return;
+  API('/admin/users/'+username,{method:'DELETE'}).then(function(){loadUsers();}).catch(function(e){alert('Fehler: '+(e.message||e));});
 }
 
-// ─── SMTP ─────────────────────────────────────────────────────────────────────
-async function loadSmtp(){
-  try{
-    const d=await API('/admin/smtp');const s=d.smtp||{};
-    document.getElementById('smtp-content').innerHTML=`
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;max-width:480px">
-        <div class="alert alert-${s.configured?'success':'info'}" style="margin-bottom:1rem">${s.configured?'✅ SMTP konfiguriert':'ℹ️ SMTP nicht konfiguriert'}</div>
-        <div class="form-group"><label>Host</label><input type="text" id="smtp-host" value="${esc(s.host||'')}"></div>
-        <div class="form-group"><label>Port</label><input type="number" id="smtp-port" value="${esc(s.port||'587')}"></div>
-        <div class="form-group"><label>Benutzer</label><input type="text" id="smtp-user" value="${esc(s.user||'')}"></div>
-        <div class="form-group"><label>Passwort</label><input type="password" id="smtp-pass" placeholder="••••••••"></div>
-        <div class="form-group"><label>Absender</label><input type="email" id="smtp-from" value="${esc(s.from||'')}"></div>
-        <div style="display:flex;gap:.8rem;flex-wrap:wrap;margin-top:.5rem">
-          <button class="btn btn-primary" onclick="saveSmtp()">Speichern & Testen</button>
-          ${s.configured?`<div style="display:flex;gap:.5rem;align-items:center"><input type="email" id="smtp-test-to" placeholder="test@mail.de" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:.45rem .8rem;color:var(--text);font-size:.88rem;outline:none"><button class="btn btn-ghost" onclick="testSmtp()">Test senden</button></div>`:''}
-        </div>
-      </div>`;
-  }catch(e){document.getElementById('smtp-content').innerHTML=`<div class="alert alert-error">${esc(e.message||'Fehler')}</div>`;}
+function loadSmtp(){
+  API('/admin/smtp').then(function(d){
+    var s=d.smtp||{};
+    document.getElementById('smtp-content').innerHTML=
+      '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;max-width:480px">'+
+        '<div class="alert alert-'+(s.configured?'success':'info')+'" style="margin-bottom:1rem">'+(s.configured?'&#9989; SMTP konfiguriert':'&#8505;&#65039; SMTP nicht konfiguriert')+'</div>'+
+        '<div class="form-group"><label>Host</label><input type="text" id="smtp-host" value="'+esc(s.host||'')+'"></div>'+
+        '<div class="form-group"><label>Port</label><input type="number" id="smtp-port" value="'+esc(s.port||'587')+'"></div>'+
+        '<div class="form-group"><label>Benutzer</label><input type="text" id="smtp-user" value="'+esc(s.user||'')+'"></div>'+
+        '<div class="form-group"><label>Passwort</label><input type="password" id="smtp-pass" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"></div>'+
+        '<div class="form-group"><label>Absender</label><input type="email" id="smtp-from" value="'+esc(s.from||'')+'"></div>'+
+        '<div style="display:flex;gap:.8rem;flex-wrap:wrap;margin-top:.5rem">'+
+          '<button class="btn btn-primary" onclick="saveSmtp()">Speichern &amp; Testen</button>'+
+          (s.configured?'<div style="display:flex;gap:.5rem;align-items:center"><input type="email" id="smtp-test-to" placeholder="test@mail.de" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:.45rem .8rem;color:var(--text);font-size:.88rem;outline:none"><button class="btn btn-ghost" onclick="testSmtp()">Test senden</button></div>':'')+
+        '</div>'+
+      '</div>';
+  }).catch(function(e){document.getElementById('smtp-content').innerHTML='<div class="alert alert-error">'+esc(e.message||'Fehler')+'</div>';});
 }
-async function saveSmtp(){
-  const body={host:document.getElementById('smtp-host').value,port:document.getElementById('smtp-port').value,
+function saveSmtp(){
+  var body={host:document.getElementById('smtp-host').value,port:document.getElementById('smtp-port').value,
     user:document.getElementById('smtp-user').value,pass:document.getElementById('smtp-pass').value,
     from:document.getElementById('smtp-from').value};
-  try{const d=await API('/admin/smtp',{method:'POST',body:JSON.stringify(body)});alert(d.message);loadSmtp();}
-  catch(e){alert('Fehler: '+(e.message||e));}
+  API('/admin/smtp',{method:'POST',body:JSON.stringify(body)})
+    .then(function(d){alert(d.message);loadSmtp();})
+    .catch(function(e){alert('Fehler: '+(e.message||e));});
 }
-async function testSmtp(){
-  const to=document.getElementById('smtp-test-to')?.value;
-  if(!to)return alert('Empfänger eingeben.');
-  try{const d=await API('/admin/smtp/test',{method:'POST',body:JSON.stringify({to})});alert(d.message);}
-  catch(e){alert('Fehler: '+(e.message||e));}
+function testSmtp(){
+  var to=document.getElementById('smtp-test-to')?document.getElementById('smtp-test-to').value:'';
+  if(!to){alert('Empf\u00E4nger eingeben.');return;}
+  API('/admin/smtp/test',{method:'POST',body:JSON.stringify({to:to})})
+    .then(function(d){alert(d.message);})
+    .catch(function(e){alert('Fehler: '+(e.message||e));});
 }
 
-// ─── WEBHOOKS ─────────────────────────────────────────────────────────────────
-async function loadWebhooks(){
-  try{
-    const d=await API('/admin/webhooks');const hooks=d.webhooks||[];
-    document.getElementById('webhooks-table').innerHTML=hooks.length?`
-      <table class="data-table"><thead><tr><th>URL</th><th>Events</th><th>Aktiv</th><th>Erstellt</th><th>Aktionen</th></tr></thead><tbody>
-      ${hooks.map(h=>`<tr>
-        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${esc(h.url)}</td>
-        <td>${esc(h.events||'*')}</td>
-        <td><span class="badge ${h.active?'badge-active':'badge-revoked'}">${h.active?'ja':'nein'}</span></td>
-        <td>${fmtDate(h.created_at)}</td>
-        <td><button class="btn btn-danger btn-sm" onclick="deleteWebhook(${h.id})">🗑</button></td>
-      </tr>`).join('')}</tbody></table>`:'<div class="loading">Keine Webhooks konfiguriert.</div>';
-  }catch(e){document.getElementById('webhooks-table').innerHTML=`<div class="alert alert-error" style="margin:1rem">${esc(e.message||'Fehler')}</div>`;}
+function loadWebhooks(){
+  API('/admin/webhooks').then(function(d){
+    var hooks=d.webhooks||[];
+    document.getElementById('webhooks-table').innerHTML=hooks.length?
+      '<table class="data-table"><thead><tr><th>URL</th><th>Events</th><th>Aktiv</th><th>Erstellt</th><th>Aktionen</th></tr></thead><tbody>'+
+      hooks.map(function(h){
+        return '<tr>'+
+          '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">'+esc(h.url)+'</td>'+
+          '<td>'+esc(h.events||'*')+'</td>'+
+          '<td><span class="badge '+(h.active?'badge-active':'badge-revoked')+'">'+(h.active?'ja':'nein')+'</span></td>'+
+          '<td>'+fmtDate(h.created_at)+'</td>'+
+          '<td><button class="btn btn-danger btn-sm" onclick="deleteWebhook('+h.id+')" >&#128465;</button></td>'+
+        '</tr>';
+      }).join('')+'</tbody></table>':'<div class="loading">Keine Webhooks konfiguriert.</div>';
+  }).catch(function(e){document.getElementById('webhooks-table').innerHTML='<div class="alert alert-error" style="margin:1rem">'+esc(e.message||'Fehler')+'</div>';});
 }
-async function createWebhook(){
-  const body={url:document.getElementById('nw-url').value,secret:document.getElementById('nw-secret').value||null};
-  try{await API('/admin/webhooks',{method:'POST',body:JSON.stringify(body)});closeModal('modal-new-webhook');loadWebhooks();}
-  catch(e){alert('Fehler: '+(e.message||e));}
+function createWebhook(){
+  var body={url:document.getElementById('nw-url').value,secret:document.getElementById('nw-secret').value||null};
+  API('/admin/webhooks',{method:'POST',body:JSON.stringify(body)})
+    .then(function(){closeModal('modal-new-webhook');loadWebhooks();})
+    .catch(function(e){alert('Fehler: '+(e.message||e));});
 }
-async function deleteWebhook(id){
-  if(!confirm('Webhook löschen?'))return;
-  try{await API('/admin/webhooks/'+id,{method:'DELETE'});loadWebhooks();}
-  catch(e){alert('Fehler: '+(e.message||e));}
+function deleteWebhook(id){
+  if(!confirm('Webhook l\u00F6schen?'))return;
+  API('/admin/webhooks/'+id,{method:'DELETE'}).then(function(){loadWebhooks();}).catch(function(e){alert('Fehler: '+(e.message||e));});
 }
 
 if(TOKEN&&window.location.hash==='#admin')openAdmin();
