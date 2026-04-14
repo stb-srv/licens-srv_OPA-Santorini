@@ -3,6 +3,8 @@
  * Fügt Kunden-Portal-Felder zur customers-Tabelle hinzu
  * und erstellt die customer_sessions-Tabelle.
  * Ausführen: node migrate-portal.js
+ *
+ * Kompatibel mit MySQL 5.7+ und MariaDB (kein ADD COLUMN IF NOT EXISTS)
  */
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
@@ -19,50 +21,50 @@ const db = await mysql.createConnection({
 
 console.log('🔄 Starte Portal-Migration...');
 
-const migrations = [
-    {
-        name: 'customers.password_hash',
-        sql: `ALTER TABLE customers ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) DEFAULT NULL`
-    },
-    {
-        name: 'customers.portal_token',
-        sql: `ALTER TABLE customers ADD COLUMN IF NOT EXISTS portal_token VARCHAR(128) DEFAULT NULL`
-    },
-    {
-        name: 'customers.portal_token_expires',
-        sql: `ALTER TABLE customers ADD COLUMN IF NOT EXISTS portal_token_expires DATETIME DEFAULT NULL`
-    },
-    {
-        name: 'customer_sessions table',
-        sql: `CREATE TABLE IF NOT EXISTS customer_sessions (
-            id CHAR(36) NOT NULL PRIMARY KEY,
-            customer_id CHAR(36) NOT NULL,
-            token_hash VARCHAR(255) NOT NULL,
-            ip VARCHAR(64),
-            user_agent VARCHAR(512),
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            expires_at DATETIME NOT NULL,
-            revoked TINYINT(1) DEFAULT 0,
-            INDEX idx_customer (customer_id),
-            INDEX idx_token (token_hash),
-            INDEX idx_expires (expires_at)
-        )`
+// Hilfsfunktion: Spalte nur hinzufügen wenn sie noch nicht existiert
+async function addColumnIfMissing(table, column, definition) {
+    const [cols] = await db.query(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+        [table, column]
+    );
+    if (cols.length > 0) {
+        console.log(`  ⏭️  ${table}.${column} (bereits vorhanden)`);
+        return;
     }
-];
+    await db.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    console.log(`  ✅ ${table}.${column} hinzugefügt`);
+}
 
-for (const m of migrations) {
-    try {
-        await db.query(m.sql);
-        console.log(`  ✅ ${m.name}`);
-    } catch (e) {
-        if (e.code === 'ER_DUP_FIELDNAME' || e.message.includes('Duplicate column')) {
-            console.log(`  ⏭️  ${m.name} (bereits vorhanden)`);
-        } else {
-            console.error(`  ❌ ${m.name}: ${e.message}`);
-        }
-    }
+try {
+    await addColumnIfMissing('customers', 'password_hash',       'VARCHAR(255) DEFAULT NULL');
+    await addColumnIfMissing('customers', 'portal_token',        'VARCHAR(128) DEFAULT NULL');
+    await addColumnIfMissing('customers', 'portal_token_expires','DATETIME DEFAULT NULL');
+} catch (e) {
+    console.error('❌ Fehler bei customers-Spalten:', e.message);
+    process.exit(1);
+}
+
+try {
+    await db.query(`CREATE TABLE IF NOT EXISTS customer_sessions (
+        id CHAR(36) NOT NULL PRIMARY KEY,
+        customer_id CHAR(36) NOT NULL,
+        token_hash VARCHAR(255) NOT NULL,
+        ip VARCHAR(64),
+        user_agent VARCHAR(512),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        expires_at DATETIME NOT NULL,
+        revoked TINYINT(1) DEFAULT 0,
+        INDEX idx_customer (customer_id),
+        INDEX idx_token (token_hash),
+        INDEX idx_expires (expires_at)
+    )`);
+    console.log('  ✅ customer_sessions table');
+} catch (e) {
+    console.error('❌ Fehler bei customer_sessions:', e.message);
+    process.exit(1);
 }
 
 console.log('\n✅ Portal-Migration abgeschlossen.');
-console.log('📝 Bitte PORTAL_SECRET in die .env eintragen!');
+console.log('📝 Bitte PORTAL_SECRET und PORTAL_URL in die .env eintragen!');
 await db.end();
