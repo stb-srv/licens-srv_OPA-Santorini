@@ -31,16 +31,19 @@ const FATAL_ERRORS = [];
 // Pflicht-DB-Variablen
 if (!process.env.DB_HOST) FATAL_ERRORS.push('DB_HOST fehlt in .env');
 if (!process.env.DB_USER) FATAL_ERRORS.push('DB_USER fehlt in .env');
-if (!process.env.DB_PASS) FATAL_ERRORS.push('DB_PASS fehlt in .env');
+if (!process.env.DB_PASS) console.warn('⚠️  DB_PASS nicht gesetzt – kein Datenbankpasswort konfiguriert.');
 if (!process.env.DB_NAME) FATAL_ERRORS.push('DB_NAME fehlt in .env');
 
-// Kritische Secrets
+
+// Kritische Secrets — Server-Start wird verweigert
 if (ADMIN_SECRET === 'change-me-in-production')
     FATAL_ERRORS.push('ADMIN_SECRET ist der unsichere Default-Wert!');
 if (HMAC_SECRET === 'hmac-change-me-in-production')
     FATAL_ERRORS.push('HMAC_SECRET ist der unsichere Default-Wert!');
+
+// HMAC-Länge: nur Warnung, kein Crash (bestehende Deployments nicht blockieren)
 if (HMAC_SECRET.length < 32)
-    FATAL_ERRORS.push(`HMAC_SECRET ist zu kurz (${HMAC_SECRET.length} Zeichen, min. 32 erforderlich). Tipp: openssl rand -hex 32`);
+    console.warn(`⚠️  HMAC_SECRET ist kurz (${HMAC_SECRET.length} Zeichen). Empfehlung: min. 32 Zeichen (openssl rand -hex 32).`);
 
 if (FATAL_ERRORS.length > 0) {
     console.error('❌ FATAL: Server-Start abgebrochen wegen Konfigurationsfehlern:');

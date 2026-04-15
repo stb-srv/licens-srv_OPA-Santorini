@@ -5,8 +5,8 @@ import db from './db.js';
 import { RSA_PRIVATE_KEY, RSA_PUBLIC_KEY } from './crypto.js';
 
 // ── Admin JWT: RS256 wenn RSA-Keys vorhanden, sonst HS256 Fallback ────────────
-const ADMIN_SECRET     = process.env.ADMIN_SECRET || 'change-me-in-production';
-const USE_RS256_ADMIN  = !!(RSA_PRIVATE_KEY && RSA_PUBLIC_KEY);
+const ADMIN_SECRET    = process.env.ADMIN_SECRET || 'change-me-in-production';
+const USE_RS256_ADMIN = !!(RSA_PRIVATE_KEY && RSA_PUBLIC_KEY);
 
 export const MIN_PASSWORD_LENGTH = 12;
 
@@ -38,17 +38,32 @@ export const requireAuth = async (req, res, next) => {
     if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
     try {
         const payload = verifyAdminToken(token);
-        // Session-Blacklist prüfen: Token muss in admin_sessions existieren und aktiv sein
         const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-        const [rows] = await db.query(
-            'SELECT id FROM admin_sessions WHERE token_hash = ? AND revoked = 0 AND expires_at > NOW()',
-            [tokenHash]
-        );
-        if (!rows[0]) {
-            return res.status(401).json({ success: false, message: 'Session ungültig oder abgelaufen. Bitte erneut einloggen.' });
+
+        // Session-Blacklist prüfen — graceful fallback wenn Tabelle noch fehlt
+        try {
+            const [rows] = await db.query(
+                'SELECT id FROM admin_sessions WHERE token_hash = ? AND revoked = 0 AND expires_at > NOW()',
+                [tokenHash]
+            );
+            if (!rows[0]) {
+                return res.status(401).json({
+                    success: false,
+                    message: 'Session ungültig oder abgelaufen. Bitte erneut einloggen.'
+                });
+            }
+        } catch (dbErr) {
+            // Falls admin_sessions-Tabelle noch nicht existiert (Migration ausstehend):
+            // nur Token-Signatur prüfen, nicht blockieren
+            if (dbErr.code === 'ER_NO_SUCH_TABLE') {
+                console.warn('⚠️  admin_sessions-Tabelle fehlt — bitte node migrate-features.js ausführen!');
+            } else {
+                throw dbErr;
+            }
         }
-        req.admin      = payload;
-        req.adminToken = token;
+
+        req.admin          = payload;
+        req.adminToken     = token;
         req.adminTokenHash = tokenHash;
         next();
     } catch {
