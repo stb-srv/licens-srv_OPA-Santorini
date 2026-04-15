@@ -5,12 +5,12 @@ import db from '../db.js';
 import { PLAN_DEFINITIONS } from '../plans.js';
 import { RSA_PUBLIC_KEY, createSignedLicenseToken, signResponse, isHmacActive, HMAC_SECRET } from '../crypto.js';
 import { domainMatches, getClientIp, addAuditLog, parseJsonField } from '../helpers.js';
-import { validateLimiter, setupLimiter, offlineTokenLimiter, MIN_PASSWORD_LENGTH } from '../middleware.js';
+import { validateLimiter, setupLimiter, offlineTokenLimiter, MIN_PASSWORD_LENGTH, asyncHandler } from '../middleware.js';
 
 const router = Router();
 const SETUP_TOKEN = process.env.SETUP_TOKEN || '';
 
-// ── Setup ────────────────────────────────────────────────────────────────────
+// ── Setup ─────────────────────────────────────────────────────────────────────
 router.post('/setup', setupLimiter, asyncHandler(async (req, res) => {
     if (!SETUP_TOKEN)
         return res.status(503).json({ success: false, message: 'Setup ist deaktiviert. SETUP_TOKEN nicht in .env konfiguriert.' });
@@ -44,7 +44,7 @@ router.post('/setup', setupLimiter, asyncHandler(async (req, res) => {
     }
 }));
 
-// ── Validate ─────────────────────────────────────────────────────────────────
+// ── Validate ───────────────────────────────────────────────────────────────────
 router.post('/validate', validateLimiter, asyncHandler(async (req, res) => {
     const { license_key, domain, device_id, device_type, nonce, features_used } = req.body;
     if (!license_key) return res.status(400).json({ status: 'invalid', message: 'No key provided' });
@@ -154,8 +154,6 @@ router.post('/validate', validateLimiter, asyncHandler(async (req, res) => {
         if (signedToken) {
             finalResponse.license_token = signedToken;
             finalResponse.token = signedToken;
-            // license_token_public_key wird NICHT mehr im Response mitgesendet.
-            // Der Public Key ist über GET /api/v1/public-key abrufbar.
         }
 
         return res.json(isHmacActive() ? signResponse(finalResponse) : finalResponse);
@@ -165,12 +163,12 @@ router.post('/validate', validateLimiter, asyncHandler(async (req, res) => {
     }
 }));
 
-// ── Public Key ───────────────────────────────────────────────────────────────
+// ── Public Key ───────────────────────────────────────────────────────────────────
 router.get('/public-key', (req, res) => {
     res.json({ public_key: RSA_PUBLIC_KEY, algorithm: 'RS256' });
 });
 
-// ── Heartbeat ────────────────────────────────────────────────────────────────
+// ── Heartbeat ────────────────────────────────────────────────────────────────────
 router.post('/heartbeat', validateLimiter, asyncHandler(async (req, res) => {
     const { license_key, domain } = req.body;
     if (!license_key) return res.status(400).json({ status: 'invalid', message: 'No key provided' });
@@ -197,7 +195,6 @@ router.post('/heartbeat', validateLimiter, asyncHandler(async (req, res) => {
             ? parseJsonField(l.limits, { max_dishes: plan.menu_items, max_tables: plan.max_tables })
             : { max_dishes: plan.menu_items, max_tables: plan.max_tables };
 
-        // Token-Gültigkeit: 73h (72h Check-Intervall + 1h Puffer)
         const signedToken = createSignedLicenseToken({
             license_key, type: l.type, plan_label: plan.label, expires_at: l.expires_at,
             allowed_modules: allowedModules, limits, domain: domain || l.associated_domain,
@@ -211,8 +208,7 @@ router.post('/heartbeat', validateLimiter, asyncHandler(async (req, res) => {
     }
 }));
 
-// ── Refresh (genutzt von OPA-CMS LicenseChecker alle 72h) ───────────────────
-// Response-Format: { status: 'active'|'revoked', token: '<RS256 JWT>' }
+// ── Refresh ──────────────────────────────────────────────────────────────────────
 router.post('/refresh', validateLimiter, asyncHandler(async (req, res) => {
     const { license_key, domain } = req.body;
     if (!license_key) return res.status(400).json({ status: 'invalid', message: 'No key provided' });
@@ -248,7 +244,6 @@ router.post('/refresh', validateLimiter, asyncHandler(async (req, res) => {
             ? parseJsonField(l.limits, { max_dishes: plan.menu_items, max_tables: plan.max_tables })
             : { max_dishes: plan.menu_items, max_tables: plan.max_tables };
 
-        // Token-Gültigkeit: 73h (72h Check-Intervall + 1h Puffer)
         const signedToken = createSignedLicenseToken({
             license_key, type: l.type, plan_label: plan.label, expires_at: l.expires_at,
             allowed_modules: allowedModules, limits, domain: domain || l.associated_domain,
@@ -270,7 +265,7 @@ router.post('/refresh', validateLimiter, asyncHandler(async (req, res) => {
     }
 }));
 
-// ── Verify License Token ─────────────────────────────────────────────────────
+// ── Verify License Token ──────────────────────────────────────────────────────────
 router.post('/verify-license-token', validateLimiter, asyncHandler(async (req, res) => {
     const { license_token } = req.body;
     if (!license_token) return res.status(400).json({ valid: false, message: 'No token provided' });
@@ -282,7 +277,7 @@ router.post('/verify-license-token', validateLimiter, asyncHandler(async (req, r
     }
 }));
 
-// ── Offline Token ────────────────────────────────────────────────────────────
+// ── Offline Token ──────────────────────────────────────────────────────────────────
 router.post('/offline-token', offlineTokenLimiter, asyncHandler(async (req, res) => {
     const { license_key, domain, device_id, duration_hours } = req.body;
     if (!license_key) return res.status(400).json({ success: false, message: 'No key provided' });
@@ -292,7 +287,6 @@ router.post('/offline-token', offlineTokenLimiter, asyncHandler(async (req, res)
         if (!l || l.status !== 'active' || new Date(l.expires_at) < new Date())
             return res.status(403).json({ success: false, message: 'License invalid or expired' });
 
-        // Fix #4: Domain-Check gegen associated_domain
         if (domain && !domainMatches(l.associated_domain, domain))
             return res.status(403).json({ success: false, message: `Offline-Token: Lizenz ist nicht für Domain "${domain}" gültig.` });
 
