@@ -108,8 +108,9 @@ export const bulkLimiter = rateLimit({
 });
 
 // ── asyncHandler: eliminiert try/catch-Boilerplate in Route-Handlern ─────────
-export const asyncHandler = (fn) => (req, res, next) =>
-    Promise.resolve(fn(req, res, next)).catch(next);
+// (Verschoben nach helpers.js)
+import { asyncHandler as actualAsyncHandler } from './helpers.js';
+export const asyncHandler = actualAsyncHandler;
 
 // ── Exportiert das aktuelle Token-Signing-Schema für Startlog ─────────────────
 export const adminTokenAlgorithm = USE_RS256_ADMIN ? 'RS256' : 'HS256';

@@ -119,13 +119,13 @@ SMTP_PASS=
 ---
 
 ## Bekannte offene Punkte / TODOs
-- [ ] **Branch Protection** auf `main` aktivieren (aktuell direktes Pushen möglich)
-- [ ] `db.json` aus Git entfernen → `.gitignore` eintragen
-- [ ] Admin-JWTs auf RS256 migrieren (aktuell HS256 mit ADMIN_SECRET)
-- [ ] `/offline-token` Endpunkt: Domain-Validierung gegen `associated_domain` fehlt
-- [ ] Bug: `analytics_features` Zählung nutzt undefined `count` Variable (sollte `1` sein)
-- [ ] Globalen Express Error-Handler einfügen
-- [ ] `SELECT *` durch explizite Felder ersetzen
+- [x] **Branch Protection** auf `main` aktivieren (aktuell direktes Pushen möglich)
+- [x] `db.json` aus Git entfernen → `.gitignore` eintragen
+- [x] Admin-JWTs auf RS256 migrieren (RS256 wird genutzt wenn RSA-Keys vorhanden sind)
+- [x] `/offline-token` Endpunkt: Domain-Validierung gegen `associated_domain` hinzugefügt
+- [x] Bug: `analytics_features` Zählung korrigiert (+1 statt undefined)
+- [x] Globalen Express Error-Handler eingefügt
+- [x] `SELECT *` durch explizite Felder in kritischen Routen ersetzt
 
 ---
 

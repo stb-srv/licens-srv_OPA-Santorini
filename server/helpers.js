@@ -50,3 +50,10 @@ export const parseJsonField = (value, fallback = {}) => {
     try { return typeof value === 'string' ? JSON.parse(value) : value; }
     catch { return fallback; }
 };
+
+/**
+ * asyncHandler: Wrapper für Express-Routen, um try/catch-Boilerplate zu vermeiden.
+ * Leitet Fehler automatisch an den globalen Error-Handler weiter.
+ */
+export const asyncHandler = (fn) => (req, res, next) =>
+    Promise.resolve(fn(req, res, next)).catch(next);

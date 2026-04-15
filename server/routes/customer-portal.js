@@ -15,6 +15,7 @@ import { asyncHandler } from '../middleware.js';
 
 const router = Router();
 const PORTAL_SECRET = process.env.PORTAL_SECRET || '';
+const CUSTOMER_SAFE_FIELDS = 'id, name, email, phone, company, portal_username, must_change_password, payment_status, created_at';
 
 // ── Rate Limiter ──────────────────────────────────────────────────────────────
 const portalLoginLimiter = rateLimit({
@@ -47,7 +48,7 @@ async function requirePortalAuth(req, res, next) {
         );
         if (!rows[0]) return res.status(401).json({ success: false, message: 'Session abgelaufen oder ungültig.' });
         // Kundendaten laden
-        const [custs] = await db.query('SELECT * FROM customers WHERE id = ?', [payload.customer_id]);
+        const [custs] = await db.query(`SELECT ${CUSTOMER_SAFE_FIELDS} FROM customers WHERE id = ?`, [payload.customer_id]);
         if (!custs[0]) return res.status(401).json({ success: false, message: 'Kunde nicht gefunden.' });
         req.customer = custs[0];
         req.sessionTokenHash = tokenHash;
@@ -263,7 +264,8 @@ router.post('/change-password', requirePortalAuth, asyncHandler(async (req, res)
     if (current_password === new_password)
         return res.status(400).json({ success: false, message: 'Neues Passwort muss sich vom aktuellen unterscheiden.' });
     try {
-        const valid = await bcrypt.compare(current_password, req.customer.password_hash);
+        const [[u]] = await db.query('SELECT password_hash FROM customers WHERE id = ?', [req.customer.id]);
+        const valid = await bcrypt.compare(current_password, u.password_hash);
         if (!valid)
             return res.status(401).json({ success: false, message: 'Aktuelles Passwort ist falsch.' });
         const hash = await bcrypt.hash(new_password, 12);
@@ -288,7 +290,7 @@ router.post('/setup-password', inviteLimiter, asyncHandler(async (req, res) => {
         return res.status(400).json({ success: false, message: 'Passwort muss mindestens 10 Zeichen haben.' });
     try {
         const [rows] = await db.query(
-            `SELECT * FROM customers WHERE portal_token = ? AND portal_token_expires > NOW()`,
+            `SELECT id, name, email FROM customers WHERE portal_token = ? AND portal_token_expires > NOW()`,
             [token]
         );
         if (!rows[0])

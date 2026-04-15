@@ -39,9 +39,9 @@ if (ADMIN_SECRET === 'change-me-in-production')
 if (!PORTAL_SECRET)
     FATAL_ERRORS.push('PORTAL_SECRET fehlt in .env – Kunden-Portal läuft ohne Authentifizierung!');
 
-// HMAC-Länge: nur Warnung
-if (HMAC_SECRET === 'hmac-change-me-in-production')
-    console.warn('⚠️  HMAC_SECRET ist der unsichere Default-Wert!');
+// HMAC-Länge und Sicherheit
+if (!HMAC_SECRET || HMAC_SECRET === 'hmac-change-me-in-production')
+    FATAL_ERRORS.push('HMAC_SECRET fehlt oder ist unsicher! (HS256 Offline-Token Sicherheit)');
 if (HMAC_SECRET.length < 32)
     console.warn(`⚠️  HMAC_SECRET ist kurz (${HMAC_SECRET.length} Zeichen). Empfehlung: min. 32 Zeichen.`);
 

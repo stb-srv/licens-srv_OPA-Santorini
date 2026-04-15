@@ -224,7 +224,7 @@ router.post('/licenses', requireAuth, asyncHandler(async (req, res) => {
 
       // Lizenz-Mail an Kunden senden (wenn E-Mail vorhanden)
       try {
-        const [custRows] = await db.query('SELECT * FROM customers WHERE id = ?', [raw.customer_id]);
+        const [custRows] = await db.query('SELECT id, name, email FROM customers WHERE id = ?', [raw.customer_id]);
         const cust = custRows[0];
         if (cust?.email) {
           await sendTemplateMail('licenseCreated', cust.email, {
@@ -588,7 +588,7 @@ router.delete('/customers/:id', requireAuth, asyncHandler(async (req, res) => {
 // ── Portal-Einladung senden ───────────────────────────────────────────────────
 router.post('/customers/:id/send-portal-invite', requireAuth, requireSuperAdmin, asyncHandler(async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT * FROM customers WHERE id = ?', [req.params.id]);
+    const [rows] = await db.query('SELECT id, name, email FROM customers WHERE id = ?', [req.params.id]);
     const customer = rows[0];
     if (!customer) return res.status(404).json({ success: false, message: 'Kunde nicht gefunden.' });
     if (!customer.email) return res.status(400).json({ success: false, message: 'Kunde hat keine E-Mail-Adresse.' });

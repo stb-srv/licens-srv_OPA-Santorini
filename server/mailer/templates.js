@@ -188,7 +188,7 @@ const TEMPLATES = {
     }),
 
     licenseRenewed: (d) => ({
-        subject: 'OPA! Santorini \u2014 Lizenz erfolgreich verlängert',
+        subject: 'Deine Lizenz wurde verlängert – OPA Santorini',
         html: layout('Lizenz verlängert', `
           <h2 style="margin:0 0 8px;font-size:18px;color:#27ae60">Lizenz verl\u00e4ngert &#10003;</h2>
           <p style="margin:0 0 20px;color:#555;line-height:1.7">
@@ -206,7 +206,7 @@ const TEMPLATES = {
     }),
 
     licenseRevoked: (d) => ({
-        subject: 'OPA! Santorini \u2014 Lizenz widerrufen',
+        subject: 'Deine Lizenz wurde gesperrt – OPA Santorini',
         html: layout('Lizenz widerrufen', `
           <h2 style="margin:0 0 8px;font-size:18px;color:#e74c3c">Lizenz widerrufen &#10060;</h2>
           <p style="margin:0 0 20px;color:#555;line-height:1.7">
@@ -223,7 +223,7 @@ const TEMPLATES = {
 
     // Passwort-Reset angefordert (Kunden-Portal)
     passwordReset: (d) => ({
-        subject: 'OPA! Santorini \u2014 Passwort zur\u00fccksetzen',
+        subject: 'Passwort zurücksetzen – OPA Santorini',
         html: layout('Passwort zur\u00fccksetzen', `
           <h2 style="margin:0 0 8px;font-size:18px;color:#222">Passwort zur\u00fccksetzen &#128274;</h2>
           <p style="margin:0 0 20px;color:#555;line-height:1.7">
