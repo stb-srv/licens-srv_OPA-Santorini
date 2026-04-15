@@ -538,7 +538,21 @@ function API(path,opts){
   var headers={'Content-Type':'application/json'};
   if(TOKEN)headers['Authorization']='Bearer '+TOKEN;
   return fetch('/api'+path,Object.assign({headers:headers},opts))
-    .then(function(r){return r.json().then(function(d){if(!r.ok)throw d;return d;});});
+    .then(function(r){
+      return r.json().then(function(d){
+        if(r.status===401){
+          // Token abgelaufen oder ungültig → automatisch ausloggen
+          TOKEN='';ROLE='';USER='';
+          localStorage.removeItem('admin_token');
+          localStorage.removeItem('admin_role');
+          localStorage.removeItem('admin_user');
+          showLogin('Sitzung abgelaufen. Bitte erneut einloggen.');
+          throw {message:'Sitzung abgelaufen. Bitte erneut einloggen.'};
+        }
+        if(!r.ok)throw d;
+        return d;
+      });
+    });
 }
 
 function fmtDate(d){return d?new Date(d).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'\u2014';}
@@ -572,7 +586,17 @@ function openAdmin(){
   document.getElementById('main-footer').style.display='none';
   document.getElementById('main-nav').style.display='none';
   document.getElementById('page-admin').classList.add('active');
-  if(TOKEN)showDashboard();else showLogin();
+  if(TOKEN){
+    // Token kurz gegen den Server prüfen – bei 401 wird API() auto-logout
+    API('/admin/licenses?limit=1')
+      .then(function(){showDashboard();})
+      .catch(function(){
+        // Falls Token abgelaufen: API() hat bereits ausgeloggt → showLogin()
+        showLogin();
+      });
+  } else {
+    showLogin();
+  }
 }
 function closeAdmin(){
   document.getElementById('public-pages').style.display='';
@@ -580,9 +604,14 @@ function closeAdmin(){
   document.getElementById('main-nav').style.display='';
   document.getElementById('page-admin').classList.remove('active');
 }
-function showLogin(){
+function showLogin(msg){
   document.getElementById('admin-login').style.display='flex';
   document.getElementById('admin-dashboard').style.display='none';
+  if(msg){
+    document.getElementById('login-alert').innerHTML='<div class="alert alert-info">&#9888;&#65039; '+esc(msg)+'</div>';
+  } else {
+    document.getElementById('login-alert').innerHTML='';
+  }
 }
 function showDashboard(){
   document.getElementById('admin-login').style.display='none';
