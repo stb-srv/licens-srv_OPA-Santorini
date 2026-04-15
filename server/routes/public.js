@@ -107,7 +107,7 @@ router.post('/validate', validateLimiter, async (req, res) => {
         const cutoff = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
         for (const d of Object.keys(dailyAnalytics)) { if (d < cutoff) delete dailyAnalytics[d]; }
         if (features_used && Array.isArray(features_used)) {
-            for (const f of features_used) featuresAnalytics[f] = (featuresAnalytics[f] || 0) + count;
+            for (const f of features_used) featuresAnalytics[f] = (featuresAnalytics[f] || 0) + 1;
         }
 
         const validatedDomains = parseJsonField(l.validated_domains, []);
@@ -291,6 +291,10 @@ router.post('/offline-token', validateLimiter, async (req, res) => {
         const l = rows[0];
         if (!l || l.status !== 'active' || new Date(l.expires_at) < new Date())
             return res.status(403).json({ success: false, message: 'License invalid or expired' });
+
+        // Fix #4: Domain-Check gegen associated_domain
+        if (domain && !domainMatches(l.associated_domain, domain))
+            return res.status(403).json({ success: false, message: `Offline-Token: Lizenz ist nicht für Domain "${domain}" gültig.` });
 
         const plan = PLAN_DEFINITIONS[l.type] || PLAN_DEFINITIONS['FREE'];
         const hours = Math.min(duration_hours || 24, 168);

@@ -50,6 +50,19 @@ async function requirePortalAuth(req, res, next) {
         if (!custs[0]) return res.status(401).json({ success: false, message: 'Kunde nicht gefunden.' });
         req.customer = custs[0];
         req.sessionTokenHash = tokenHash;
+        // Fix #2: must_change_password — nur /change-password und /logout darf
+        // mit abgelaufenem Passwort aufgerufen werden
+        if (custs[0].must_change_password) {
+            const allowedPaths = ['/change-password', '/logout'];
+            const reqPath = req.path.replace(/\/$/, '') || '/';
+            if (!allowedPaths.includes(reqPath)) {
+                return res.status(403).json({
+                    success: false,
+                    must_change_password: true,
+                    message: 'Bitte ändere zuerst dein Passwort, bevor du das Portal nutzen kannst.'
+                });
+            }
+        }
         next();
     } catch (e) {
         return res.status(401).json({ success: false, message: 'Token ungültig oder abgelaufen.' });
@@ -133,9 +146,11 @@ router.get('/me', requirePortalAuth, async (req, res) => {
             id: c.id,
             name: c.name,
             email: c.email,
+            username: c.portal_username || null,   // Fix #5
             company: c.company || null,
             phone: c.phone || null,
             payment_status: c.payment_status || 'unknown',
+            must_change_password: c.must_change_password ? true : false,
             created_at: c.created_at
         }
     });
@@ -202,6 +217,32 @@ router.get('/history', requirePortalAuth, async (req, res) => {
         res.json({ success: true, history });
     } catch (e) {
         res.status(500).json({ success: false, message: 'Fehler beim Laden der Kaufhistorie.' });
+    }
+});
+
+// ── POST /change-password (Fix #2) ────────────────────────────────────────────
+// Kunden können ihr Passwort ändern (auch wenn must_change_password gesetzt ist)
+router.post('/change-password', requirePortalAuth, async (req, res) => {
+    const { current_password, new_password } = req.body;
+    if (!current_password || !new_password)
+        return res.status(400).json({ success: false, message: 'Aktuelles und neues Passwort erforderlich.' });
+    if (new_password.length < 10)
+        return res.status(400).json({ success: false, message: 'Neues Passwort muss mindestens 10 Zeichen haben.' });
+    if (current_password === new_password)
+        return res.status(400).json({ success: false, message: 'Neues Passwort muss sich vom aktuellen unterscheiden.' });
+    try {
+        const valid = await bcrypt.compare(current_password, req.customer.password_hash);
+        if (!valid)
+            return res.status(401).json({ success: false, message: 'Aktuelles Passwort ist falsch.' });
+        const hash = await bcrypt.hash(new_password, 12);
+        await db.query(
+            'UPDATE customers SET password_hash = ?, must_change_password = 0 WHERE id = ?',
+            [hash, req.customer.id]
+        );
+        res.json({ success: true, message: 'Passwort erfolgreich geändert.' });
+    } catch (e) {
+        console.error('[Portal/change-password]', e.message);
+        res.status(500).json({ success: false, message: 'Interner Fehler.' });
     }
 });
 

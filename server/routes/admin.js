@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import db from '../db.js';
 import { PLAN_DEFINITIONS } from '../plans.js';
-import { buildTransporter, verifySmtp, sendTemplateMail, getActiveSmtpConfig } from '../mailer/index.js';
+import { buildTransporter, sendTemplateMail, getActiveSmtpConfig } from '../mailer/index.js';
 import { fireWebhook } from '../webhook.js';
 import { generateKey, getClientIp, addAuditLog, parseJsonField } from '../helpers.js';
 import { requireAuth, requireSuperAdmin, loginLimiter, MIN_PASSWORD_LENGTH } from '../middleware.js';
@@ -126,7 +126,10 @@ router.get('/licenses', requireAuth, async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page) || 1);
   const limit = Math.min(500, Math.max(1, parseInt(req.query.limit) || 100));
   const offset = (page - 1) * limit;
-  const search = req.query.search ? `%${req.query.search}%` : null;
+  // Fix #8: LIKE-Wildcards escapen (%  _ \ führen sonst zu unerwartetem Verhalten)
+  const search = req.query.search
+    ? `%${req.query.search.replace(/[%_\\]/g, '\\$&')}%`
+    : null;
 
   const [[{ total }]] = await db.query(
     search
@@ -259,8 +262,10 @@ router.post('/licenses/:key/renew', requireAuth, async (req, res) => {
     const baseDate = new Date(l.expires_at) > new Date() ? new Date(l.expires_at) : new Date();
     const newExpiryStr = new Date(baseDate.getTime() + days * 86400000).toISOString().slice(0, 19).replace('T', ' ');
 
-    await db.query("UPDATE licenses SET expires_at = ?, status = 'active' WHERE license_key = ?",
-      [newExpiryStr, req.params.key]);
+    await db.query(
+      "UPDATE licenses SET expires_at = ?, status = 'active', expiry_notified_at = NULL WHERE license_key = ?",
+      [newExpiryStr, req.params.key]
+    );
 
     if (l.customer_id) {
       await db.query(
@@ -502,6 +507,8 @@ router.patch('/customers/:id', requireAuth, async (req, res) => {
 
 router.delete('/customers/:id', requireAuth, async (req, res) => {
   try {
+    // Fix #6: Verwaiste Lizenzen auf customer_id = NULL setzen statt zu verwaisen
+    await db.query('UPDATE licenses SET customer_id = NULL WHERE customer_id = ?', [req.params.id]);
     await db.query('DELETE FROM customers WHERE id = ?', [req.params.id]);
     await addAuditLog('customer_deleted', { customer_id: req.params.id, by: req.admin.username }, req.admin.username);
     res.json({ success: true });
