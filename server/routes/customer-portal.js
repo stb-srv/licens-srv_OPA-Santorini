@@ -11,11 +11,9 @@ import crypto from 'crypto';
 import db from '../db.js';
 import { sendTemplateMail } from '../mailer/index.js';
 import rateLimit from 'express-rate-limit';
-import { asyncHandler } from '../middleware.js';
 
 const router = Router();
 const PORTAL_SECRET = process.env.PORTAL_SECRET || '';
-const CUSTOMER_SAFE_FIELDS = 'id, name, email, phone, company, portal_username, must_change_password, payment_status, created_at';
 
 // ── Rate Limiter ──────────────────────────────────────────────────────────────
 const portalLoginLimiter = rateLimit({
@@ -48,7 +46,7 @@ async function requirePortalAuth(req, res, next) {
         );
         if (!rows[0]) return res.status(401).json({ success: false, message: 'Session abgelaufen oder ungültig.' });
         // Kundendaten laden
-        const [custs] = await db.query(`SELECT ${CUSTOMER_SAFE_FIELDS} FROM customers WHERE id = ?`, [payload.customer_id]);
+        const [custs] = await db.query('SELECT * FROM customers WHERE id = ?', [payload.customer_id]);
         if (!custs[0]) return res.status(401).json({ success: false, message: 'Kunde nicht gefunden.' });
         req.customer = custs[0];
         req.sessionTokenHash = tokenHash;
@@ -72,7 +70,7 @@ async function requirePortalAuth(req, res, next) {
 }
 
 // ── POST /login ───────────────────────────────────────────────────────────────
-router.post('/login', portalLoginLimiter, asyncHandler(async (req, res) => {
+router.post('/login', portalLoginLimiter, async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password)
         return res.status(400).json({ success: false, message: 'Benutzername/E-Mail und Passwort erforderlich.' });
@@ -127,20 +125,20 @@ router.post('/login', portalLoginLimiter, asyncHandler(async (req, res) => {
         console.error('[Portal/login]', e.message);
         res.status(500).json({ success: false, message: 'Interner Fehler.' });
     }
-}));
+});
 
 // ── POST /logout ──────────────────────────────────────────────────────────────
-router.post('/logout', requirePortalAuth, asyncHandler(async (req, res) => {
+router.post('/logout', requirePortalAuth, async (req, res) => {
     try {
         await db.query('UPDATE customer_sessions SET revoked = 1 WHERE token_hash = ?', [req.sessionTokenHash]);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ success: false, message: 'Fehler beim Logout.' });
     }
-}));
+});
 
 // ── GET /me ───────────────────────────────────────────────────────────────────
-router.get('/me', requirePortalAuth, asyncHandler(async (req, res) => {
+router.get('/me', requirePortalAuth, async (req, res) => {
     const c = req.customer;
     res.json({
         success: true,
@@ -148,7 +146,7 @@ router.get('/me', requirePortalAuth, asyncHandler(async (req, res) => {
             id: c.id,
             name: c.name,
             email: c.email,
-            username: c.portal_username || null,   // Fix #5
+            username: c.portal_username || null,
             company: c.company || null,
             phone: c.phone || null,
             payment_status: c.payment_status || 'unknown',
@@ -156,10 +154,58 @@ router.get('/me', requirePortalAuth, asyncHandler(async (req, res) => {
             created_at: c.created_at
         }
     });
-}));
+});
+
+// ── PATCH /update-profile ─────────────────────────────────────────────────────
+// Kunden können ihren eigenen Namen, Telefonnummer und Firma bearbeiten.
+// E-Mail ist Admin-only und kann hier nicht geändert werden.
+router.patch('/update-profile', requirePortalAuth, async (req, res) => {
+    const { name, phone, company } = req.body;
+
+    if (name !== undefined) {
+        if (typeof name !== 'string' || name.trim().length < 2)
+            return res.status(400).json({ success: false, message: 'Name muss mindestens 2 Zeichen lang sein.' });
+    }
+
+    const updates = [];
+    const params  = [];
+
+    if (name    !== undefined) { updates.push('name = ?');    params.push(name.trim()); }
+    if (phone   !== undefined) { updates.push('phone = ?');   params.push(phone || null); }
+    if (company !== undefined) { updates.push('company = ?'); params.push(company || null); }
+
+    if (updates.length === 0)
+        return res.status(400).json({ success: false, message: 'Keine änderbaren Felder angegeben. Erlaubt: name, phone, company.' });
+
+    try {
+        params.push(req.customer.id);
+        await db.query(`UPDATE customers SET ${updates.join(', ')} WHERE id = ?`, params);
+
+        const [rows] = await db.query(
+            'SELECT id, name, email, phone, company, portal_username FROM customers WHERE id = ?',
+            [req.customer.id]
+        );
+        const c = rows[0];
+        res.json({
+            success: true,
+            message: 'Profil erfolgreich aktualisiert.',
+            customer: {
+                id:       c.id,
+                name:     c.name,
+                email:    c.email,
+                username: c.portal_username || null,
+                phone:    c.phone || null,
+                company:  c.company || null
+            }
+        });
+    } catch (e) {
+        console.error('[Portal/update-profile]', e.message);
+        res.status(500).json({ success: false, message: 'Interner Fehler.' });
+    }
+});
 
 // ── GET /licenses ─────────────────────────────────────────────────────────────
-router.get('/licenses', requirePortalAuth, asyncHandler(async (req, res) => {
+router.get('/licenses', requirePortalAuth, async (req, res) => {
     try {
         const [licenses] = await db.query(
             `SELECT license_key, type, status, associated_domain, expires_at,
@@ -173,10 +219,10 @@ router.get('/licenses', requirePortalAuth, asyncHandler(async (req, res) => {
     } catch (e) {
         res.status(500).json({ success: false, message: 'Fehler beim Laden der Lizenzen.' });
     }
-}));
+});
 
 // ── PATCH /licenses/:key/domain ───────────────────────────────────────────────
-router.patch('/licenses/:key/domain', requirePortalAuth, asyncHandler(async (req, res) => {
+router.patch('/licenses/:key/domain', requirePortalAuth, async (req, res) => {
     const { domain } = req.body;
     if (!domain)
         return res.status(400).json({ success: false, message: 'Domain ist ein Pflichtfeld.' });
@@ -203,10 +249,10 @@ router.patch('/licenses/:key/domain', requirePortalAuth, asyncHandler(async (req
     } catch (e) {
         res.status(500).json({ success: false, message: 'Fehler beim Setzen der Domain.' });
     }
-}));
+});
 
 // ── GET /history ──────────────────────────────────────────────────────────────
-router.get('/history', requirePortalAuth, asyncHandler(async (req, res) => {
+router.get('/history', requirePortalAuth, async (req, res) => {
     try {
         const [history] = await db.query(
             `SELECT ph.id, ph.license_key, ph.plan, ph.action, ph.amount, ph.note, ph.created_at
@@ -220,42 +266,11 @@ router.get('/history', requirePortalAuth, asyncHandler(async (req, res) => {
     } catch (e) {
         res.status(500).json({ success: false, message: 'Fehler beim Laden der Kaufhistorie.' });
     }
-}));
-
-// ── POST /update-profile ──────────────────────────────────────────────────────
-// Kunden können eigenen Namen, Telefon, Firma ändern (NICHT die E-Mail)
-router.post('/update-profile', requirePortalAuth, asyncHandler(async (req, res) => {
-    const { name, phone, company } = req.body;
-    if (name !== undefined && (!name || name.trim().length < 2))
-        return res.status(400).json({ success: false, message: 'Name muss mindestens 2 Zeichen haben.' });
-    try {
-        const updates = [];
-        const params  = [];
-        if (name    !== undefined) { updates.push('name = ?');    params.push(name.trim()); }
-        if (phone   !== undefined) { updates.push('phone = ?');   params.push(phone || null); }
-        if (company !== undefined) { updates.push('company = ?'); params.push(company || null); }
-        if (updates.length === 0)
-            return res.status(400).json({ success: false, message: 'Keine änderbaren Felder angegeben.' });
-        params.push(req.customer.id);
-        await db.query(`UPDATE customers SET ${updates.join(', ')} WHERE id = ?`, params);
-        await db.query(
-            "INSERT INTO audit_log (action, details, admin_username, created_at) VALUES (?, ?, ?, NOW())",
-            ['customer_self_updated', JSON.stringify({ customer_id: req.customer.id, fields: Object.keys(req.body) }), `portal:${req.customer.email}`]
-        );
-        const [[updated]] = await db.query(
-            'SELECT id, name, email, phone, company, portal_username FROM customers WHERE id = ?',
-            [req.customer.id]
-        );
-        res.json({ success: true, customer: updated });
-    } catch (e) {
-        console.error('[Portal/update-profile]', e.message);
-        res.status(500).json({ success: false, message: 'Interner Fehler.' });
-    }
-}));
+});
 
 // ── POST /change-password (Fix #2) ────────────────────────────────────────────
 // Kunden können ihr Passwort ändern (auch wenn must_change_password gesetzt ist)
-router.post('/change-password', requirePortalAuth, asyncHandler(async (req, res) => {
+router.post('/change-password', requirePortalAuth, async (req, res) => {
     const { current_password, new_password } = req.body;
     if (!current_password || !new_password)
         return res.status(400).json({ success: false, message: 'Aktuelles und neues Passwort erforderlich.' });
@@ -264,8 +279,7 @@ router.post('/change-password', requirePortalAuth, asyncHandler(async (req, res)
     if (current_password === new_password)
         return res.status(400).json({ success: false, message: 'Neues Passwort muss sich vom aktuellen unterscheiden.' });
     try {
-        const [[u]] = await db.query('SELECT password_hash FROM customers WHERE id = ?', [req.customer.id]);
-        const valid = await bcrypt.compare(current_password, u.password_hash);
+        const valid = await bcrypt.compare(current_password, req.customer.password_hash);
         if (!valid)
             return res.status(401).json({ success: false, message: 'Aktuelles Passwort ist falsch.' });
         const hash = await bcrypt.hash(new_password, 12);
@@ -278,11 +292,11 @@ router.post('/change-password', requirePortalAuth, asyncHandler(async (req, res)
         console.error('[Portal/change-password]', e.message);
         res.status(500).json({ success: false, message: 'Interner Fehler.' });
     }
-}));
+});
 
 // ── POST /setup-password (Einmal-Token) ────────────────────────────────────────
 // Wird aufgerufen wenn der Kunde den Link aus der Einladungsmail öffnet
-router.post('/setup-password', inviteLimiter, asyncHandler(async (req, res) => {
+router.post('/setup-password', inviteLimiter, async (req, res) => {
     const { token, password } = req.body;
     if (!token || !password)
         return res.status(400).json({ success: false, message: 'Token und Passwort erforderlich.' });
@@ -290,7 +304,7 @@ router.post('/setup-password', inviteLimiter, asyncHandler(async (req, res) => {
         return res.status(400).json({ success: false, message: 'Passwort muss mindestens 10 Zeichen haben.' });
     try {
         const [rows] = await db.query(
-            `SELECT id, name, email FROM customers WHERE portal_token = ? AND portal_token_expires > NOW()`,
+            `SELECT * FROM customers WHERE portal_token = ? AND portal_token_expires > NOW()`,
             [token]
         );
         if (!rows[0])
@@ -306,11 +320,11 @@ router.post('/setup-password', inviteLimiter, asyncHandler(async (req, res) => {
         console.error('[Portal/setup-password]', e.message);
         res.status(500).json({ success: false, message: 'Interner Fehler.' });
     }
-}));
+});
 
 // ── GET /verify-invite-token ──────────────────────────────────────────────────
 // Prüft ob ein Einladungs-Token noch gültig ist (für das Frontend)
-router.get('/verify-invite-token', asyncHandler(async (req, res) => {
+router.get('/verify-invite-token', async (req, res) => {
     const { token } = req.query;
     if (!token) return res.status(400).json({ success: false, message: 'Token fehlt.' });
     try {
@@ -324,11 +338,11 @@ router.get('/verify-invite-token', asyncHandler(async (req, res) => {
     } catch (e) {
         res.status(500).json({ success: false, message: 'Interner Fehler.' });
     }
-}));
+});
 
 // ── POST /forgot-password ──────────────────────────────────────────────
 // Kunden können selbst einen Passwort-Reset anfordern (kein Admin-Eingriff nötig)
-router.post('/forgot-password', inviteLimiter, asyncHandler(async (req, res) => {
+router.post('/forgot-password', inviteLimiter, async (req, res) => {
     const { email } = req.body;
     // Immer mit 200 antworten (kein E-Mail-Enumeration)
     const genericResponse = { success: true, message: 'Falls deine E-Mail registriert ist, hast du in Kürze eine E-Mail mit einem Reset-Link erhalten.' };
@@ -359,6 +373,6 @@ router.post('/forgot-password', inviteLimiter, asyncHandler(async (req, res) => 
         // Fehler nicht nach außen leaken
     }
     res.json(genericResponse);
-}));
+});
 
 export default router;
