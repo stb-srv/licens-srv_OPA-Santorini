@@ -97,8 +97,14 @@ export const setupLimiter = rateLimit({
 
 // Dedizierter Limiter für /offline-token (strenger als validateLimiter)
 export const offlineTokenLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, max: 10,
+    windowMs: 15 * 60 * 1000, max: 20,
     message: { success: false, message: 'Too many offline token requests. Please wait 15 minutes.' }
+});
+
+// Dedizierter Limiter für /licenses/bulk
+export const bulkLimiter = rateLimit({
+    windowMs: 60 * 1000, max: 10,
+    message: { success: false, message: 'Too many bulk requests. Max 10 per minute.' }
 });
 
 // ── asyncHandler: eliminiert try/catch-Boilerplate in Route-Handlern ─────────

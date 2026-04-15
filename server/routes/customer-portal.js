@@ -220,6 +220,37 @@ router.get('/history', requirePortalAuth, async (req, res) => {
     }
 });
 
+// ── POST /update-profile ──────────────────────────────────────────────────────
+// Kunden können eigenen Namen, Telefon, Firma ändern (NICHT die E-Mail)
+router.post('/update-profile', requirePortalAuth, async (req, res) => {
+    const { name, phone, company } = req.body;
+    if (name !== undefined && (!name || name.trim().length < 2))
+        return res.status(400).json({ success: false, message: 'Name muss mindestens 2 Zeichen haben.' });
+    try {
+        const updates = [];
+        const params  = [];
+        if (name    !== undefined) { updates.push('name = ?');    params.push(name.trim()); }
+        if (phone   !== undefined) { updates.push('phone = ?');   params.push(phone || null); }
+        if (company !== undefined) { updates.push('company = ?'); params.push(company || null); }
+        if (updates.length === 0)
+            return res.status(400).json({ success: false, message: 'Keine änderbaren Felder angegeben.' });
+        params.push(req.customer.id);
+        await db.query(`UPDATE customers SET ${updates.join(', ')} WHERE id = ?`, params);
+        await db.query(
+            "INSERT INTO audit_log (action, details, admin_username, created_at) VALUES (?, ?, ?, NOW())",
+            ['customer_self_updated', JSON.stringify({ customer_id: req.customer.id, fields: Object.keys(req.body) }), `portal:${req.customer.email}`]
+        );
+        const [[updated]] = await db.query(
+            'SELECT id, name, email, phone, company, portal_username FROM customers WHERE id = ?',
+            [req.customer.id]
+        );
+        res.json({ success: true, customer: updated });
+    } catch (e) {
+        console.error('[Portal/update-profile]', e.message);
+        res.status(500).json({ success: false, message: 'Interner Fehler.' });
+    }
+});
+
 // ── POST /change-password (Fix #2) ────────────────────────────────────────────
 // Kunden können ihr Passwort ändern (auch wenn must_change_password gesetzt ist)
 router.post('/change-password', requirePortalAuth, async (req, res) => {

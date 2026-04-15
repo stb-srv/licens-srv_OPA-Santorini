@@ -35,13 +35,15 @@ if (!process.env.DB_PASS) console.warn('⚠️  DB_PASS nicht gesetzt – kein D
 if (!process.env.DB_NAME) FATAL_ERRORS.push('DB_NAME fehlt in .env');
 
 
-// Kritische Secrets — Server-Start wird verweigert
+// Pflicht-Secrets (alle prüfen, dann exit)
 if (ADMIN_SECRET === 'change-me-in-production')
     FATAL_ERRORS.push('ADMIN_SECRET ist der unsichere Default-Wert!');
 if (HMAC_SECRET === 'hmac-change-me-in-production')
     FATAL_ERRORS.push('HMAC_SECRET ist der unsichere Default-Wert!');
+if (!PORTAL_SECRET)
+    FATAL_ERRORS.push('PORTAL_SECRET fehlt in .env – Kunden-Portal läuft ohne Authentifizierung!');
 
-// HMAC-Länge: nur Warnung, kein Crash (bestehende Deployments nicht blockieren)
+// HMAC-Länge: nur Warnung
 if (HMAC_SECRET.length < 32)
     console.warn(`⚠️  HMAC_SECRET ist kurz (${HMAC_SECRET.length} Zeichen). Empfehlung: min. 32 Zeichen (openssl rand -hex 32).`);
 
@@ -54,7 +56,7 @@ if (FATAL_ERRORS.length > 0) {
 // Warnungen (nicht fatal)
 if (!RSA_PRIVATE_KEY)  console.warn('⚠️  RSA_PRIVATE_KEY nicht gesetzt – License-JWT Signing deaktiviert!');
 if (!SETUP_TOKEN)      console.warn('⚠️  SETUP_TOKEN nicht gesetzt – POST /api/v1/setup ist deaktiviert!');
-if (!PORTAL_SECRET)    console.warn('⚠️  PORTAL_SECRET nicht gesetzt – Kunden-Portal ist deaktiviert!');
+
 
 // Info-Log: Token-Algorithmus
 console.log(`🔐  Admin-JWT Algorithmus: ${adminTokenAlgorithm}${adminTokenAlgorithm === 'HS256' ? ' (RS256 wird empfohlen – RSA_PRIVATE_KEY setzen)' : ' ✅'}`);

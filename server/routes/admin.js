@@ -8,7 +8,7 @@ import { fireWebhook } from '../webhook.js';
 import { generateKey, getClientIp, addAuditLog, parseJsonField } from '../helpers.js';
 import {
   requireAuth, requireSuperAdmin, loginLimiter,
-  MIN_PASSWORD_LENGTH, signAdminToken, asyncHandler
+  MIN_PASSWORD_LENGTH, signAdminToken, asyncHandler, bulkLimiter
 } from '../middleware.js';
 
 const router = Router();
@@ -459,140 +459,129 @@ async function uniquePortalUsername(name, company = null) {
     return base;
   }
 }
-router.get('/customers', requireAuth, async (req, res) => {
+
+
+// ── Customers ─────────────────────────────────────────────────────────────────
+
+router.get('/customers', requireAuth, asyncHandler(async (req, res) => {
   const includeArchived = req.query.include_archived === '1';
   const query = includeArchived
-    ? 'SELECT * FROM customers ORDER BY archived ASC, created_at DESC'
-    : 'SELECT * FROM customers WHERE archived = 0 OR archived IS NULL ORDER BY created_at DESC';
+    ? `SELECT ${CUSTOMER_SAFE_FIELDS} FROM customers ORDER BY archived ASC, created_at DESC`
+    : `SELECT ${CUSTOMER_SAFE_FIELDS} FROM customers WHERE archived = 0 OR archived IS NULL ORDER BY created_at DESC`;
   const [rows] = await db.query(query);
   res.json({ customers: rows });
-});
+}));
 
-router.post('/customers', requireAuth, async (req, res) => {
+router.post('/customers', requireAuth, asyncHandler(async (req, res) => {
   const { name, email, phone, contact_person, company, payment_status, notes } = req.body;
   if (!name) return res.status(400).json({ success: false, message: 'Name required' });
   if (!email) return res.status(400).json({ success: false, message: 'E-Mail ist ein Pflichtfeld' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     return res.status(400).json({ success: false, message: 'Ungültige E-Mail-Adresse' });
+
+  const id = crypto.randomUUID();
+  const tempPassword = generateTempPassword();
+  const passwordHash = await bcrypt.hash(tempPassword, 12);
+  const portalUsername = await uniquePortalUsername(name, company || null);
+
+  // DB-Transaktion: INSERT + UPDATE portal_username atomar
+  const conn = await db.getConnection();
   try {
-    const id = crypto.randomUUID();
-
-    // Temporäres Passwort hashen
-    const tempPassword = generateTempPassword();
-    const passwordHash = await bcrypt.hash(tempPassword, 12);
-
-    // Benutzernamen generieren aus Vor-/Nachname + Firmenname
-    const portalUsername = await uniquePortalUsername(name, company || null);
-
-    // ── Schritt 1: Kunde anlegen (ohne portal_username – immer kompatibel) ──
-    await db.query(
+    await conn.beginTransaction();
+    await conn.query(
       `INSERT INTO customers
          (id, name, email, phone, contact_person, company, payment_status, notes,
           password_hash, must_change_password)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [id, name, email, phone || null, contact_person || null,
-       company || null, payment_status || 'unknown', notes || '',
-       passwordHash]
+       company || null, payment_status || 'unknown', notes || '', passwordHash]
     );
-
-    // ── Schritt 2: portal_username setzen (nur wenn Spalte existiert) ────────
     try {
-      await db.query(
-        'UPDATE customers SET portal_username = ? WHERE id = ?',
-        [portalUsername, id]
-      );
+      await conn.query('UPDATE customers SET portal_username = ? WHERE id = ?', [portalUsername, id]);
     } catch (colErr) {
-      console.warn('[customers] portal_username konnte nicht gesetzt werden (Migration ausstehend?):', colErr.message);
+      console.warn('[customers] portal_username konnte nicht gesetzt werden:', colErr.message);
     }
-
-    await addAuditLog('customer_created',
-      { customer_id: id, name, email, portal_username: portalUsername, by: req.admin.username },
-      req.admin.username);
-
-    // ── Schritt 3: Willkommens-Mail senden ───────────────────────────────────
-    const portalUrl = (process.env.PORTAL_URL || 'https://licens-prod.stb-srv.de').replace(/\/$/, '');
-    try {
-      await sendTemplateMail('accountCreated', email, {
-        name,
-        email,
-        username:  portalUsername,
-        password:  tempPassword,
-        login_url: `${portalUrl}/portal.html`
-      });
-      console.log(`[customers] Willkommens-Mail gesendet an ${email} (username: ${portalUsername})`);
-    } catch (mailErr) {
-      console.error('[customers] Willkommens-Mail fehlgeschlagen (nicht kritisch):', mailErr.message);
-    }
-
-    const [rows] = await db.query('SELECT * FROM customers WHERE id = ?', [id]);
-    const { password_hash: _, ...safeCustomer } = rows[0];
-    res.json({ success: true, customer: safeCustomer });
+    await conn.commit();
   } catch (e) {
+    await conn.rollback();
+    conn.release();
     console.error('[customers/create]', e);
-    res.status(500).json({ success: false, message: `Fehler beim Anlegen: ${e.message}` });
+    return res.status(500).json({ success: false, message: `Fehler beim Anlegen: ${e.message}` });
   }
-});
+  conn.release();
 
-router.patch('/customers/:id', requireAuth, async (req, res) => {
+  await addAuditLog('customer_created',
+    { customer_id: id, name, email, portal_username: portalUsername, by: req.admin.username },
+    req.admin.username);
+
+  const portalUrl = (process.env.PORTAL_URL || 'https://licens-prod.stb-srv.de').replace(/\/$/, '');
   try {
-    const [rows] = await db.query('SELECT * FROM customers WHERE id = ?', [req.params.id]);
-    if (!rows[0]) return res.status(404).json({ success: false, message: 'Customer not found' });
-    const { name, email, phone, contact_person, company, payment_status, notes, archived } = req.body;
-    if (email !== undefined) {
-      if (!email) return res.status(400).json({ success: false, message: 'E-Mail ist ein Pflichtfeld' });
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-        return res.status(400).json({ success: false, message: 'Ungültige E-Mail-Adresse' });
-    }
+    await sendTemplateMail('accountCreated', email, {
+      name, email, username: portalUsername, password: tempPassword,
+      login_url: `${portalUrl}/portal.html`
+    });
+  } catch (mailErr) {
+    console.error('[customers] Willkommens-Mail fehlgeschlagen:', mailErr.message);
+  }
 
-    // archived-Feld separat behandeln (TINYINT)
-    const archivedVal = archived !== undefined ? (archived ? 1 : 0) : null;
+  const [[customer]] = await db.query(`SELECT ${CUSTOMER_SAFE_FIELDS} FROM customers WHERE id = ?`, [id]);
+  res.json({ success: true, customer });
+}));
 
-    await db.query(
-      `UPDATE customers SET
-        name=COALESCE(?,name), email=COALESCE(?,email), phone=?, contact_person=?,
-        company=COALESCE(?,company), payment_status=COALESCE(?,payment_status), notes=COALESCE(?,notes),
-        archived=COALESCE(?,archived)
-       WHERE id=?`,
-      [name || null, email || null,
-       phone !== undefined ? phone : rows[0].phone,
-       contact_person !== undefined ? contact_person : rows[0].contact_person,
-       company || null, payment_status || null,
-       notes !== undefined ? notes : rows[0].notes,
-       archivedVal,
-       req.params.id]
+router.patch('/customers/:id', requireAuth, asyncHandler(async (req, res) => {
+  const [rows] = await db.query(`SELECT ${CUSTOMER_SAFE_FIELDS} FROM customers WHERE id = ?`, [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ success: false, message: 'Customer not found' });
+  const { name, email, phone, contact_person, company, payment_status, notes, archived } = req.body;
+  if (email !== undefined) {
+    if (!email) return res.status(400).json({ success: false, message: 'E-Mail ist ein Pflichtfeld' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      return res.status(400).json({ success: false, message: 'Ungültige E-Mail-Adresse' });
+  }
+  const archivedVal = archived !== undefined ? (archived ? 1 : 0) : null;
+  await db.query(
+    `UPDATE customers SET
+      name=COALESCE(?,name), email=COALESCE(?,email), phone=?, contact_person=?,
+      company=COALESCE(?,company), payment_status=COALESCE(?,payment_status), notes=COALESCE(?,notes),
+      archived=COALESCE(?,archived)
+     WHERE id=?`,
+    [name || null, email || null,
+     phone !== undefined ? phone : rows[0].phone,
+     contact_person !== undefined ? contact_person : rows[0].contact_person,
+     company || null, payment_status || null,
+     notes !== undefined ? notes : rows[0].notes,
+     archivedVal, req.params.id]
+  );
+  if (archived !== undefined) {
+    await addAuditLog(
+      archived ? 'customer_archived' : 'customer_unarchived',
+      { customer_id: req.params.id, name: rows[0].name, by: req.admin.username },
+      req.admin.username
     );
-
-    // Audit-Log: bei Archivierung spezifischer Eintrag
-    if (archived !== undefined) {
-      await addAuditLog(
-        archived ? 'customer_archived' : 'customer_unarchived',
-        { customer_id: req.params.id, name: rows[0].name, by: req.admin.username },
-        req.admin.username
-      );
-    } else {
-      await addAuditLog('customer_updated', { customer_id: req.params.id, by: req.admin.username }, req.admin.username);
-    }
-
-    const [updated] = await db.query('SELECT * FROM customers WHERE id = ?', [req.params.id]);
-    const { password_hash: _, ...safeCustomer } = updated[0];
-    res.json({ success: true, customer: safeCustomer });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+  } else {
+    await addAuditLog('customer_updated', { customer_id: req.params.id, by: req.admin.username }, req.admin.username);
   }
-});
+  const [[updated]] = await db.query(`SELECT ${CUSTOMER_SAFE_FIELDS} FROM customers WHERE id = ?`, [req.params.id]);
+  res.json({ success: true, customer: updated });
+}));
 
-router.delete('/customers/:id', requireAuth, async (req, res) => {
+
+router.delete('/customers/:id', requireAuth, asyncHandler(async (req, res) => {
+  const conn = await db.getConnection();
   try {
-    // Fix #6: Verwaiste Lizenzen auf customer_id = NULL setzen statt zu verwaisen
-    await db.query('UPDATE licenses SET customer_id = NULL WHERE customer_id = ?', [req.params.id]);
-    await db.query('DELETE FROM customers WHERE id = ?', [req.params.id]);
-    await addAuditLog('customer_deleted', { customer_id: req.params.id, by: req.admin.username }, req.admin.username);
-    res.json({ success: true });
+    await conn.beginTransaction();
+    await conn.query('UPDATE licenses SET customer_id = NULL WHERE customer_id = ?', [req.params.id]);
+    await conn.query('DELETE FROM customers WHERE id = ?', [req.params.id]);
+    await conn.commit();
   } catch (e) {
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    await conn.rollback();
+    conn.release();
+    throw e;
   }
-});
+  conn.release();
+  await addAuditLog('customer_deleted', { customer_id: req.params.id, by: req.admin.username }, req.admin.username);
+  res.json({ success: true });
+}));
+
 
 // ── Portal-Einladung senden ───────────────────────────────────────────────────
 router.post('/customers/:id/send-portal-invite', requireAuth, requireSuperAdmin, async (req, res) => {
@@ -884,29 +873,51 @@ router.delete('/webhooks/:id', requireAuth, requireSuperAdmin, async (req, res) 
 });
 
 // ── Impersonate ───────────────────────────────────────────────────────────────
-router.post('/impersonate', requireAuth, requireSuperAdmin, async (req, res) => {
+router.post('/impersonate', requireAuth, requireSuperAdmin, asyncHandler(async (req, res) => {
   const { license_key } = req.body;
   if (!license_key) return res.status(400).json({ success: false });
+  const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [license_key]);
+  const l = rows[0];
+  if (!l) return res.status(404).json({ success: false });
+  const [[customer]] = l.customer_id
+    ? await db.query(`SELECT ${CUSTOMER_SAFE_FIELDS} FROM customers WHERE id = ?`, [l.customer_id])
+    : [[undefined]];
+  const [devices] = await db.query('SELECT * FROM devices WHERE license_key = ?', [license_key]);
+  await addAuditLog('impersonate', { license_key, by: req.admin.username }, req.admin.username);
+  res.json({ success: true, license: l, customer: customer || null, devices });
+}));
+
+// ── GET /sessions (SuperAdmin) ───────────────────────────────────────────────
+router.get('/sessions', requireAuth, requireSuperAdmin, asyncHandler(async (req, res) => {
+  const [adminSessions] = await db.query(
+    `SELECT id, admin_username AS username, 'admin' AS type, ip, created_at, expires_at
+     FROM admin_sessions WHERE revoked = 0 AND expires_at > NOW()
+     ORDER BY created_at DESC LIMIT 200`
+  );
+  let customerSessions = [];
   try {
-    const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [license_key]);
-    const l = rows[0];
-    if (!l) return res.status(404).json({ success: false });
-    const [custRows] = l.customer_id
-      ? await db.query('SELECT * FROM customers WHERE id = ?', [l.customer_id])
-      : [[]];
-    const [devices] = await db.query('SELECT * FROM devices WHERE license_key = ?', [license_key]);
-    await addAuditLog('impersonate', { license_key, by: req.admin.username }, req.admin.username);
-    res.json({ success: true, license: l, customer: custRows[0] || null, devices });
-  } catch (e) {
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-});
+    const [cs] = await db.query(
+      `SELECT s.id, c.email AS username, 'customer' AS type, s.ip, s.created_at, s.expires_at
+       FROM customer_sessions s
+       LEFT JOIN customers c ON s.customer_id = c.id
+       WHERE s.revoked = 0 AND s.expires_at > NOW()
+       ORDER BY s.created_at DESC LIMIT 200`
+    );
+    customerSessions = cs;
+  } catch { /* customer_sessions noch nicht migriert */ }
+  res.json({
+    success: true,
+    total: adminSessions.length + customerSessions.length,
+    admin_sessions: adminSessions,
+    customer_sessions: customerSessions
+  });
+}));
 
 // ── Bulk-Aktionen für Lizenzen ────────────────────────────────────────────────
 // POST /api/admin/licenses/bulk
 // Body: { action: 'renew'|'revoke'|'suspend'|'assign_customer', keys: [...], days?, customer_id? }
-router.post('/licenses/bulk', requireAuth, asyncHandler(async (req, res) => {
-  const { action, keys, days, customer_id, reason } = req.body;
+router.post('/licenses/bulk', requireAuth, bulkLimiter, asyncHandler(async (req, res) => {
+  const { action, keys, days, customer_id, reason, confirm } = req.body;
   const ALLOWED_ACTIONS = ['renew', 'revoke', 'suspend', 'assign_customer', 'activate'];
   if (!action || !ALLOWED_ACTIONS.includes(action))
     return res.status(400).json({ success: false, message: `Ungültige Aktion. Erlaubt: ${ALLOWED_ACTIONS.join(', ')}` });
@@ -914,6 +925,10 @@ router.post('/licenses/bulk', requireAuth, asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'keys[] muss eine nicht-leere Liste von Lizenzschlüsseln sein.' });
   if (keys.length > 100)
     return res.status(400).json({ success: false, message: 'Maximal 100 Lizenzen pro Bulk-Operation.' });
+
+  // Sicherheits-Bestaetigung
+  if (confirm !== true)
+    return res.status(400).json({ success: false, message: 'Sicherheitscheck: { "confirm": true } muss im Body enthalten sein.' });
 
   const results = { ok: [], failed: [] };
 
