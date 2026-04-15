@@ -15,10 +15,6 @@ const router = Router();
 
 const CUSTOMER_SAFE_FIELDS = 'id, name, email, phone, contact_person, company, payment_status, notes, archived, portal_username, must_change_password, created_at, updated_at';
 
-/**
- * Generiert ein zufälliges 12-Zeichen-Passwort:
- * mind. 1 Großbuchstabe, 1 Ziffer, 1 Sonderzeichen – Rest alphanumerisch.
- */
 function generateTempPassword() {
   const upper  = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   const lower  = 'abcdefghjkmnpqrstuvwxyz';
@@ -32,13 +28,14 @@ function generateTempPassword() {
   ];
   for (let i = pw.length; i < 12; i++)
     pw.push(all[crypto.randomInt(all.length)]);
-  // Fisher-Yates shuffle
   for (let i = pw.length - 1; i > 0; i--) {
     const j = crypto.randomInt(i + 1);
     [pw[i], pw[j]] = [pw[j], pw[i]];
   }
   return pw.join('');
-}// ── Auth ───────────────────────────────────────────────────────────────────
+}
+
+// ── Auth ───────────────────────────────────────────────────────────────────
 router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password)
@@ -53,10 +50,7 @@ router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
     return res.status(401).json({ success: false, message: 'Invalid credentials' });
   }
 
-  // RS256 oder HS256 (je nach Konfiguration in middleware.js)
   const token = signAdminToken({ username: admin.username, role: admin.role });
-
-  // Session in admin_sessions speichern (Grundlage für Token-Blacklist)
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
   await db.query(
     `INSERT INTO admin_sessions (id, admin_username, token_hash, ip, user_agent, expires_at)
@@ -71,7 +65,6 @@ router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
   res.json({ success: true, token, username: admin.username, role: admin.role });
 }));
 
-// ── POST /logout ────────────────────────────────────────────────────────
 router.post('/logout', requireAuth, asyncHandler(async (req, res) => {
   await db.query(
     'UPDATE admin_sessions SET revoked = 1 WHERE token_hash = ?',
@@ -144,7 +137,6 @@ router.get('/licenses', requireAuth, asyncHandler(async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page) || 1);
   const limit = Math.min(500, Math.max(1, parseInt(req.query.limit) || 100));
   const offset = (page - 1) * limit;
-  // Fix #8: LIKE-Wildcards escapen (%  _ \ führen sonst zu unerwartetem Verhalten)
   const search = req.query.search
     ? `%${req.query.search.replace(/[%_\\]/g, '\\$&')}%`
     : null;
@@ -221,23 +213,17 @@ router.post('/licenses', requireAuth, asyncHandler(async (req, res) => {
         [crypto.randomUUID(), raw.customer_id, key, raw.type || 'FREE',
          raw.amount || null, raw.note || `Lizenz ${raw.type || 'FREE'} erstellt`, req.admin.username]
       );
-
-      // Lizenz-Mail an Kunden senden (wenn E-Mail vorhanden)
       try {
         const [custRows] = await db.query('SELECT id, name, email FROM customers WHERE id = ?', [raw.customer_id]);
         const cust = custRows[0];
         if (cust?.email) {
           await sendTemplateMail('licenseCreated', cust.email, {
-            customer_name: cust.name,
-            license_key:   key,
-            type:          raw.type || 'FREE',
-            expires_at:    expiresAt,
-            associated_domain: raw.associated_domain || '*'
+            customer_name: cust.name, license_key: key, type: raw.type || 'FREE',
+            expires_at: expiresAt, associated_domain: raw.associated_domain || '*'
           });
-          console.log(`[licenses] Lizenz-Mail gesendet an ${cust.email}`);
         }
       } catch (mailErr) {
-        console.error('[licenses] Lizenz-Mail fehlgeschlagen (nicht kritisch):', mailErr.message);
+        console.error('[licenses] Lizenz-Mail fehlgeschlagen:', mailErr.message);
       }
     }
 
@@ -269,30 +255,25 @@ router.patch('/licenses/:key/status', requireAuth, asyncHandler(async (req, res)
     req.admin.username);
   await fireWebhook('license.status_changed', { license_key: req.params.key, from: l.status, to: req.body.status });
 
-  // E-Mail bei Sperrung / Suspension
   if (['revoked', 'suspended'].includes(req.body.status) && l.customer_email) {
     try {
       await sendTemplateMail('licenseRevoked', l.customer_email, {
         customer_name: l.customer_name || l.customer_real_name || 'Kunde',
-        license_key:   req.params.key,
-        status:        req.body.status,
-        reason:        req.body.reason || null
+        license_key: req.params.key, status: req.body.status, reason: req.body.reason || null
       });
     } catch (mailErr) {
-      console.error('[licenses] Sperr-Mail fehlgeschlagen (nicht kritisch):', mailErr.message);
+      console.error('[licenses] Sperr-Mail fehlgeschlagen:', mailErr.message);
     }
   }
   res.json({ success: true });
 }));
 
-// PATCH /licenses/:key — vollständige Lizenzbearbeitung
 router.patch('/licenses/:key', requireAuth, asyncHandler(async (req, res) => {
   const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [req.params.key]);
   if (!rows[0]) return res.status(404).json({ success: false, message: 'Lizenz nicht gefunden' });
 
   const { type, associated_domain, expires_at, max_devices, customer_name, customer_id, allowed_modules, limits } = req.body;
-  const updates = [];
-  const params  = [];
+  const updates = [], params = [];
 
   if (type !== undefined)              { updates.push('type = ?');               params.push(type); }
   if (associated_domain !== undefined) { updates.push('associated_domain = ?');  params.push(associated_domain); }
@@ -314,7 +295,6 @@ router.patch('/licenses/:key', requireAuth, asyncHandler(async (req, res) => {
   const [updated] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [req.params.key]);
   res.json({ success: true, license: updated[0] });
 }));
-
 
 router.post('/licenses/:key/renew', requireAuth, asyncHandler(async (req, res) => {
   const [rows] = await db.query(
@@ -349,24 +329,19 @@ router.post('/licenses/:key/renew', requireAuth, asyncHandler(async (req, res) =
     req.admin.username);
   await fireWebhook('license.renewed', { license_key: req.params.key, new_expiry: newExpiryStr });
 
-  // E-Mail-Bestätigung an Kunden
   if (l.customer_email) {
     try {
       await sendTemplateMail('licenseRenewed', l.customer_email, {
-        customer_name: l.customer_name || 'Kunde',
-        license_key:   req.params.key,
-        type:          l.type,
-        new_expires_at: newExpiryStr,
-        days
+        customer_name: l.customer_name || 'Kunde', license_key: req.params.key,
+        type: l.type, new_expires_at: newExpiryStr, days
       });
     } catch (mailErr) {
-      console.error('[licenses] Verlängerungs-Mail fehlgeschlagen (nicht kritisch):', mailErr.message);
+      console.error('[licenses] Verlängerungs-Mail fehlgeschlagen:', mailErr.message);
     }
   }
 
   res.json({ success: true, new_expires_at: newExpiryStr, days_extended: days });
 }));
-
 
 router.delete('/licenses/:key', requireAuth, asyncHandler(async (req, res) => {
   try {
@@ -392,59 +367,36 @@ router.patch('/licenses/:key/customer', requireAuth, asyncHandler(async (req, re
   }
 }));
 
-// ── Customers ────────────────────────────────────────────────────────────────
-
-/**
- * Normalisiert einen String für die Verwendung im Benutzernamen:
- * Umlaute → ASCII, Kleinbuchstaben, nur Buchstaben/Ziffern.
- */
+// ── Customers ─────────────────────────────────────────────────────────────────
 function normalizeSlug(str) {
   return str
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')  // Diakritika entfernen (ä→a, ö→o, ü→u)
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/ß/gi, 'ss')
     .toLowerCase()
-    .replace(/[^a-z0-9]/g, '');       // nur Buchstaben und Ziffern
+    .replace(/[^a-z0-9]/g, '');
 }
 
-/**
- * Generiert einen Portal-Benutzernamen aus Name + optionalem Firmennamen.
- *
- * Schema:  vorname.nachname[.firma]
- * Beispiele:
- *   "Max Müller", "Muster GmbH"  → "max.mueller.mustergmbh"
- *   "Max Müller",  null           → "max.mueller"
- *   "Max",         "Muster GmbH"  → "max.mustergmbh"
- */
 function buildPortalUsername(name, company = null) {
   const parts = (name || '').trim().split(/\s+/).filter(Boolean);
   let slug;
   if (parts.length >= 2) {
-    // Vorname + letztes Wort als Nachname
     slug = `${normalizeSlug(parts[0])}.${normalizeSlug(parts[parts.length - 1])}`;
   } else if (parts.length === 1) {
     slug = normalizeSlug(parts[0]);
   } else {
     slug = 'kunde';
   }
-
   if (company) {
-    // Firma normalisieren: Rechtsformen kürzen (GmbH, AG, KG, …) und auf 12 Zeichen kappen
     const firmSlug = normalizeSlug(company)
       .replace(/gmbhcokg|gmbhco|gmbh|gbr|ohg|ug|ag|kg|ev|inc|ltd/g, '')
-      .replace(/^\d+/, '')  // führende Ziffern entfernen
+      .replace(/^\d+/, '')
       .slice(0, 12);
     if (firmSlug) slug = `${slug}.${firmSlug}`;
   }
-
   return slug || 'kunde';
 }
 
-/**
- * Gibt einen einzigartigen portal_username zurück.
- * Hängt bei Kollisionen eine Nummer an (max.mueller2, max.mueller3, …).
- * Fällt still zurück falls die DB-Spalte noch nicht existiert.
- */
 async function uniquePortalUsername(name, company = null) {
   const base = buildPortalUsername(name, company);
   try {
@@ -457,13 +409,9 @@ async function uniquePortalUsername(name, company = null) {
     }
     return `${base}${Date.now()}`;
   } catch {
-    // Spalte existiert noch nicht (Migration ausstehend)
     return base;
   }
 }
-
-
-// ── Customers ─────────────────────────────────────────────────────────────────
 
 router.get('/customers', requireAuth, asyncHandler(async (req, res) => {
   const includeArchived = req.query.include_archived === '1';
@@ -486,7 +434,6 @@ router.post('/customers', requireAuth, asyncHandler(async (req, res) => {
   const passwordHash = await bcrypt.hash(tempPassword, 12);
   const portalUsername = await uniquePortalUsername(name, company || null);
 
-  // DB-Transaktion: INSERT + UPDATE portal_username atomar
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
@@ -566,7 +513,6 @@ router.patch('/customers/:id', requireAuth, asyncHandler(async (req, res) => {
   res.json({ success: true, customer: updated });
 }));
 
-
 router.delete('/customers/:id', requireAuth, asyncHandler(async (req, res) => {
   const conn = await db.getConnection();
   try {
@@ -584,8 +530,6 @@ router.delete('/customers/:id', requireAuth, asyncHandler(async (req, res) => {
   res.json({ success: true });
 }));
 
-
-// ── Portal-Einladung senden ───────────────────────────────────────────────────
 router.post('/customers/:id/send-portal-invite', requireAuth, requireSuperAdmin, asyncHandler(async (req, res) => {
   try {
     const [rows] = await db.query('SELECT id, name, email FROM customers WHERE id = ?', [req.params.id]);
@@ -594,26 +538,17 @@ router.post('/customers/:id/send-portal-invite', requireAuth, requireSuperAdmin,
     if (!customer.email) return res.status(400).json({ success: false, message: 'Kunde hat keine E-Mail-Adresse.' });
 
     const token = crypto.randomBytes(40).toString('hex');
-    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000)
-      .toISOString().slice(0, 19).replace('T', ' ');
-    await db.query(
-      'UPDATE customers SET portal_token = ?, portal_token_expires = ? WHERE id = ?',
-      [token, expires, customer.id]
-    );
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+    await db.query('UPDATE customers SET portal_token = ?, portal_token_expires = ? WHERE id = ?',
+      [token, expires, customer.id]);
 
     const baseUrl = (process.env.PORTAL_URL || `http://localhost:${process.env.PORT || 4000}`).replace(/\/$/, '');
-    const inviteUrl = `${baseUrl}/portal.html?token=${token}`;
-
     await sendTemplateMail('portalInvite', customer.email, {
-      name: customer.name,
-      email: customer.email,
-      invite_url: inviteUrl
+      name: customer.name, email: customer.email,
+      invite_url: `${baseUrl}/portal.html?token=${token}`
     });
-
     await addAuditLog('portal_invite_sent',
-      { customer_id: customer.id, email: customer.email, by: req.admin.username },
-      req.admin.username);
-
+      { customer_id: customer.id, email: customer.email, by: req.admin.username }, req.admin.username);
     res.json({ success: true, message: `Einladungsmail an ${customer.email} gesendet.` });
   } catch (e) {
     console.error('[portal-invite]', e.message);
@@ -625,11 +560,8 @@ router.post('/customers/:id/send-portal-invite', requireAuth, requireSuperAdmin,
 router.get('/purchase-history', requireAuth, asyncHandler(async (req, res) => {
   try {
     const { customer_id, license_key } = req.query;
-    let query = `
-      SELECT ph.*, c.name as customer_name, c.email as customer_email
-      FROM purchase_history ph
-      LEFT JOIN customers c ON ph.customer_id = c.id
-      WHERE 1=1`;
+    let query = `SELECT ph.*, c.name as customer_name, c.email as customer_email
+      FROM purchase_history ph LEFT JOIN customers c ON ph.customer_id = c.id WHERE 1=1`;
     const params = [];
     if (customer_id) { query += ' AND ph.customer_id = ?'; params.push(customer_id); }
     if (license_key) { query += ' AND ph.license_key = ?'; params.push(license_key); }
@@ -656,8 +588,7 @@ router.post('/purchase-history', requireAuth, asyncHandler(async (req, res) => {
       [id, customer_id, license_key, plan, action || 'purchase', amount || null, note || null, req.admin.username]
     );
     await addAuditLog('purchase_history_added',
-      { customer_id, license_key, action: action || 'purchase', by: req.admin.username },
-      req.admin.username);
+      { customer_id, license_key, action: action || 'purchase', by: req.admin.username }, req.admin.username);
     const [rows] = await db.query('SELECT * FROM purchase_history WHERE id = ?', [id]);
     res.json({ success: true, entry: rows[0] });
   } catch (e) {
@@ -679,8 +610,14 @@ router.delete('/purchase-history/:id', requireAuth, requireSuperAdmin, asyncHand
 router.get('/login-log', requireAuth, asyncHandler(async (req, res) => {
   try {
     const limit = Math.min(500, parseInt(req.query.limit) || 100);
+    // Unterstützt sowohl 'ts' (alte Tabelle) als auch 'created_at' (neue Tabelle)
+    const [cols] = await db.query(
+      `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'audit_log' AND COLUMN_NAME IN ('ts','created_at')`
+    );
+    const tsCol = cols.find(c => c.COLUMN_NAME === 'ts') ? 'ts' : 'created_at';
     const [rows] = await db.query(
-      `SELECT * FROM audit_log WHERE action IN ('admin_login','admin_login_failed') ORDER BY ts DESC LIMIT ?`,
+      `SELECT * FROM audit_log WHERE action IN ('admin_login','admin_login_failed') ORDER BY ${tsCol} DESC LIMIT ?`,
       [limit]
     );
     res.json({ success: true, logs: rows });
@@ -703,7 +640,12 @@ router.patch('/devices/:id/deactivate', requireAuth, asyncHandler(async (req, re
   try {
     const [rows] = await db.query('SELECT * FROM devices WHERE id = ?', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ success: false });
-    await db.query('UPDATE devices SET active = 0, deactivated_at = NOW() WHERE id = ?', [req.params.id]);
+    // deactivated_at nur setzen wenn Spalte existiert
+    try {
+      await db.query('UPDATE devices SET active = 0, deactivated_at = NOW() WHERE id = ?', [req.params.id]);
+    } catch {
+      await db.query('UPDATE devices SET active = 0 WHERE id = ?', [req.params.id]);
+    }
     await addAuditLog('device_deactivated',
       { device_id: rows[0].device_id, license_key: rows[0].license_key, by: req.admin.username },
       req.admin.username);
@@ -733,11 +675,8 @@ router.get('/analytics', requireAuth, asyncHandler(async (req, res) => {
     'SELECT license_key, customer_name, type, usage_count, last_validated, analytics_daily, analytics_features FROM licenses ORDER BY usage_count DESC LIMIT 10'
   );
   const topLicenses = licenses.map(l => ({
-    license_key: l.license_key,
-    customer_name: l.customer_name,
-    type: l.type,
-    usage_count: l.usage_count || 0,
-    last_validated: l.last_validated
+    license_key: l.license_key, customer_name: l.customer_name,
+    type: l.type, usage_count: l.usage_count || 0, last_validated: l.last_validated
   }));
 
   const [allLicenses] = await db.query('SELECT analytics_daily, analytics_features FROM licenses');
@@ -760,14 +699,26 @@ router.get('/audit-log', requireAuth, asyncHandler(async (req, res) => {
   const rawLimit = parseInt(req.query.limit) || 100;
   const limit = Math.min(1000, Math.max(1, rawLimit));
   const { action, license_key } = req.query;
+
+  // Unterstützt sowohl 'ts' als auch 'created_at'
+  const [cols] = await db.query(
+    `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'audit_log' AND COLUMN_NAME IN ('ts','created_at')`
+  );
+  const tsCol = cols.find(c => c.COLUMN_NAME === 'ts') ? 'ts' : 'created_at';
+  const dataCol = (await db.query(
+    `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'audit_log' AND COLUMN_NAME IN ('details','data')`
+  ))[0].find(c => c.COLUMN_NAME === 'details') ? 'details' : 'data';
+
   let query = 'SELECT * FROM audit_log WHERE 1=1';
   const params = [];
   if (action) { query += ' AND action = ?'; params.push(action); }
   if (license_key) {
-    query += ' AND JSON_EXTRACT(details, "$.license_key") = ?';
+    query += ` AND JSON_EXTRACT(\`${dataCol}\`, '$.license_key') = ?`;
     params.push(license_key);
   }
-  query += ' ORDER BY ts DESC LIMIT ?';
+  query += ` ORDER BY ${tsCol} DESC LIMIT ?`;
   params.push(limit);
   const [logs] = await db.query(query, params);
   res.json({ logs });
@@ -824,11 +775,10 @@ router.post('/smtp/test', requireAuth, requireSuperAdmin, asyncHandler(async (re
   if (!to) return res.status(400).json({ success: false, message: 'Empfänger-E-Mail fehlt' });
   try {
     const cfg = await getActiveSmtpConfig();
-    if (!cfg) return res.status(500).json({ success: false, message: 'SMTP nicht konfiguriert. Bitte zuerst SMTP-Einstellungen speichern.' });
+    if (!cfg) return res.status(500).json({ success: false, message: 'SMTP nicht konfiguriert.' });
     const info = await sendTemplateMail('test', to, { host: cfg.host });
     res.json({ success: true, message: `Test-E-Mail an ${to} gesendet. MessageId: ${info.messageId}` });
   } catch (e) {
-    console.error('[SMTP/test] Fehler:', e.message, e.code || '');
     res.status(500).json({ success: false, message: `Fehler beim Senden: ${e.message}` });
   }
 }));
@@ -889,7 +839,7 @@ router.post('/impersonate', requireAuth, requireSuperAdmin, asyncHandler(async (
   res.json({ success: true, license: l, customer: customer || null, devices });
 }));
 
-// ── GET /sessions (SuperAdmin) ───────────────────────────────────────────────
+// ── Sessions ─────────────────────────────────────────────────────────────────
 router.get('/sessions', requireAuth, requireSuperAdmin, asyncHandler(async (req, res) => {
   const [adminSessions] = await db.query(
     `SELECT id, admin_username AS username, 'admin' AS type, ip, created_at, expires_at
@@ -900,8 +850,7 @@ router.get('/sessions', requireAuth, requireSuperAdmin, asyncHandler(async (req,
   try {
     const [cs] = await db.query(
       `SELECT s.id, c.email AS username, 'customer' AS type, s.ip, s.created_at, s.expires_at
-       FROM customer_sessions s
-       LEFT JOIN customers c ON s.customer_id = c.id
+       FROM customer_sessions s LEFT JOIN customers c ON s.customer_id = c.id
        WHERE s.revoked = 0 AND s.expires_at > NOW()
        ORDER BY s.created_at DESC LIMIT 200`
     );
@@ -915,30 +864,24 @@ router.get('/sessions', requireAuth, requireSuperAdmin, asyncHandler(async (req,
   });
 }));
 
-// ── Bulk-Aktionen für Lizenzen ────────────────────────────────────────────────
-// POST /api/admin/licenses/bulk
-// Body: { action: 'renew'|'revoke'|'suspend'|'assign_customer', keys: [...], days?, customer_id? }
+// ── Bulk ─────────────────────────────────────────────────────────────────────
 router.post('/licenses/bulk', requireAuth, bulkLimiter, asyncHandler(async (req, res) => {
   const { action, keys, days, customer_id, reason, confirm } = req.body;
   const ALLOWED_ACTIONS = ['renew', 'revoke', 'suspend', 'assign_customer', 'activate'];
   if (!action || !ALLOWED_ACTIONS.includes(action))
     return res.status(400).json({ success: false, message: `Ungültige Aktion. Erlaubt: ${ALLOWED_ACTIONS.join(', ')}` });
   if (!Array.isArray(keys) || keys.length === 0)
-    return res.status(400).json({ success: false, message: 'keys[] muss eine nicht-leere Liste von Lizenzschlüsseln sein.' });
+    return res.status(400).json({ success: false, message: 'keys[] muss eine nicht-leere Liste sein.' });
   if (keys.length > 100)
     return res.status(400).json({ success: false, message: 'Maximal 100 Lizenzen pro Bulk-Operation.' });
-
-  // Sicherheits-Bestaetigung
   if (confirm !== true)
     return res.status(400).json({ success: false, message: 'Sicherheitscheck: { "confirm": true } muss im Body enthalten sein.' });
 
   const results = { ok: [], failed: [] };
-
   for (const key of keys) {
     try {
       const [rows] = await db.query(
-        'SELECT l.*, c.email AS customer_email FROM licenses l LEFT JOIN customers c ON l.customer_id = c.id WHERE l.license_key = ?',
-        [key]
+        'SELECT l.*, c.email AS customer_email FROM licenses l LEFT JOIN customers c ON l.customer_id = c.id WHERE l.license_key = ?', [key]
       );
       const l = rows[0];
       if (!l) { results.failed.push({ key, reason: 'not_found' }); continue; }
@@ -948,74 +891,38 @@ router.post('/licenses/bulk', requireAuth, bulkLimiter, asyncHandler(async (req,
         const d = days || plan.expires_days;
         const base = new Date(l.expires_at) > new Date() ? new Date(l.expires_at) : new Date();
         const newExpiry = new Date(base.getTime() + d * 86400000).toISOString().slice(0, 19).replace('T', ' ');
-        await db.query(
-          "UPDATE licenses SET expires_at = ?, status = 'active', expiry_notified_at = NULL WHERE license_key = ?",
-          [newExpiry, key]
-        );
+        await db.query("UPDATE licenses SET expires_at = ?, status = 'active', expiry_notified_at = NULL WHERE license_key = ?", [newExpiry, key]);
         await addAuditLog('license_renewed', { license_key: key, days: d, bulk: true, by: req.admin.username }, req.admin.username);
-
       } else if (action === 'revoke' || action === 'suspend') {
         await db.query('UPDATE licenses SET status = ? WHERE license_key = ?', [action === 'revoke' ? 'revoked' : 'suspended', key]);
         await addAuditLog('license_status_changed', { license_key: key, to: action, bulk: true, by: req.admin.username }, req.admin.username);
         if (l.customer_email) {
           sendTemplateMail('licenseRevoked', l.customer_email, {
-            customer_name: l.customer_name || 'Kunde', license_key: key,
-            status: action, reason: reason || null
+            customer_name: l.customer_name || 'Kunde', license_key: key, status: action, reason: reason || null
           }).catch(() => {});
         }
-
       } else if (action === 'activate') {
         await db.query('UPDATE licenses SET status = ? WHERE license_key = ?', ['active', key]);
         await addAuditLog('license_status_changed', { license_key: key, to: 'active', bulk: true, by: req.admin.username }, req.admin.username);
-
       } else if (action === 'assign_customer') {
         if (!customer_id) { results.failed.push({ key, reason: 'customer_id_required' }); continue; }
         await db.query('UPDATE licenses SET customer_id = ? WHERE license_key = ?', [customer_id, key]);
         await addAuditLog('license_customer_linked', { license_key: key, customer_id, bulk: true, by: req.admin.username }, req.admin.username);
       }
-
       results.ok.push(key);
     } catch (e) {
       console.error(`[bulk] ${key}:`, e.message);
       results.failed.push({ key, reason: e.message });
     }
   }
-
-  res.json({
-    success: true,
-    processed: results.ok.length,
-    failed: results.failed.length,
-    ...results
-  });
+  res.json({ success: true, processed: results.ok.length, failed: results.failed.length, ...results });
 }));
 
-// ── Webhook-Signatur-Doku ─────────────────────────────────────────────────────
-// GET /api/admin/webhooks/signing-info
-// Erklärt wie Empfänger die HMAC-Signatur prüfen.
 router.get('/webhooks/signing-info', requireAuth, (req, res) => {
   res.json({
     success: true,
-    description: 'Jeder Webhook-Request enthält den Header "X-OPA-Signature" (wenn ein Secret konfiguriert ist).',
-    algorithm: 'HMAC-SHA256',
-    header: 'X-OPA-Signature',
-    how_to_verify: [
-      '1. Lies den rohen Request-Body als String.',
-      '2. Berechne: HMAC-SHA256(body, webhook_secret).',
-      '3. Vergleiche das Ergebnis mit dem Header-Wert (hex-kodiert).',
-      '4. Verwende einen timing-safe Vergleich (z.B. crypto.timingSafeEqual in Node.js).'
-    ],
-    example_nodejs: `
-const crypto = require('crypto');
-function verifyWebhook(rawBody, secret, signature) {
-  const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
-}`.trim(),
-    example_php: `
-<?php
-function verifyWebhook(string $rawBody, string $secret, string $signature): bool {
-  $expected = hash_hmac('sha256', $rawBody, $secret);
-  return hash_equals($expected, $signature);
-}`.trim()
+    algorithm: 'HMAC-SHA256', header: 'X-OPA-Signature',
+    description: 'Jeder Webhook-Request enthält den Header "X-OPA-Signature" (wenn ein Secret konfiguriert ist).'
   });
 });
 
