@@ -13,6 +13,8 @@ import {
 
 const router = Router();
 
+const CUSTOMER_SAFE_FIELDS = 'id, name, email, phone, contact_person, company, payment_status, notes, archived, portal_username, must_change_password, created_at, updated_at';
+
 /**
  * Generiert ein zufälliges 12-Zeichen-Passwort:
  * mind. 1 Großbuchstabe, 1 Ziffer, 1 Sonderzeichen – Rest alphanumerisch.
@@ -80,12 +82,12 @@ router.post('/logout', requireAuth, asyncHandler(async (req, res) => {
 }));
 
 // ── Admin Users ──────────────────────────────────────────────────────────────
-router.get('/users', requireAuth, requireSuperAdmin, async (req, res) => {
+router.get('/users', requireAuth, requireSuperAdmin, asyncHandler(async (req, res) => {
   const [rows] = await db.query('SELECT id, username, role, created_at FROM admins');
   res.json({ users: rows });
-});
+}));
 
-router.post('/users', requireAuth, requireSuperAdmin, async (req, res) => {
+router.post('/users', requireAuth, requireSuperAdmin, asyncHandler(async (req, res) => {
   const { username, password, role } = req.body;
   if (!username || !password)
     return res.status(400).json({ success: false, message: 'Username and password required' });
@@ -101,9 +103,9 @@ router.post('/users', requireAuth, requireSuperAdmin, async (req, res) => {
     if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ success: false, message: 'Username already exists' });
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
-});
+}));
 
-router.delete('/users/:username', requireAuth, requireSuperAdmin, async (req, res) => {
+router.delete('/users/:username', requireAuth, requireSuperAdmin, asyncHandler(async (req, res) => {
   if (req.params.username === req.admin.username)
     return res.status(400).json({ success: false, message: 'Cannot delete your own account' });
   try {
@@ -114,9 +116,9 @@ router.delete('/users/:username', requireAuth, requireSuperAdmin, async (req, re
   } catch (e) {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
-});
+}));
 
-router.patch('/users/:username/password', requireAuth, async (req, res) => {
+router.patch('/users/:username/password', requireAuth, asyncHandler(async (req, res) => {
   const isSelf = req.params.username === req.admin.username;
   const isSuperAdmin = req.admin.role === 'superadmin';
   if (!isSelf && !isSuperAdmin)
@@ -132,13 +134,13 @@ router.patch('/users/:username/password', requireAuth, async (req, res) => {
   } catch (e) {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
-});
+}));
 
 // ── Plans ────────────────────────────────────────────────────────────────────
 router.get('/plans', requireAuth, (req, res) => res.json(PLAN_DEFINITIONS));
 
 // ── Licenses ─────────────────────────────────────────────────────────────────
-router.get('/licenses', requireAuth, async (req, res) => {
+router.get('/licenses', requireAuth, asyncHandler(async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page) || 1);
   const limit = Math.min(500, Math.max(1, parseInt(req.query.limit) || 100));
   const offset = (page - 1) * limit;
@@ -180,15 +182,15 @@ router.get('/licenses', requireAuth, async (req, res) => {
     },
     pagination: { page, limit, total: parseInt(total), pages: Math.ceil(total / limit) }
   });
-});
+}));
 
-router.get('/licenses/:key', requireAuth, async (req, res) => {
+router.get('/licenses/:key', requireAuth, asyncHandler(async (req, res) => {
   const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [req.params.key]);
   if (!rows[0]) return res.status(404).json({ success: false, message: 'Not found' });
   res.json({ success: true, license: rows[0] });
-});
+}));
 
-router.post('/licenses', requireAuth, async (req, res) => {
+router.post('/licenses', requireAuth, asyncHandler(async (req, res) => {
   const raw = req.body;
   const plan = PLAN_DEFINITIONS[raw.type] || PLAN_DEFINITIONS['FREE'];
   const key = raw.license_key?.trim() || generateKey(raw.type);
@@ -248,7 +250,7 @@ router.post('/licenses', requireAuth, async (req, res) => {
     console.error(e);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
-});
+}));
 
 router.patch('/licenses/:key/status', requireAuth, asyncHandler(async (req, res) => {
   const VALID_STATUSES = ['active', 'revoked', 'cancelled', 'expired', 'suspended'];
@@ -366,7 +368,7 @@ router.post('/licenses/:key/renew', requireAuth, asyncHandler(async (req, res) =
 }));
 
 
-router.delete('/licenses/:key', requireAuth, async (req, res) => {
+router.delete('/licenses/:key', requireAuth, asyncHandler(async (req, res) => {
   try {
     await db.query('DELETE FROM licenses WHERE license_key = ?', [req.params.key]);
     await addAuditLog('license_deleted', { license_key: req.params.key, by: req.admin.username }, req.admin.username);
@@ -375,9 +377,9 @@ router.delete('/licenses/:key', requireAuth, async (req, res) => {
   } catch (e) {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
-});
+}));
 
-router.patch('/licenses/:key/customer', requireAuth, async (req, res) => {
+router.patch('/licenses/:key/customer', requireAuth, asyncHandler(async (req, res) => {
   try {
     await db.query('UPDATE licenses SET customer_id = ? WHERE license_key = ?',
       [req.body.customer_id || null, req.params.key]);
@@ -388,7 +390,7 @@ router.patch('/licenses/:key/customer', requireAuth, async (req, res) => {
   } catch (e) {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
-});
+}));
 
 // ── Customers ────────────────────────────────────────────────────────────────
 
@@ -504,11 +506,11 @@ router.post('/customers', requireAuth, asyncHandler(async (req, res) => {
     await conn.commit();
   } catch (e) {
     await conn.rollback();
-    conn.release();
     console.error('[customers/create]', e);
     return res.status(500).json({ success: false, message: `Fehler beim Anlegen: ${e.message}` });
+  } finally {
+    conn.release();
   }
-  conn.release();
 
   await addAuditLog('customer_created',
     { customer_id: id, name, email, portal_username: portalUsername, by: req.admin.username },
@@ -574,17 +576,17 @@ router.delete('/customers/:id', requireAuth, asyncHandler(async (req, res) => {
     await conn.commit();
   } catch (e) {
     await conn.rollback();
-    conn.release();
     throw e;
+  } finally {
+    conn.release();
   }
-  conn.release();
   await addAuditLog('customer_deleted', { customer_id: req.params.id, by: req.admin.username }, req.admin.username);
   res.json({ success: true });
 }));
 
 
 // ── Portal-Einladung senden ───────────────────────────────────────────────────
-router.post('/customers/:id/send-portal-invite', requireAuth, requireSuperAdmin, async (req, res) => {
+router.post('/customers/:id/send-portal-invite', requireAuth, requireSuperAdmin, asyncHandler(async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM customers WHERE id = ?', [req.params.id]);
     const customer = rows[0];
@@ -617,10 +619,10 @@ router.post('/customers/:id/send-portal-invite', requireAuth, requireSuperAdmin,
     console.error('[portal-invite]', e.message);
     res.status(500).json({ success: false, message: `Fehler: ${e.message}` });
   }
-});
+}));
 
 // ── Purchase History ──────────────────────────────────────────────────────────
-router.get('/purchase-history', requireAuth, async (req, res) => {
+router.get('/purchase-history', requireAuth, asyncHandler(async (req, res) => {
   try {
     const { customer_id, license_key } = req.query;
     let query = `
@@ -637,9 +639,9 @@ router.get('/purchase-history', requireAuth, async (req, res) => {
   } catch (e) {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
-});
+}));
 
-router.post('/purchase-history', requireAuth, async (req, res) => {
+router.post('/purchase-history', requireAuth, asyncHandler(async (req, res) => {
   const { customer_id, license_key, plan, action, amount, note } = req.body;
   if (!customer_id || !license_key || !plan)
     return res.status(400).json({ success: false, message: 'customer_id, license_key und plan sind Pflichtfelder' });
@@ -661,9 +663,9 @@ router.post('/purchase-history', requireAuth, async (req, res) => {
   } catch (e) {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
-});
+}));
 
-router.delete('/purchase-history/:id', requireAuth, requireSuperAdmin, async (req, res) => {
+router.delete('/purchase-history/:id', requireAuth, requireSuperAdmin, asyncHandler(async (req, res) => {
   try {
     await db.query('DELETE FROM purchase_history WHERE id = ?', [req.params.id]);
     await addAuditLog('purchase_history_deleted', { id: req.params.id, by: req.admin.username }, req.admin.username);
@@ -671,10 +673,10 @@ router.delete('/purchase-history/:id', requireAuth, requireSuperAdmin, async (re
   } catch (e) {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
-});
+}));
 
 // ── Login-Log ─────────────────────────────────────────────────────────────────
-router.get('/login-log', requireAuth, async (req, res) => {
+router.get('/login-log', requireAuth, asyncHandler(async (req, res) => {
   try {
     const limit = Math.min(500, parseInt(req.query.limit) || 100);
     const [rows] = await db.query(
@@ -685,19 +687,19 @@ router.get('/login-log', requireAuth, async (req, res) => {
   } catch (e) {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
-});
+}));
 
 // ── Devices ──────────────────────────────────────────────────────────────────
-router.get('/devices', requireAuth, async (req, res) => {
+router.get('/devices', requireAuth, asyncHandler(async (req, res) => {
   const { license_key } = req.query;
   let query = 'SELECT * FROM devices';
   const params = [];
   if (license_key) { query += ' WHERE license_key = ?'; params.push(license_key); }
   const [devices] = await db.query(query, params);
   res.json({ devices });
-});
+}));
 
-router.patch('/devices/:id/deactivate', requireAuth, async (req, res) => {
+router.patch('/devices/:id/deactivate', requireAuth, asyncHandler(async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM devices WHERE id = ?', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ success: false });
@@ -709,9 +711,9 @@ router.patch('/devices/:id/deactivate', requireAuth, async (req, res) => {
   } catch (e) {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
-});
+}));
 
-router.delete('/devices/:id', requireAuth, async (req, res) => {
+router.delete('/devices/:id', requireAuth, asyncHandler(async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM devices WHERE id = ?', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ success: false });
@@ -723,10 +725,10 @@ router.delete('/devices/:id', requireAuth, async (req, res) => {
   } catch (e) {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
-});
+}));
 
 // ── Analytics ────────────────────────────────────────────────────────────────
-router.get('/analytics', requireAuth, async (req, res) => {
+router.get('/analytics', requireAuth, asyncHandler(async (req, res) => {
   const [licenses] = await db.query(
     'SELECT license_key, customer_name, type, usage_count, last_validated, analytics_daily, analytics_features FROM licenses ORDER BY usage_count DESC LIMIT 10'
   );
@@ -751,10 +753,10 @@ router.get('/analytics', requireAuth, async (req, res) => {
   const [[{ active_devices }]] = await db.query('SELECT COUNT(*) as active_devices FROM devices WHERE active = 1');
 
   res.json({ top_licenses: topLicenses, daily_requests: daily, feature_usage: features, total_devices, active_devices });
-});
+}));
 
 // ── Audit Log ────────────────────────────────────────────────────────────────
-router.get('/audit-log', requireAuth, async (req, res) => {
+router.get('/audit-log', requireAuth, asyncHandler(async (req, res) => {
   const rawLimit = parseInt(req.query.limit) || 100;
   const limit = Math.min(1000, Math.max(1, rawLimit));
   const { action, license_key } = req.query;
@@ -769,10 +771,10 @@ router.get('/audit-log', requireAuth, async (req, res) => {
   params.push(limit);
   const [logs] = await db.query(query, params);
   res.json({ logs });
-});
+}));
 
 // ── SMTP ─────────────────────────────────────────────────────────────────────
-router.get('/smtp', requireAuth, requireSuperAdmin, async (req, res) => {
+router.get('/smtp', requireAuth, requireSuperAdmin, asyncHandler(async (req, res) => {
   try {
     const [rows] = await db.query('SELECT host, port, secure, smtp_user, smtp_from FROM smtp_config WHERE id = 1');
     const cfg = rows[0] || {};
@@ -787,9 +789,9 @@ router.get('/smtp', requireAuth, requireSuperAdmin, async (req, res) => {
   } catch (e) {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
-});
+}));
 
-router.post('/smtp', requireAuth, requireSuperAdmin, async (req, res) => {
+router.post('/smtp', requireAuth, requireSuperAdmin, asyncHandler(async (req, res) => {
   const { host, port, secure, user, pass, from, test_to } = req.body;
   if (!host || !user || !pass)
     return res.status(400).json({ success: false, message: 'Host, Benutzer und Passwort sind Pflichtfelder' });
@@ -815,9 +817,9 @@ router.post('/smtp', requireAuth, requireSuperAdmin, async (req, res) => {
     console.error('[SMTP save]', e);
     res.status(400).json({ success: false, message: `SMTP-Fehler: ${e.message}` });
   }
-});
+}));
 
-router.post('/smtp/test', requireAuth, requireSuperAdmin, async (req, res) => {
+router.post('/smtp/test', requireAuth, requireSuperAdmin, asyncHandler(async (req, res) => {
   const { to } = req.body;
   if (!to) return res.status(400).json({ success: false, message: 'Empfänger-E-Mail fehlt' });
   try {
@@ -829,9 +831,9 @@ router.post('/smtp/test', requireAuth, requireSuperAdmin, async (req, res) => {
     console.error('[SMTP/test] Fehler:', e.message, e.code || '');
     res.status(500).json({ success: false, message: `Fehler beim Senden: ${e.message}` });
   }
-});
+}));
 
-router.delete('/smtp', requireAuth, requireSuperAdmin, async (req, res) => {
+router.delete('/smtp', requireAuth, requireSuperAdmin, asyncHandler(async (req, res) => {
   try {
     await db.query('DELETE FROM smtp_config WHERE id = 1');
     await addAuditLog('smtp_config_deleted', { by: req.admin.username }, req.admin.username);
@@ -839,15 +841,15 @@ router.delete('/smtp', requireAuth, requireSuperAdmin, async (req, res) => {
   } catch (e) {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
-});
+}));
 
 // ── Webhooks ─────────────────────────────────────────────────────────────────
-router.get('/webhooks', requireAuth, requireSuperAdmin, async (req, res) => {
+router.get('/webhooks', requireAuth, requireSuperAdmin, asyncHandler(async (req, res) => {
   const [rows] = await db.query('SELECT id, url, events, active, created_at FROM webhooks');
   res.json({ webhooks: rows });
-});
+}));
 
-router.post('/webhooks', requireAuth, requireSuperAdmin, async (req, res) => {
+router.post('/webhooks', requireAuth, requireSuperAdmin, asyncHandler(async (req, res) => {
   const { url, secret, events } = req.body;
   if (!url) return res.status(400).json({ success: false, message: 'URL erforderlich' });
   try {
@@ -860,9 +862,9 @@ router.post('/webhooks', requireAuth, requireSuperAdmin, async (req, res) => {
   } catch (e) {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
-});
+}));
 
-router.delete('/webhooks/:id', requireAuth, requireSuperAdmin, async (req, res) => {
+router.delete('/webhooks/:id', requireAuth, requireSuperAdmin, asyncHandler(async (req, res) => {
   try {
     await db.query('DELETE FROM webhooks WHERE id = ?', [req.params.id]);
     await addAuditLog('webhook_deleted', { webhook_id: req.params.id, by: req.admin.username }, req.admin.username);
@@ -870,7 +872,7 @@ router.delete('/webhooks/:id', requireAuth, requireSuperAdmin, async (req, res) 
   } catch (e) {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
-});
+}));
 
 // ── Impersonate ───────────────────────────────────────────────────────────────
 router.post('/impersonate', requireAuth, requireSuperAdmin, asyncHandler(async (req, res) => {

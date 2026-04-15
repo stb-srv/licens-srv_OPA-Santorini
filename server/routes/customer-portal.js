@@ -11,6 +11,7 @@ import crypto from 'crypto';
 import db from '../db.js';
 import { sendTemplateMail } from '../mailer/index.js';
 import rateLimit from 'express-rate-limit';
+import { asyncHandler } from '../middleware.js';
 
 const router = Router();
 const PORTAL_SECRET = process.env.PORTAL_SECRET || '';
@@ -70,7 +71,7 @@ async function requirePortalAuth(req, res, next) {
 }
 
 // ── POST /login ───────────────────────────────────────────────────────────────
-router.post('/login', portalLoginLimiter, async (req, res) => {
+router.post('/login', portalLoginLimiter, asyncHandler(async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password)
         return res.status(400).json({ success: false, message: 'Benutzername/E-Mail und Passwort erforderlich.' });
@@ -125,20 +126,20 @@ router.post('/login', portalLoginLimiter, async (req, res) => {
         console.error('[Portal/login]', e.message);
         res.status(500).json({ success: false, message: 'Interner Fehler.' });
     }
-});
+}));
 
 // ── POST /logout ──────────────────────────────────────────────────────────────
-router.post('/logout', requirePortalAuth, async (req, res) => {
+router.post('/logout', requirePortalAuth, asyncHandler(async (req, res) => {
     try {
         await db.query('UPDATE customer_sessions SET revoked = 1 WHERE token_hash = ?', [req.sessionTokenHash]);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ success: false, message: 'Fehler beim Logout.' });
     }
-});
+}));
 
 // ── GET /me ───────────────────────────────────────────────────────────────────
-router.get('/me', requirePortalAuth, async (req, res) => {
+router.get('/me', requirePortalAuth, asyncHandler(async (req, res) => {
     const c = req.customer;
     res.json({
         success: true,
@@ -154,10 +155,10 @@ router.get('/me', requirePortalAuth, async (req, res) => {
             created_at: c.created_at
         }
     });
-});
+}));
 
 // ── GET /licenses ─────────────────────────────────────────────────────────────
-router.get('/licenses', requirePortalAuth, async (req, res) => {
+router.get('/licenses', requirePortalAuth, asyncHandler(async (req, res) => {
     try {
         const [licenses] = await db.query(
             `SELECT license_key, type, status, associated_domain, expires_at,
@@ -171,10 +172,10 @@ router.get('/licenses', requirePortalAuth, async (req, res) => {
     } catch (e) {
         res.status(500).json({ success: false, message: 'Fehler beim Laden der Lizenzen.' });
     }
-});
+}));
 
 // ── PATCH /licenses/:key/domain ───────────────────────────────────────────────
-router.patch('/licenses/:key/domain', requirePortalAuth, async (req, res) => {
+router.patch('/licenses/:key/domain', requirePortalAuth, asyncHandler(async (req, res) => {
     const { domain } = req.body;
     if (!domain)
         return res.status(400).json({ success: false, message: 'Domain ist ein Pflichtfeld.' });
@@ -201,10 +202,10 @@ router.patch('/licenses/:key/domain', requirePortalAuth, async (req, res) => {
     } catch (e) {
         res.status(500).json({ success: false, message: 'Fehler beim Setzen der Domain.' });
     }
-});
+}));
 
 // ── GET /history ──────────────────────────────────────────────────────────────
-router.get('/history', requirePortalAuth, async (req, res) => {
+router.get('/history', requirePortalAuth, asyncHandler(async (req, res) => {
     try {
         const [history] = await db.query(
             `SELECT ph.id, ph.license_key, ph.plan, ph.action, ph.amount, ph.note, ph.created_at
@@ -218,11 +219,11 @@ router.get('/history', requirePortalAuth, async (req, res) => {
     } catch (e) {
         res.status(500).json({ success: false, message: 'Fehler beim Laden der Kaufhistorie.' });
     }
-});
+}));
 
 // ── POST /update-profile ──────────────────────────────────────────────────────
 // Kunden können eigenen Namen, Telefon, Firma ändern (NICHT die E-Mail)
-router.post('/update-profile', requirePortalAuth, async (req, res) => {
+router.post('/update-profile', requirePortalAuth, asyncHandler(async (req, res) => {
     const { name, phone, company } = req.body;
     if (name !== undefined && (!name || name.trim().length < 2))
         return res.status(400).json({ success: false, message: 'Name muss mindestens 2 Zeichen haben.' });
@@ -249,11 +250,11 @@ router.post('/update-profile', requirePortalAuth, async (req, res) => {
         console.error('[Portal/update-profile]', e.message);
         res.status(500).json({ success: false, message: 'Interner Fehler.' });
     }
-});
+}));
 
 // ── POST /change-password (Fix #2) ────────────────────────────────────────────
 // Kunden können ihr Passwort ändern (auch wenn must_change_password gesetzt ist)
-router.post('/change-password', requirePortalAuth, async (req, res) => {
+router.post('/change-password', requirePortalAuth, asyncHandler(async (req, res) => {
     const { current_password, new_password } = req.body;
     if (!current_password || !new_password)
         return res.status(400).json({ success: false, message: 'Aktuelles und neues Passwort erforderlich.' });
@@ -275,11 +276,11 @@ router.post('/change-password', requirePortalAuth, async (req, res) => {
         console.error('[Portal/change-password]', e.message);
         res.status(500).json({ success: false, message: 'Interner Fehler.' });
     }
-});
+}));
 
 // ── POST /setup-password (Einmal-Token) ────────────────────────────────────────
 // Wird aufgerufen wenn der Kunde den Link aus der Einladungsmail öffnet
-router.post('/setup-password', inviteLimiter, async (req, res) => {
+router.post('/setup-password', inviteLimiter, asyncHandler(async (req, res) => {
     const { token, password } = req.body;
     if (!token || !password)
         return res.status(400).json({ success: false, message: 'Token und Passwort erforderlich.' });
@@ -303,11 +304,11 @@ router.post('/setup-password', inviteLimiter, async (req, res) => {
         console.error('[Portal/setup-password]', e.message);
         res.status(500).json({ success: false, message: 'Interner Fehler.' });
     }
-});
+}));
 
 // ── GET /verify-invite-token ──────────────────────────────────────────────────
 // Prüft ob ein Einladungs-Token noch gültig ist (für das Frontend)
-router.get('/verify-invite-token', async (req, res) => {
+router.get('/verify-invite-token', asyncHandler(async (req, res) => {
     const { token } = req.query;
     if (!token) return res.status(400).json({ success: false, message: 'Token fehlt.' });
     try {
@@ -321,11 +322,11 @@ router.get('/verify-invite-token', async (req, res) => {
     } catch (e) {
         res.status(500).json({ success: false, message: 'Interner Fehler.' });
     }
-});
+}));
 
 // ── POST /forgot-password ──────────────────────────────────────────────
 // Kunden können selbst einen Passwort-Reset anfordern (kein Admin-Eingriff nötig)
-router.post('/forgot-password', inviteLimiter, async (req, res) => {
+router.post('/forgot-password', inviteLimiter, asyncHandler(async (req, res) => {
     const { email } = req.body;
     // Immer mit 200 antworten (kein E-Mail-Enumeration)
     const genericResponse = { success: true, message: 'Falls deine E-Mail registriert ist, hast du in Kürze eine E-Mail mit einem Reset-Link erhalten.' };
@@ -356,6 +357,6 @@ router.post('/forgot-password', inviteLimiter, async (req, res) => {
         // Fehler nicht nach außen leaken
     }
     res.json(genericResponse);
-});
+}));
 
 export default router;

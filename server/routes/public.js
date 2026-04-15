@@ -11,7 +11,7 @@ const router = Router();
 const SETUP_TOKEN = process.env.SETUP_TOKEN || '';
 
 // ── Setup ────────────────────────────────────────────────────────────────────
-router.post('/setup', setupLimiter, async (req, res) => {
+router.post('/setup', setupLimiter, asyncHandler(async (req, res) => {
     if (!SETUP_TOKEN)
         return res.status(503).json({ success: false, message: 'Setup ist deaktiviert. SETUP_TOKEN nicht in .env konfiguriert.' });
 
@@ -42,10 +42,10 @@ router.post('/setup', setupLimiter, async (req, res) => {
         console.error('Setup-Fehler:', e.message);
         res.status(500).json({ success: false, message: 'Internal server error' });
     }
-});
+}));
 
 // ── Validate ─────────────────────────────────────────────────────────────────
-router.post('/validate', validateLimiter, async (req, res) => {
+router.post('/validate', validateLimiter, asyncHandler(async (req, res) => {
     const { license_key, domain, device_id, device_type, nonce, features_used } = req.body;
     if (!license_key) return res.status(400).json({ status: 'invalid', message: 'No key provided' });
     const clientIp = getClientIp(req);
@@ -163,7 +163,7 @@ router.post('/validate', validateLimiter, async (req, res) => {
         console.error(e);
         res.status(500).json({ status: 'error', message: 'Internal server error' });
     }
-});
+}));
 
 // ── Public Key ───────────────────────────────────────────────────────────────
 router.get('/public-key', (req, res) => {
@@ -171,7 +171,7 @@ router.get('/public-key', (req, res) => {
 });
 
 // ── Heartbeat ────────────────────────────────────────────────────────────────
-router.post('/heartbeat', validateLimiter, async (req, res) => {
+router.post('/heartbeat', validateLimiter, asyncHandler(async (req, res) => {
     const { license_key, domain } = req.body;
     if (!license_key) return res.status(400).json({ status: 'invalid', message: 'No key provided' });
     const clientIp = getClientIp(req);
@@ -209,11 +209,11 @@ router.post('/heartbeat', validateLimiter, async (req, res) => {
         console.error(e);
         res.status(500).json({ status: 'error', message: 'Internal server error' });
     }
-});
+}));
 
 // ── Refresh (genutzt von OPA-CMS LicenseChecker alle 72h) ───────────────────
 // Response-Format: { status: 'active'|'revoked', token: '<RS256 JWT>' }
-router.post('/refresh', validateLimiter, async (req, res) => {
+router.post('/refresh', validateLimiter, asyncHandler(async (req, res) => {
     const { license_key, domain } = req.body;
     if (!license_key) return res.status(400).json({ status: 'invalid', message: 'No key provided' });
     const clientIp = getClientIp(req);
@@ -268,10 +268,10 @@ router.post('/refresh', validateLimiter, async (req, res) => {
         console.error(e);
         res.status(500).json({ status: 'error', message: 'Internal server error' });
     }
-});
+}));
 
 // ── Verify License Token ─────────────────────────────────────────────────────
-router.post('/verify-license-token', validateLimiter, (req, res) => {
+router.post('/verify-license-token', validateLimiter, asyncHandler(async (req, res) => {
     const { license_token } = req.body;
     if (!license_token) return res.status(400).json({ valid: false, message: 'No token provided' });
     try {
@@ -280,10 +280,10 @@ router.post('/verify-license-token', validateLimiter, (req, res) => {
     } catch (e) {
         res.status(401).json({ valid: false, message: 'Ungültiges oder abgelaufenes Token: ' + e.message });
     }
-});
+}));
 
 // ── Offline Token ────────────────────────────────────────────────────────────
-router.post('/offline-token', offlineTokenLimiter, async (req, res) => {
+router.post('/offline-token', offlineTokenLimiter, asyncHandler(async (req, res) => {
     const { license_key, domain, device_id, duration_hours } = req.body;
     if (!license_key) return res.status(400).json({ success: false, message: 'No key provided' });
     try {
@@ -315,9 +315,9 @@ router.post('/offline-token', offlineTokenLimiter, async (req, res) => {
         console.error(e);
         res.status(500).json({ success: false, message: 'Internal server error' });
     }
-});
+}));
 
-router.post('/verify-offline-token', (req, res) => {
+router.post('/verify-offline-token', asyncHandler(async (req, res) => {
     const { offline_token } = req.body;
     if (!offline_token) return res.status(400).json({ success: false });
     try {
@@ -326,6 +326,6 @@ router.post('/verify-offline-token', (req, res) => {
     } catch (e) {
         res.status(401).json({ success: false, message: 'Invalid or expired offline token' });
     }
-});
+}));
 
 export default router;

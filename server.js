@@ -28,24 +28,22 @@ const SETUP_TOKEN   = process.env.SETUP_TOKEN   || '';
 // ── Environment-Validierung ───────────────────────────────────────────────────
 const FATAL_ERRORS = [];
 
-// Pflicht-DB-Variablen
+// Pflicht-Variablen aus dem Request: DB_HOST, DB_USER, DB_PASS, DB_NAME, ADMIN_SECRET, PORTAL_SECRET
 if (!process.env.DB_HOST) FATAL_ERRORS.push('DB_HOST fehlt in .env');
 if (!process.env.DB_USER) FATAL_ERRORS.push('DB_USER fehlt in .env');
-if (!process.env.DB_PASS) console.warn('⚠️  DB_PASS nicht gesetzt – kein Datenbankpasswort konfiguriert.');
+if (!process.env.DB_PASS) FATAL_ERRORS.push('DB_PASS fehlt in .env');
 if (!process.env.DB_NAME) FATAL_ERRORS.push('DB_NAME fehlt in .env');
 
-
-// Pflicht-Secrets (alle prüfen, dann exit)
 if (ADMIN_SECRET === 'change-me-in-production')
-    FATAL_ERRORS.push('ADMIN_SECRET ist der unsichere Default-Wert!');
-if (HMAC_SECRET === 'hmac-change-me-in-production')
-    FATAL_ERRORS.push('HMAC_SECRET ist der unsichere Default-Wert!');
+    FATAL_ERRORS.push('ADMIN_SECRET ist der unsichere Default-Wert oder fehlt!');
 if (!PORTAL_SECRET)
     FATAL_ERRORS.push('PORTAL_SECRET fehlt in .env – Kunden-Portal läuft ohne Authentifizierung!');
 
 // HMAC-Länge: nur Warnung
+if (HMAC_SECRET === 'hmac-change-me-in-production')
+    console.warn('⚠️  HMAC_SECRET ist der unsichere Default-Wert!');
 if (HMAC_SECRET.length < 32)
-    console.warn(`⚠️  HMAC_SECRET ist kurz (${HMAC_SECRET.length} Zeichen). Empfehlung: min. 32 Zeichen (openssl rand -hex 32).`);
+    console.warn(`⚠️  HMAC_SECRET ist kurz (${HMAC_SECRET.length} Zeichen). Empfehlung: min. 32 Zeichen.`);
 
 if (FATAL_ERRORS.length > 0) {
     console.error('❌ FATAL: Server-Start abgebrochen wegen Konfigurationsfehlern:');
