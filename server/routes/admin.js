@@ -311,28 +311,58 @@ router.patch('/licenses/:key/customer', requireAuth, async (req, res) => {
 // ── Customers ────────────────────────────────────────────────────────────────
 
 /**
- * Generiert einen Portal-Benutzernamen aus dem Kundennamen.
- * Beispiel: "Max Müller" → "max.mueller"
+ * Normalisiert einen String für die Verwendung im Benutzernamen:
+ * Umlaute → ASCII, Kleinbuchstaben, nur Buchstaben/Ziffern.
  */
-function buildPortalUsername(name) {
-  return name
+function normalizeSlug(str) {
+  return str
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')   // Umlaute: ä→a, ö→o, ü→u
+    .replace(/[\u0300-\u036f]/g, '')  // Diakritika entfernen (ä→a, ö→o, ü→u)
     .replace(/ß/gi, 'ss')
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '')        // Sonderzeichen entfernen
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .reduce((acc, part, i, arr) =>
-      arr.length >= 2 && i === 0 ? part : i === arr.length - 1 ? (acc ? acc + '.' + part : part) : acc
-    , '');
+    .replace(/[^a-z0-9]/g, '');       // nur Buchstaben und Ziffern
 }
 
-/** Gibt einen eindeutigen portal_username zurück (fügt ggf. Zahl-Suffix an).
- *  Fällt still auf null zurück wenn die Spalte noch nicht existiert. */
-async function uniquePortalUsername(baseName) {
-  const base = buildPortalUsername(baseName) || 'kunde';
+/**
+ * Generiert einen Portal-Benutzernamen aus Name + optionalem Firmennamen.
+ *
+ * Schema:  vorname.nachname[.firma]
+ * Beispiele:
+ *   "Max Müller", "Muster GmbH"  → "max.mueller.mustergmbh"
+ *   "Max Müller",  null           → "max.mueller"
+ *   "Max",         "Muster GmbH"  → "max.mustergmbh"
+ */
+function buildPortalUsername(name, company = null) {
+  const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+  let slug;
+  if (parts.length >= 2) {
+    // Vorname + letztes Wort als Nachname
+    slug = `${normalizeSlug(parts[0])}.${normalizeSlug(parts[parts.length - 1])}`;
+  } else if (parts.length === 1) {
+    slug = normalizeSlug(parts[0]);
+  } else {
+    slug = 'kunde';
+  }
+
+  if (company) {
+    // Firma normalisieren: Rechtsformen kürzen (GmbH, AG, KG, …) und auf 12 Zeichen kappen
+    const firmSlug = normalizeSlug(company)
+      .replace(/gmbhcokg|gmbhco|gmbh|gbr|ohg|ug|ag|kg|ev|inc|ltd/g, '')
+      .replace(/^\d+/, '')  // führende Ziffern entfernen
+      .slice(0, 12);
+    if (firmSlug) slug = `${slug}.${firmSlug}`;
+  }
+
+  return slug || 'kunde';
+}
+
+/**
+ * Gibt einen einzigartigen portal_username zurück.
+ * Hängt bei Kollisionen eine Nummer an (max.mueller2, max.mueller3, …).
+ * Fällt still zurück falls die DB-Spalte noch nicht existiert.
+ */
+async function uniquePortalUsername(name, company = null) {
+  const base = buildPortalUsername(name, company);
   try {
     for (let i = 0; i < 100; i++) {
       const attempt = i === 0 ? base : `${base}${i}`;
@@ -343,7 +373,7 @@ async function uniquePortalUsername(baseName) {
     }
     return `${base}${Date.now()}`;
   } catch {
-    // Spalte existiert noch nicht (Migration noch nicht ausgeführt)
+    // Spalte existiert noch nicht (Migration ausstehend)
     return base;
   }
 }
@@ -369,8 +399,8 @@ router.post('/customers', requireAuth, async (req, res) => {
     const tempPassword = generateTempPassword();
     const passwordHash = await bcrypt.hash(tempPassword, 12);
 
-    // Benutzernamen generieren (unabhängig von DB-Spalte)
-    const portalUsername = await uniquePortalUsername(name);
+    // Benutzernamen generieren aus Vor-/Nachname + Firmenname
+    const portalUsername = await uniquePortalUsername(name, company || null);
 
     // ── Schritt 1: Kunde anlegen (ohne portal_username – immer kompatibel) ──
     await db.query(

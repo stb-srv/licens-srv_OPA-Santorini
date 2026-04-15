@@ -77,24 +77,34 @@ const TEMPLATES = {
         text: `OPA! Santorini Lizenzserver — SMTP Test erfolgreich.\n\nGesendet: ${new Date().toLocaleString('de-DE')}`
     }),
 
-    // Neuer Kunde angelegt — sendet Login-Daten mit temporärem Passwort
+    // Neuer Kunde angelegt — sendet Login-Daten mit automatisch generiertem Benutzernamen
     accountCreated: (d) => ({
-        subject: 'Deine Zugangsdaten f\u00fcr OPA! Santorini',
+        subject: 'Willkommen bei OPA! Santorini \u2014 Deine Zugangsdaten',
         html: layout('Account erstellt', `
           <h2 style="margin:0 0 8px;font-size:18px;color:#222">Willkommen, ${d.name || 'Kunde'}! &#127881;</h2>
           <p style="margin:0 0 20px;color:#555;line-height:1.7">
-            Dein Zugang zum <strong>OPA! Santorini Kunden-Portal</strong> wurde angelegt.
+            Dein Zugang zum <strong>OPA! Santorini Kunden-Portal</strong> wurde erfolgreich angelegt.
             Dort kannst du deine Lizenzen einsehen, Domains verwalten und deine Kaufhistorie abrufen.
           </p>
+
+          <!-- Benutzername-Highlight-Box -->
+          <div style="background:linear-gradient(135deg,#eff6ff 0%,#dbeafe 100%);border:2px solid #3b82f6;border-radius:10px;padding:18px 22px;margin:0 0 20px">
+            <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#1d4ed8;letter-spacing:.1em;text-transform:uppercase">&#128100; Dein Benutzername</p>
+            <p style="margin:0;font-size:22px;font-weight:800;color:#1e3a8a;font-family:monospace;letter-spacing:.03em">${d.username || d.email}</p>
+            <p style="margin:8px 0 0;font-size:12px;color:#2563eb;line-height:1.5">
+              Du kannst dich mit diesem Benutzernamen <strong>oder</strong> deiner E-Mail-Adresse einloggen.
+            </p>
+          </div>
+
           ${infoBox([
-            ['Benutzername', `<code style="background:#e8f4fd;padding:3px 8px;border-radius:4px;font-size:14px;font-weight:700;color:#0369a1">${d.username || d.email}</code>`],
-            ['E-Mail', d.email],
+            ['E-Mail-Adresse', d.email],
             ['Tempor\u00e4res Passwort', `<code style="background:#fff3cd;padding:3px 8px;border-radius:4px;font-size:14px;font-weight:700;color:#856404">${d.password}</code>`],
             ['Portal-URL', `<a href="${d.login_url}" style="color:#6c63ff">${d.login_url}</a>`]
           ])}
+
           <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:14px 18px;margin:20px 0">
             <p style="margin:0;color:#856404;font-size:13px;line-height:1.6">
-              \u26a0\ufe0f <strong>Wichtig:</strong> Bitte \u00e4ndere dein Passwort direkt nach dem ersten Login.
+              &#9888;&#65039; <strong>Wichtig:</strong> Bitte \u00e4ndere dein Passwort direkt nach dem ersten Login.
               Du wirst automatisch dazu aufgefordert.
             </p>
           </div>
@@ -107,7 +117,7 @@ const TEMPLATES = {
             Fragen? Schreib uns an support@stb-srv.de
           </p>
         `),
-        text: `Willkommen beim OPA! Santorini Kunden-Portal\n\nDeine Zugangsdaten:\nBenutzername: ${d.username || d.email}\nE-Mail: ${d.email}\nPasswort: ${d.password}\n\nPortal: ${d.login_url}\n\nBitte \u00e4ndere dein Passwort nach dem ersten Login.`
+        text: `Willkommen beim OPA! Santorini Kunden-Portal!\n\nDeine Zugangsdaten:\n\nBenutzername: ${d.username || d.email}\nE-Mail:       ${d.email}\nPasswort:     ${d.password}\n\nDu kannst dich mit dem Benutzernamen ODER der E-Mail-Adresse einloggen.\n\nPortal-URL: ${d.login_url}\n\nWICHTIG: Bitte \u00e4ndere dein Passwort nach dem ersten Login.\n\nBei Fragen: support@stb-srv.de`
     }),
 
     portalInvite: (d) => ({
