@@ -219,6 +219,38 @@ const TEMPLATES = {
           ])}
         `),
         text: `Lizenz widerrufen\n\nLizenzschlüssel: ${d.license_key}\nGrund: ${d.reason || 'Nicht angegeben'}`
+    }),
+
+    // Passwort-Reset angefordert (Kunden-Portal)
+    passwordReset: (d) => ({
+        subject: 'OPA! Santorini \u2014 Passwort zur\u00fccksetzen',
+        html: layout('Passwort zur\u00fccksetzen', `
+          <h2 style="margin:0 0 8px;font-size:18px;color:#222">Passwort zur\u00fccksetzen &#128274;</h2>
+          <p style="margin:0 0 20px;color:#555;line-height:1.7">
+            Hallo ${d.name || 'Kunde'},<br><br>
+            wir haben eine Anfrage zum Zur\u00fccksetzen deines Passworts f\u00fcr das
+            <strong>OPA! Santorini Kunden-Portal</strong> erhalten.
+          </p>
+          <div style="text-align:center;margin:28px 0">
+            <a href="${d.reset_url}" style="display:inline-block;background:#6c63ff;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:700;font-size:15px">
+              &#128274; Passwort zur\u00fccksetzen
+            </a>
+          </div>
+          ${infoBox([
+            ['G\u00fcltig bis', new Date(Date.now() + 2*60*60*1000).toLocaleString('de-DE')],
+            ['Link g\u00fcltig', '2 Stunden']
+          ])}
+          <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:14px 18px;margin:20px 0">
+            <p style="margin:0;color:#856404;font-size:13px;line-height:1.6">
+              &#9888;&#65039; Falls du \u003cstrong\u003ekein\u003c/strong\u003e Passwort-Reset angefordert hast, ignoriere diese E-Mail.
+              Dein Passwort bleibt unver\u00e4ndert.
+            </p>
+          </div>
+          <p style="margin:20px 0 0;color:#aaa;font-size:13px">
+            Fragen? Schreib uns an support@stb-srv.de
+          </p>
+        `),
+        text: `Passwort zur\u00fccksetzen\n\nHallo ${d.name},\n\nBitte klicke auf folgenden Link um dein Passwort zur\u00fcckzusetzen:\n${d.reset_url}\n\nDer Link ist 2 Stunden g\u00fcltig.\n\nFalls du keinen Reset angefordert hast, ignoriere diese E-Mail.`
     })
 };
 

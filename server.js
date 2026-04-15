@@ -13,31 +13,48 @@ import publicRoutes from './server/routes/public.js';
 import adminRoutes from './server/routes/admin.js';
 import portalRoutes from './server/routes/customer-portal.js';
 import { envSmtp } from './server/smtp.js';
+import { adminTokenAlgorithm } from './server/middleware.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 4000;
-const ADMIN_SECRET = process.env.ADMIN_SECRET || 'change-me-in-production';
-const HMAC_SECRET = process.env.HMAC_SECRET || 'hmac-change-me-in-production';
+const ADMIN_SECRET  = process.env.ADMIN_SECRET  || 'change-me-in-production';
+const HMAC_SECRET   = process.env.HMAC_SECRET   || 'hmac-change-me-in-production';
 const PORTAL_SECRET = process.env.PORTAL_SECRET || '';
-const SETUP_TOKEN = process.env.SETUP_TOKEN || '';
+const SETUP_TOKEN   = process.env.SETUP_TOKEN   || '';
 
-// ── Startup Security Checks ──────────────────────────────────────────────────
-if (!RSA_PRIVATE_KEY)   console.warn('⚠️  RSA_PRIVATE_KEY nicht gesetzt – JWT Signing deaktiviert!');
-if (!SETUP_TOKEN)       console.warn('⚠️  SETUP_TOKEN nicht gesetzt – POST /api/v1/setup ist deaktiviert!');
-if (!PORTAL_SECRET)     console.warn('⚠️  PORTAL_SECRET nicht gesetzt – Kunden-Portal ist deaktiviert!');
+// ── Environment-Validierung ───────────────────────────────────────────────────
+const FATAL_ERRORS = [];
 
-// KRITISCH: Unsichere Default-Secrets → Server-Start verweigern
-if (ADMIN_SECRET === 'change-me-in-production') {
-    console.error('❌ FATAL: ADMIN_SECRET ist der unsichere Default-Wert! Bitte in .env setzen.');
+// Pflicht-DB-Variablen
+if (!process.env.DB_HOST) FATAL_ERRORS.push('DB_HOST fehlt in .env');
+if (!process.env.DB_USER) FATAL_ERRORS.push('DB_USER fehlt in .env');
+if (!process.env.DB_PASS) FATAL_ERRORS.push('DB_PASS fehlt in .env');
+if (!process.env.DB_NAME) FATAL_ERRORS.push('DB_NAME fehlt in .env');
+
+// Kritische Secrets
+if (ADMIN_SECRET === 'change-me-in-production')
+    FATAL_ERRORS.push('ADMIN_SECRET ist der unsichere Default-Wert!');
+if (HMAC_SECRET === 'hmac-change-me-in-production')
+    FATAL_ERRORS.push('HMAC_SECRET ist der unsichere Default-Wert!');
+if (HMAC_SECRET.length < 32)
+    FATAL_ERRORS.push(`HMAC_SECRET ist zu kurz (${HMAC_SECRET.length} Zeichen, min. 32 erforderlich). Tipp: openssl rand -hex 32`);
+
+if (FATAL_ERRORS.length > 0) {
+    console.error('❌ FATAL: Server-Start abgebrochen wegen Konfigurationsfehlern:');
+    FATAL_ERRORS.forEach(e => console.error(`   • ${e}`));
     process.exit(1);
 }
-if (HMAC_SECRET === 'hmac-change-me-in-production') {
-    console.error('❌ FATAL: HMAC_SECRET ist der unsichere Default-Wert! Bitte in .env setzen.');
-    process.exit(1);
-}
+
+// Warnungen (nicht fatal)
+if (!RSA_PRIVATE_KEY)  console.warn('⚠️  RSA_PRIVATE_KEY nicht gesetzt – License-JWT Signing deaktiviert!');
+if (!SETUP_TOKEN)      console.warn('⚠️  SETUP_TOKEN nicht gesetzt – POST /api/v1/setup ist deaktiviert!');
+if (!PORTAL_SECRET)    console.warn('⚠️  PORTAL_SECRET nicht gesetzt – Kunden-Portal ist deaktiviert!');
+
+// Info-Log: Token-Algorithmus
+console.log(`🔐  Admin-JWT Algorithmus: ${adminTokenAlgorithm}${adminTokenAlgorithm === 'HS256' ? ' (RS256 wird empfohlen – RSA_PRIVATE_KEY setzen)' : ' ✅'}`);
 
 // ── DB ───────────────────────────────────────────────────────────────────────
 try { await testConnection(); }

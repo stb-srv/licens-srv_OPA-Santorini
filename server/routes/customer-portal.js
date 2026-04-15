@@ -263,7 +263,8 @@ router.post('/setup-password', inviteLimiter, async (req, res) => {
             return res.status(400).json({ success: false, message: 'Link ungültig oder abgelaufen. Bitte einen neuen Link anfordern.' });
         const hash = await bcrypt.hash(password, 12);
         await db.query(
-            `UPDATE customers SET password_hash = ?, portal_token = NULL, portal_token_expires = NULL WHERE id = ?`,
+            `UPDATE customers SET password_hash = ?, portal_token = NULL, portal_token_expires = NULL,
+             must_change_password = 0 WHERE id = ?`,
             [hash, rows[0].id]
         );
         res.json({ success: true, message: 'Passwort erfolgreich gesetzt. Du kannst dich jetzt einloggen.' });
@@ -289,6 +290,41 @@ router.get('/verify-invite-token', async (req, res) => {
     } catch (e) {
         res.status(500).json({ success: false, message: 'Interner Fehler.' });
     }
+});
+
+// ── POST /forgot-password ──────────────────────────────────────────────
+// Kunden können selbst einen Passwort-Reset anfordern (kein Admin-Eingriff nötig)
+router.post('/forgot-password', inviteLimiter, async (req, res) => {
+    const { email } = req.body;
+    // Immer mit 200 antworten (kein E-Mail-Enumeration)
+    const genericResponse = { success: true, message: 'Falls deine E-Mail registriert ist, hast du in Kürze eine E-Mail mit einem Reset-Link erhalten.' };
+    if (!email) return res.json(genericResponse);
+    try {
+        const [rows] = await db.query(
+            'SELECT id, name, email FROM customers WHERE email = ? AND (archived = 0 OR archived IS NULL)',
+            [email.toLowerCase().trim()]
+        );
+        if (!rows[0]) return res.json(genericResponse); // Kein Leak ob E-Mail existiert
+
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const expiresAt  = new Date(Date.now() + 2 * 60 * 60 * 1000); // 2 Stunden
+        await db.query(
+            'UPDATE customers SET portal_token = ?, portal_token_expires = ? WHERE id = ?',
+            [resetToken, expiresAt, rows[0].id]
+        );
+
+        const portalUrl  = (process.env.PORTAL_URL || 'https://licens-prod.stb-srv.de').replace(/\/$/, '');
+        const resetUrl   = `${portalUrl}/portal.html?reset=${resetToken}`;
+
+        await sendTemplateMail('passwordReset', rows[0].email, {
+            name:      rows[0].name,
+            reset_url: resetUrl
+        });
+    } catch (e) {
+        console.error('[Portal/forgot-password]', e.message);
+        // Fehler nicht nach außen leaken
+    }
+    res.json(genericResponse);
 });
 
 export default router;

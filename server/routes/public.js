@@ -5,7 +5,7 @@ import db from '../db.js';
 import { PLAN_DEFINITIONS } from '../plans.js';
 import { RSA_PUBLIC_KEY, createSignedLicenseToken, signResponse, isHmacActive, HMAC_SECRET } from '../crypto.js';
 import { domainMatches, getClientIp, addAuditLog, parseJsonField } from '../helpers.js';
-import { validateLimiter, setupLimiter, MIN_PASSWORD_LENGTH } from '../middleware.js';
+import { validateLimiter, setupLimiter, offlineTokenLimiter, MIN_PASSWORD_LENGTH } from '../middleware.js';
 
 const router = Router();
 const SETUP_TOKEN = process.env.SETUP_TOKEN || '';
@@ -283,7 +283,7 @@ router.post('/verify-license-token', validateLimiter, (req, res) => {
 });
 
 // ── Offline Token ────────────────────────────────────────────────────────────
-router.post('/offline-token', validateLimiter, async (req, res) => {
+router.post('/offline-token', offlineTokenLimiter, async (req, res) => {
     const { license_key, domain, device_id, duration_hours } = req.body;
     if (!license_key) return res.status(400).json({ success: false, message: 'No key provided' });
     try {

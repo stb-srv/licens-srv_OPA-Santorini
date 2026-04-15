@@ -1,16 +1,17 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import db from '../db.js';
 import { PLAN_DEFINITIONS } from '../plans.js';
 import { buildTransporter, sendTemplateMail, getActiveSmtpConfig } from '../mailer/index.js';
 import { fireWebhook } from '../webhook.js';
 import { generateKey, getClientIp, addAuditLog, parseJsonField } from '../helpers.js';
-import { requireAuth, requireSuperAdmin, loginLimiter, MIN_PASSWORD_LENGTH } from '../middleware.js';
+import {
+  requireAuth, requireSuperAdmin, loginLimiter,
+  MIN_PASSWORD_LENGTH, signAdminToken, asyncHandler
+} from '../middleware.js';
 
 const router = Router();
-const ADMIN_SECRET = process.env.ADMIN_SECRET || 'change-me-in-production';
 
 /**
  * Generiert ein zufälliges 12-Zeichen-Passwort:
@@ -35,33 +36,48 @@ function generateTempPassword() {
     [pw[i], pw[j]] = [pw[j], pw[i]];
   }
   return pw.join('');
-}
-
-// ── Auth ────────────────────────────────────────────────────────────────────
-router.post('/login', loginLimiter, async (req, res) => {
+}// ── Auth ───────────────────────────────────────────────────────────────────
+router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password)
     return res.status(400).json({ success: false, message: 'Username and password required' });
-  try {
-    const [rows] = await db.query('SELECT * FROM admins WHERE username = ?', [username]);
-    const admin = rows[0];
-    if (!admin) {
-      await addAuditLog('admin_login_failed', { username, ip: getClientIp(req) });
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
-    }
-    const valid = await bcrypt.compare(password, admin.password_hash);
-    if (!valid) {
-      await addAuditLog('admin_login_failed', { username, ip: getClientIp(req) });
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
-    }
-    const token = jwt.sign({ username: admin.username, role: admin.role }, ADMIN_SECRET, { expiresIn: '8h' });
-    await addAuditLog('admin_login', { username, ip: getClientIp(req) }, username);
-    res.json({ success: true, token, username: admin.username, role: admin.role });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+
+  const [rows] = await db.query(
+    'SELECT id, username, password_hash, role FROM admins WHERE username = ?', [username]
+  );
+  const admin = rows[0];
+  if (!admin || !(await bcrypt.compare(password, admin.password_hash))) {
+    await addAuditLog('admin_login_failed', { username, ip: getClientIp(req) });
+    return res.status(401).json({ success: false, message: 'Invalid credentials' });
   }
-});
+
+  // RS256 oder HS256 (je nach Konfiguration in middleware.js)
+  const token = signAdminToken({ username: admin.username, role: admin.role });
+
+  // Session in admin_sessions speichern (Grundlage für Token-Blacklist)
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  await db.query(
+    `INSERT INTO admin_sessions (id, admin_username, token_hash, ip, user_agent, expires_at)
+     VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 8 HOUR))`,
+    [
+      crypto.randomUUID(), admin.username, tokenHash,
+      getClientIp(req), (req.headers['user-agent'] || '').slice(0, 512)
+    ]
+  );
+
+  await addAuditLog('admin_login', { username, ip: getClientIp(req) }, username);
+  res.json({ success: true, token, username: admin.username, role: admin.role });
+}));
+
+// ── POST /logout ────────────────────────────────────────────────────────
+router.post('/logout', requireAuth, asyncHandler(async (req, res) => {
+  await db.query(
+    'UPDATE admin_sessions SET revoked = 1 WHERE token_hash = ?',
+    [req.adminTokenHash]
+  );
+  await addAuditLog('admin_logout', { username: req.admin.username, ip: getClientIp(req) }, req.admin.username);
+  res.json({ success: true, message: 'Erfolgreich ausgeloggt.' });
+}));
 
 // ── Admin Users ──────────────────────────────────────────────────────────────
 router.get('/users', requireAuth, requireSuperAdmin, async (req, res) => {
@@ -234,60 +250,121 @@ router.post('/licenses', requireAuth, async (req, res) => {
   }
 });
 
-router.patch('/licenses/:key/status', requireAuth, async (req, res) => {
+router.patch('/licenses/:key/status', requireAuth, asyncHandler(async (req, res) => {
   const VALID_STATUSES = ['active', 'revoked', 'cancelled', 'expired', 'suspended'];
   if (!req.body.status || !VALID_STATUSES.includes(req.body.status))
     return res.status(400).json({ success: false, message: `Ungültiger Status. Erlaubt: ${VALID_STATUSES.join(', ')}` });
-  try {
-    const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [req.params.key]);
-    if (!rows[0]) return res.status(404).json({ success: false });
-    await db.query('UPDATE licenses SET status = ? WHERE license_key = ?', [req.body.status, req.params.key]);
-    await addAuditLog('license_status_changed',
-      { license_key: req.params.key, from: rows[0].status, to: req.body.status, by: req.admin.username },
-      req.admin.username);
-    await fireWebhook('license.status_changed', { license_key: req.params.key, from: rows[0].status, to: req.body.status });
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-});
 
-router.post('/licenses/:key/renew', requireAuth, async (req, res) => {
-  try {
-    const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [req.params.key]);
-    const l = rows[0];
-    if (!l) return res.status(404).json({ success: false, message: 'Lizenz nicht gefunden' });
-    const plan = PLAN_DEFINITIONS[l.type] || PLAN_DEFINITIONS['FREE'];
-    const days = req.body.days || plan.expires_days;
-    const baseDate = new Date(l.expires_at) > new Date() ? new Date(l.expires_at) : new Date();
-    const newExpiryStr = new Date(baseDate.getTime() + days * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+  const [rows] = await db.query(
+    'SELECT l.*, c.email AS customer_email, c.name AS customer_real_name FROM licenses l LEFT JOIN customers c ON l.customer_id = c.id WHERE l.license_key = ?',
+    [req.params.key]
+  );
+  if (!rows[0]) return res.status(404).json({ success: false });
+  const l = rows[0];
+  await db.query('UPDATE licenses SET status = ? WHERE license_key = ?', [req.body.status, req.params.key]);
+  await addAuditLog('license_status_changed',
+    { license_key: req.params.key, from: l.status, to: req.body.status, by: req.admin.username },
+    req.admin.username);
+  await fireWebhook('license.status_changed', { license_key: req.params.key, from: l.status, to: req.body.status });
 
-    await db.query(
-      "UPDATE licenses SET expires_at = ?, status = 'active', expiry_notified_at = NULL WHERE license_key = ?",
-      [newExpiryStr, req.params.key]
-    );
-
-    if (l.customer_id) {
-      await db.query(
-        `INSERT INTO purchase_history (id, customer_id, license_key, plan, action, amount, note, created_by)
-         VALUES (?, ?, ?, ?, 'renewal', ?, ?, ?)`,
-        [crypto.randomUUID(), l.customer_id, req.params.key, l.type,
-         req.body.amount || null,
-         `Verlängerung um ${days} Tage – neues Ablaufdatum: ${newExpiryStr}`,
-         req.admin.username]
-      );
+  // E-Mail bei Sperrung / Suspension
+  if (['revoked', 'suspended'].includes(req.body.status) && l.customer_email) {
+    try {
+      await sendTemplateMail('licenseRevoked', l.customer_email, {
+        customer_name: l.customer_name || l.customer_real_name || 'Kunde',
+        license_key:   req.params.key,
+        status:        req.body.status,
+        reason:        req.body.reason || null
+      });
+    } catch (mailErr) {
+      console.error('[licenses] Sperr-Mail fehlgeschlagen (nicht kritisch):', mailErr.message);
     }
-
-    await addAuditLog('license_renewed',
-      { license_key: req.params.key, days, new_expiry: newExpiryStr, by: req.admin.username },
-      req.admin.username);
-    await fireWebhook('license.renewed', { license_key: req.params.key, new_expiry: newExpiryStr });
-    res.json({ success: true, new_expires_at: newExpiryStr, days_extended: days });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ success: false, message: 'Internal server error' });
   }
-});
+  res.json({ success: true });
+}));
+
+// PATCH /licenses/:key — vollständige Lizenzbearbeitung
+router.patch('/licenses/:key', requireAuth, asyncHandler(async (req, res) => {
+  const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [req.params.key]);
+  if (!rows[0]) return res.status(404).json({ success: false, message: 'Lizenz nicht gefunden' });
+
+  const { type, associated_domain, expires_at, max_devices, customer_name, customer_id, allowed_modules, limits } = req.body;
+  const updates = [];
+  const params  = [];
+
+  if (type !== undefined)              { updates.push('type = ?');               params.push(type); }
+  if (associated_domain !== undefined) { updates.push('associated_domain = ?');  params.push(associated_domain); }
+  if (expires_at !== undefined)        { updates.push('expires_at = ?');         params.push(expires_at); }
+  if (max_devices !== undefined)       { updates.push('max_devices = ?');        params.push(parseInt(max_devices) || 0); }
+  if (customer_name !== undefined)     { updates.push('customer_name = ?');      params.push(customer_name); }
+  if (customer_id !== undefined)       { updates.push('customer_id = ?');        params.push(customer_id || null); }
+  if (allowed_modules !== undefined)   { updates.push('allowed_modules = ?');    params.push(JSON.stringify(allowed_modules)); }
+  if (limits !== undefined)            { updates.push('limits = ?');             params.push(JSON.stringify(limits)); }
+
+  if (updates.length === 0)
+    return res.status(400).json({ success: false, message: 'Keine änderbaren Felder angegeben.' });
+
+  params.push(req.params.key);
+  await db.query(`UPDATE licenses SET ${updates.join(', ')} WHERE license_key = ?`, params);
+  await addAuditLog('license_updated',
+    { license_key: req.params.key, changes: Object.keys(req.body), by: req.admin.username },
+    req.admin.username);
+  const [updated] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [req.params.key]);
+  res.json({ success: true, license: updated[0] });
+}));
+
+
+router.post('/licenses/:key/renew', requireAuth, asyncHandler(async (req, res) => {
+  const [rows] = await db.query(
+    'SELECT l.*, c.email AS customer_email FROM licenses l LEFT JOIN customers c ON l.customer_id = c.id WHERE l.license_key = ?',
+    [req.params.key]
+  );
+  const l = rows[0];
+  if (!l) return res.status(404).json({ success: false, message: 'Lizenz nicht gefunden' });
+  const plan = PLAN_DEFINITIONS[l.type] || PLAN_DEFINITIONS['FREE'];
+  const days = req.body.days || plan.expires_days;
+  const baseDate = new Date(l.expires_at) > new Date() ? new Date(l.expires_at) : new Date();
+  const newExpiryStr = new Date(baseDate.getTime() + days * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+
+  await db.query(
+    "UPDATE licenses SET expires_at = ?, status = 'active', expiry_notified_at = NULL WHERE license_key = ?",
+    [newExpiryStr, req.params.key]
+  );
+
+  if (l.customer_id) {
+    await db.query(
+      `INSERT INTO purchase_history (id, customer_id, license_key, plan, action, amount, note, created_by)
+       VALUES (?, ?, ?, ?, 'renewal', ?, ?, ?)`,
+      [crypto.randomUUID(), l.customer_id, req.params.key, l.type,
+       req.body.amount || null,
+       `Verlängerung um ${days} Tage – neues Ablaufdatum: ${newExpiryStr}`,
+       req.admin.username]
+    );
+  }
+
+  await addAuditLog('license_renewed',
+    { license_key: req.params.key, days, new_expiry: newExpiryStr, by: req.admin.username },
+    req.admin.username);
+  await fireWebhook('license.renewed', { license_key: req.params.key, new_expiry: newExpiryStr });
+
+  // E-Mail-Bestätigung an Kunden
+  if (l.customer_email) {
+    try {
+      await sendTemplateMail('licenseRenewed', l.customer_email, {
+        customer_name: l.customer_name || 'Kunde',
+        license_key:   req.params.key,
+        type:          l.type,
+        new_expires_at: newExpiryStr,
+        days
+      });
+    } catch (mailErr) {
+      console.error('[licenses] Verlängerungs-Mail fehlgeschlagen (nicht kritisch):', mailErr.message);
+    }
+  }
+
+  res.json({ success: true, new_expires_at: newExpiryStr, days_extended: days });
+}));
+
 
 router.delete('/licenses/:key', requireAuth, async (req, res) => {
   try {
@@ -823,6 +900,106 @@ router.post('/impersonate', requireAuth, requireSuperAdmin, async (req, res) => 
   } catch (e) {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
+});
+
+// ── Bulk-Aktionen für Lizenzen ────────────────────────────────────────────────
+// POST /api/admin/licenses/bulk
+// Body: { action: 'renew'|'revoke'|'suspend'|'assign_customer', keys: [...], days?, customer_id? }
+router.post('/licenses/bulk', requireAuth, asyncHandler(async (req, res) => {
+  const { action, keys, days, customer_id, reason } = req.body;
+  const ALLOWED_ACTIONS = ['renew', 'revoke', 'suspend', 'assign_customer', 'activate'];
+  if (!action || !ALLOWED_ACTIONS.includes(action))
+    return res.status(400).json({ success: false, message: `Ungültige Aktion. Erlaubt: ${ALLOWED_ACTIONS.join(', ')}` });
+  if (!Array.isArray(keys) || keys.length === 0)
+    return res.status(400).json({ success: false, message: 'keys[] muss eine nicht-leere Liste von Lizenzschlüsseln sein.' });
+  if (keys.length > 100)
+    return res.status(400).json({ success: false, message: 'Maximal 100 Lizenzen pro Bulk-Operation.' });
+
+  const results = { ok: [], failed: [] };
+
+  for (const key of keys) {
+    try {
+      const [rows] = await db.query(
+        'SELECT l.*, c.email AS customer_email FROM licenses l LEFT JOIN customers c ON l.customer_id = c.id WHERE l.license_key = ?',
+        [key]
+      );
+      const l = rows[0];
+      if (!l) { results.failed.push({ key, reason: 'not_found' }); continue; }
+
+      if (action === 'renew') {
+        const plan = PLAN_DEFINITIONS[l.type] || PLAN_DEFINITIONS['FREE'];
+        const d = days || plan.expires_days;
+        const base = new Date(l.expires_at) > new Date() ? new Date(l.expires_at) : new Date();
+        const newExpiry = new Date(base.getTime() + d * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+        await db.query(
+          "UPDATE licenses SET expires_at = ?, status = 'active', expiry_notified_at = NULL WHERE license_key = ?",
+          [newExpiry, key]
+        );
+        await addAuditLog('license_renewed', { license_key: key, days: d, bulk: true, by: req.admin.username }, req.admin.username);
+
+      } else if (action === 'revoke' || action === 'suspend') {
+        await db.query('UPDATE licenses SET status = ? WHERE license_key = ?', [action === 'revoke' ? 'revoked' : 'suspended', key]);
+        await addAuditLog('license_status_changed', { license_key: key, to: action, bulk: true, by: req.admin.username }, req.admin.username);
+        if (l.customer_email) {
+          sendTemplateMail('licenseRevoked', l.customer_email, {
+            customer_name: l.customer_name || 'Kunde', license_key: key,
+            status: action, reason: reason || null
+          }).catch(() => {});
+        }
+
+      } else if (action === 'activate') {
+        await db.query('UPDATE licenses SET status = ? WHERE license_key = ?', ['active', key]);
+        await addAuditLog('license_status_changed', { license_key: key, to: 'active', bulk: true, by: req.admin.username }, req.admin.username);
+
+      } else if (action === 'assign_customer') {
+        if (!customer_id) { results.failed.push({ key, reason: 'customer_id_required' }); continue; }
+        await db.query('UPDATE licenses SET customer_id = ? WHERE license_key = ?', [customer_id, key]);
+        await addAuditLog('license_customer_linked', { license_key: key, customer_id, bulk: true, by: req.admin.username }, req.admin.username);
+      }
+
+      results.ok.push(key);
+    } catch (e) {
+      console.error(`[bulk] ${key}:`, e.message);
+      results.failed.push({ key, reason: e.message });
+    }
+  }
+
+  res.json({
+    success: true,
+    processed: results.ok.length,
+    failed: results.failed.length,
+    ...results
+  });
+}));
+
+// ── Webhook-Signatur-Doku ─────────────────────────────────────────────────────
+// GET /api/admin/webhooks/signing-info
+// Erklärt wie Empfänger die HMAC-Signatur prüfen.
+router.get('/webhooks/signing-info', requireAuth, (req, res) => {
+  res.json({
+    success: true,
+    description: 'Jeder Webhook-Request enthält den Header "X-OPA-Signature" (wenn ein Secret konfiguriert ist).',
+    algorithm: 'HMAC-SHA256',
+    header: 'X-OPA-Signature',
+    how_to_verify: [
+      '1. Lies den rohen Request-Body als String.',
+      '2. Berechne: HMAC-SHA256(body, webhook_secret).',
+      '3. Vergleiche das Ergebnis mit dem Header-Wert (hex-kodiert).',
+      '4. Verwende einen timing-safe Vergleich (z.B. crypto.timingSafeEqual in Node.js).'
+    ],
+    example_nodejs: `
+const crypto = require('crypto');
+function verifyWebhook(rawBody, secret, signature) {
+  const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+}`.trim(),
+    example_php: `
+<?php
+function verifyWebhook(string $rawBody, string $secret, string $signature): bool {
+  $expected = hash_hmac('sha256', $rawBody, $secret);
+  return hash_equals($expected, $signature);
+}`.trim()
+  });
 });
 
 export default router;

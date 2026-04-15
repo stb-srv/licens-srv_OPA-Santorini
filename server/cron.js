@@ -52,16 +52,32 @@ export async function runExpiryCron() {
 }
 
 // Fix #7: Nonce-Cleanup in eigenem Intervall (stündlich), TTL = 2 Stunden
+// Bereinigt auch abgelaufene customer_sessions und admin_sessions
 export async function runNonceCleanup() {
     try {
-        const [result] = await db.query(
+        const [nonceResult] = await db.query(
             'DELETE FROM used_nonces WHERE ts < ?',
             [Date.now() - 2 * 60 * 60 * 1000]  // 2h TTL statt 5min
         );
-        if (result.affectedRows > 0)
-            console.log(`🧹 ${result.affectedRows} abgelaufene Nonce(s) bereinigt.`);
+        if (nonceResult.affectedRows > 0)
+            console.log(`🧹 ${nonceResult.affectedRows} abgelaufene Nonce(s) bereinigt.`);
+
+        // Abgelaufene Portal-Sessions bereinigen
+        const [sessResult] = await db.query(
+            'DELETE FROM customer_sessions WHERE expires_at < NOW() OR revoked = 1'
+        );
+        if (sessResult.affectedRows > 0)
+            console.log(`🧹 ${sessResult.affectedRows} abgelaufene Kunden-Session(s) bereinigt.`);
+
+        // Abgelaufene Admin-Sessions bereinigen
+        const [adminSessResult] = await db.query(
+            'DELETE FROM admin_sessions WHERE expires_at < NOW() OR revoked = 1'
+        );
+        if (adminSessResult.affectedRows > 0)
+            console.log(`🧹 ${adminSessResult.affectedRows} abgelaufene Admin-Session(s) bereinigt.`);
+
     } catch (e) {
-        console.error('Nonce-Cleanup Fehler:', e.message);
+        console.error('Nonce/Session-Cleanup Fehler:', e.message);
     }
 }
 
