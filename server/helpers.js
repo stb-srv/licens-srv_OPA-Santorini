@@ -34,10 +34,32 @@ export const getClientIp = (req) =>
     || req.socket?.remoteAddress
     || 'unknown';
 
+// Erkennt beim ersten Aufruf welche Spalten audit_log hat (data vs details, ts vs created_at)
+let _auditCols = null;
+async function detectAuditCols() {
+    if (_auditCols) return _auditCols;
+    try {
+        const [cols] = await db.query(
+            `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'audit_log'`
+        );
+        const names = cols.map(c => c.COLUMN_NAME);
+        _auditCols = {
+            dataCol:  names.includes('details') ? 'details' : 'data',
+            tsCol:    names.includes('created_at') ? 'created_at' : 'ts'
+        };
+        console.log(`ℹ️  audit_log Schema erkannt: dataCol=${_auditCols.dataCol}, tsCol=${_auditCols.tsCol}`);
+    } catch {
+        _auditCols = { dataCol: 'data', tsCol: 'ts' };
+    }
+    return _auditCols;
+}
+
 export const addAuditLog = async (action, details, actor = 'system') => {
     try {
+        const { dataCol, tsCol } = await detectAuditCols();
         await db.query(
-            'INSERT INTO audit_log (id, actor, action, details) VALUES (?, ?, ?, ?)',
+            `INSERT INTO audit_log (id, actor, action, \`${dataCol}\`, \`${tsCol}\`) VALUES (?, ?, ?, ?, NOW())`,
             [crypto.randomUUID(), actor, action, JSON.stringify(details)]
         );
     } catch (e) {
