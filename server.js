@@ -72,7 +72,7 @@ app.use(helmet({
             styleSrc:       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             styleSrcElem:   ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             imgSrc:         ["'self'", "data:", "https:"],
-            connectSrc:     ["'self'"],
+            connectSrc:     ["'self'", "https://cdn.jsdelivr.net"],
             fontSrc:        ["'self'", "https:", "data:", "https://fonts.gstatic.com"],
             objectSrc:      ["'none'"],
             upgradeInsecureRequests: [],
@@ -119,12 +119,12 @@ app.use(cors({
 
 app.use(express.json());
 
-// ── Routes (vor express.static, damit API-Routen nie durch Static-Files überschattet werden) ──
+// ── Routes ──────────────────────────────────────────────────────────────────
 app.use('/api/v1', publicRoutes);
 app.use('/api/admin', requireIpWhitelist, adminRoutes);
 app.use('/api/portal', portalRoutes);
 
-// ── Static Files (nach API-Routen) ───────────────────────────────────────────
+// ── Static Files ──────────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Favicon Fallback ─────────────────────────────────────────────────────────
