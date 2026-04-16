@@ -29,16 +29,16 @@ CREATE TABLE IF NOT EXISTS customer_sessions (
 
 -- 3. customers – fehlende Spalten hinzufügen
 ALTER TABLE customers
-    ADD COLUMN IF NOT EXISTS archived TINYINT(1) DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255),
-    ADD COLUMN IF NOT EXISTS must_change_password TINYINT(1) DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS portal_token VARCHAR(80),
-    ADD COLUMN IF NOT EXISTS portal_token_expires DATETIME,
-    ADD COLUMN IF NOT EXISTS contact_person VARCHAR(255),
-    ADD COLUMN IF NOT EXISTS portal_username VARCHAR(64);
+    ADD COLUMN archived TINYINT(1) DEFAULT 0,
+    ADD COLUMN password_hash VARCHAR(255),
+    ADD COLUMN must_change_password TINYINT(1) DEFAULT 0,
+    ADD COLUMN portal_token VARCHAR(80),
+    ADD COLUMN portal_token_expires DATETIME,
+    ADD COLUMN contact_person VARCHAR(255),
+    ADD COLUMN portal_username VARCHAR(64);
 
 -- Index für schnellen Username-Login
-CREATE INDEX IF NOT EXISTS idx_portal_username ON customers (portal_username);
+CREATE INDEX idx_portal_username ON customers (portal_username);
 
 -- 4. licenses – ENUM für cancelled-Status erweitern
 ALTER TABLE licenses
@@ -50,4 +50,4 @@ ALTER TABLE licenses
 
 -- 6. licenses – validated_domains Spalte
 ALTER TABLE licenses
-    ADD COLUMN IF NOT EXISTS validated_domains JSON;
+    ADD COLUMN validated_domains JSON;
