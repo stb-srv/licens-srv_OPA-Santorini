@@ -1557,5 +1557,46 @@ function deleteWebhook(id){
 
 if(TOKEN&&window.location.hash==='#admin')openAdmin();
 </script>
+<!-- ── DSGVO Cookie-Banner ──────────────────────────────────────────── -->
+<div id="cookie-banner" style="
+  display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;
+  background:var(--bg2);border-top:1px solid var(--border);
+  padding:1rem 2rem;display:flex;align-items:center;
+  justify-content:space-between;flex-wrap:wrap;gap:1rem;
+  box-shadow:0 -4px 24px rgba(0,0,0,0.3);">
+  <div style="flex:1;min-width:220px;">
+    <strong style="font-size:.95rem;">🍪 Cookie-Hinweis</strong>
+    <p style="font-size:.82rem;color:var(--text2);margin:.3rem 0 0;">
+      Diese Website verwendet ausschließlich technisch notwendige Cookies 
+      (Session-Token, Theme-Einstellung). Es werden keine Tracking- oder 
+      Werbe-Cookies eingesetzt. Rechtsgrundlage: Art. 6 Abs. 1 lit. f DSGVO.
+      <a onclick="showPublicPage('legal')" style="color:var(--accent);cursor:pointer;margin-left:.3rem;">
+        Datenschutzerklärung
+      </a>
+    </p>
+  </div>
+  <div style="display:flex;gap:.6rem;flex-shrink:0;">
+    <button class="btn btn-ghost btn-sm" onclick="cookieDecline()">Ablehnen</button>
+    <button class="btn btn-primary btn-sm" onclick="cookieAccept()">Verstanden</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  if(!localStorage.getItem('cookie_consent')){
+    var b=document.getElementById('cookie-banner');
+    if(b){ b.style.display='flex'; }
+  }
+})();
+function cookieAccept(){
+  localStorage.setItem('cookie_consent','accepted');
+  document.getElementById('cookie-banner').style.display='none';
+}
+function cookieDecline(){
+  localStorage.setItem('cookie_consent','declined');
+  document.getElementById('cookie-banner').style.display='none';
+}
+</script>
+
 </body>
 </html>

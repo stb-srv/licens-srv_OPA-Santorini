@@ -862,9 +862,9 @@ router.get('/analytics', requireAuth, asyncHandler(async (req, res) => {
 
   // 8. Top Customers (by license count)
   const [topCustomers] = await db.query(
-    `SELECT c.name, COUNT(l.id) as lic_count 
+    `SELECT c.name, COUNT(l.license_key) as lic_count 
      FROM customers c JOIN licenses l ON c.id = l.customer_id 
-     GROUP BY c.id ORDER BY lic_count DESC LIMIT 10`
+     GROUP BY c.id, c.name ORDER BY lic_count DESC LIMIT 10`
   );
 
   // Format Daily Stats for Chart (last 30 days)
