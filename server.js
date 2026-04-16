@@ -29,7 +29,6 @@ const SETUP_TOKEN   = process.env.SETUP_TOKEN   || '';
 // ── Environment-Validierung ───────────────────────────────────────────────────
 const FATAL_ERRORS = [];
 
-// Pflicht-Variablen aus dem Request: DB_HOST, DB_USER, DB_PASS, DB_NAME, ADMIN_SECRET, PORTAL_SECRET
 if (!process.env.DB_HOST) FATAL_ERRORS.push('DB_HOST fehlt in .env');
 if (!process.env.DB_USER) FATAL_ERRORS.push('DB_USER fehlt in .env');
 if (!process.env.DB_PASS) FATAL_ERRORS.push('DB_PASS fehlt in .env');
@@ -40,7 +39,6 @@ if (ADMIN_SECRET === 'change-me-in-production')
 if (!PORTAL_SECRET)
     FATAL_ERRORS.push('PORTAL_SECRET fehlt in .env – Kunden-Portal läuft ohne Authentifizierung!');
 
-// HMAC-Länge und Sicherheit
 if (!HMAC_SECRET || HMAC_SECRET === 'hmac-change-me-in-production')
     FATAL_ERRORS.push('HMAC_SECRET fehlt oder ist unsicher! (HS256 Offline-Token Sicherheit)');
 if (HMAC_SECRET.length < 32)
@@ -52,12 +50,9 @@ if (FATAL_ERRORS.length > 0) {
     process.exit(1);
 }
 
-// Warnungen (nicht fatal)
 if (!RSA_PRIVATE_KEY)  console.warn('⚠️  RSA_PRIVATE_KEY nicht gesetzt – License-JWT Signing deaktiviert!');
 if (!SETUP_TOKEN)      console.warn('⚠️  SETUP_TOKEN nicht gesetzt – POST /api/v1/setup ist deaktiviert!');
 
-
-// Info-Log: Token-Algorithmus
 console.log(`🔐  Admin-JWT Algorithmus: ${adminTokenAlgorithm}${adminTokenAlgorithm === 'HS256' ? ' (RS256 wird empfohlen – RSA_PRIVATE_KEY setzen)' : ' ✅'}`);
 
 // ── DB ───────────────────────────────────────────────────────────────────────
@@ -72,12 +67,13 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc:     ["'self'"],
-            scriptSrc:      ["'self'", "'unsafe-inline'"],
+            scriptSrc:      ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
             scriptSrcAttr:  ["'self'", "'unsafe-inline'"],
-            styleSrc:       ["'self'", "'unsafe-inline'"],
+            styleSrc:       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            styleSrcElem:   ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             imgSrc:         ["'self'", "data:", "https:"],
             connectSrc:     ["'self'"],
-            fontSrc:        ["'self'", "https:", "data:"],
+            fontSrc:        ["'self'", "https:", "data:", "https://fonts.gstatic.com"],
             objectSrc:      ["'none'"],
             upgradeInsecureRequests: [],
         },
@@ -131,7 +127,10 @@ app.use('/api/portal', portalRoutes);
 // ── Static Files (nach API-Routen) ───────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ── API 404-Handler (verhindert dass Express eine HTML-Seite zurückgibt) ──────
+// ── Favicon Fallback ─────────────────────────────────────────────────────────
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
+// ── API 404-Handler ───────────────────────────────────────────────────────────
 app.use('/api', (req, res) => {
     res.status(404).json({ success: false, message: `Route ${req.method} /api${req.path} nicht gefunden.` });
 });
@@ -141,7 +140,6 @@ app.use('/api', (req, res) => {
 app.use((err, req, res, next) => {
     console.error('❌ Unbehandelter Fehler:', err.message || err);
     if (res.headersSent) return;
-    // CORS-Fehler
     if (err.message && err.message.startsWith('CORS:')) {
         return res.status(403).json({ success: false, message: err.message });
     }
