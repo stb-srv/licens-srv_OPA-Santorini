@@ -241,6 +241,8 @@
           <tr><td><span class="method method-get">GET</span></td><td><code>/api/admin/login-log</code></td><td>Login-Protokoll</td></tr>
           <tr><td><span class="method method-get">GET</span></td><td><code>/api/admin/audit-log</code></td><td>System-Audit-Log</td></tr>
           <tr><td><span class="method method-get">GET</span></td><td><code>/api/admin/devices</code></td><td>Ger&auml;te-Liste</td></tr>
+          <tr><td><span class="method method-patch">PATCH</span></td><td><code>/api/admin/users/:username</code></td><td>Admin-User bearbeiten (Rolle, Status)</td></tr>
+          <tr><td><span class="method method-patch">PATCH</span></td><td><code>/api/admin/users/:username/password</code></td><td>Passwort ändern</td></tr>
         </tbody></table>
       </div>
     </section>
@@ -470,6 +472,44 @@
   <div class="modal-footer">
     <button class="btn btn-ghost" onclick="closeModal('modal-new-user')">Abbrechen</button>
     <button class="btn btn-primary" onclick="createAdminUser()">Anlegen</button>
+  </div>
+</div></div>
+
+<div class="modal-overlay" id="modal-change-password"><div class="modal">
+  <h3>🔑 Passwort ändern</h3>
+  <input type="hidden" id="cp-username">
+  <div id="cp-alert"></div>
+  <div class="form-group"><label>Neues Passwort * (min. 12 Zeichen)</label>
+    <input type="password" id="cp-pass" placeholder="••••••••••••">
+  </div>
+  <div class="form-group"><label>Passwort bestätigen *</label>
+    <input type="password" id="cp-pass2" placeholder="••••••••••••">
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal('modal-change-password')">Abbrechen</button>
+    <button class="btn btn-primary" onclick="savePassword()">Speichern</button>
+  </div>
+</div></div>
+
+<div class="modal-overlay" id="modal-edit-user"><div class="modal">
+  <h3>✏️ Admin-User bearbeiten</h3>
+  <input type="hidden" id="eu-username">
+  <div id="eu-alert"></div>
+  <div class="form-group"><label>Rolle</label>
+    <select id="eu-role">
+      <option value="admin">Admin</option>
+      <option value="superadmin">Superadmin</option>
+    </select>
+  </div>
+  <div class="form-group"><label>Status</label>
+    <select id="eu-active">
+      <option value="1">Aktiv</option>
+      <option value="0">Gesperrt</option>
+    </select>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal('modal-edit-user')">Abbrechen</button>
+    <button class="btn btn-primary" onclick="saveUserEdit()">Speichern</button>
   </div>
 </div></div>
 
@@ -977,16 +1017,27 @@ function loadUsers(){
   API('/admin/users').then(function(d){
     var users=d.users||[];
     document.getElementById('users-table').innerHTML=users.length?
-      '<table class="data-table"><thead><tr><th>Benutzername</th><th>Rolle</th><th>Erstellt</th><th>Aktionen</th></tr></thead><tbody>'+
+      '<table class="data-table"><thead><tr>'+
+        '<th>Benutzername</th><th>Rolle</th><th>Status</th><th>Erstellt</th><th>Aktionen</th>'+
+      '</tr></thead><tbody>'+
       users.map(function(u){
-        return '<tr>'+
-          '<td>'+esc(u.username)+'</td>'+
+        var isSelf=u.username===USER;
+        var isActive=u.active===1||u.active===true||u.active===undefined;
+        return '<tr style="'+(isActive?'':'opacity:.55')+'">' +
+          '<td>'+esc(u.username)+(isSelf?' <span class="badge badge-pro">Ich</span>':'')+'</td>'+
           '<td><span class="badge '+(u.role==='superadmin'?'badge-superadmin':'badge-active')+'">'+esc(u.role)+'</span></td>'+
+          '<td><span class="badge '+(isActive?'badge-active':'badge-suspended')+'">'+(isActive?'Aktiv':'Gesperrt')+'</span></td>'+
           '<td>'+fmtDate(u.created_at)+'</td>'+
-          '<td>'+(u.username!==USER?'<button class="btn btn-danger btn-sm" onclick="deleteUser(\''+esc(u.username)+'\')" >&#128465; L\u00F6schen</button>':'')+'</td>'+
+          '<td style="white-space:nowrap;display:flex;gap:.4rem;flex-wrap:wrap">'+
+            '<button class="btn btn-ghost btn-sm" onclick="openEditUser(\''+esc(u.username)+'\',\''+esc(u.role)+'\','+(isActive?1:0)+')">✏️ Bearbeiten</button>'+
+            '<button class="btn btn-warning btn-sm" onclick="openChangePassword(\''+esc(u.username)+'\')">🔑 Passwort</button>'+
+            (!isSelf?'<button class="btn btn-danger btn-sm" onclick="deleteUser(\''+esc(u.username)+'\')">🗑 Löschen</button>':'')+
+          '</td>'+
         '</tr>';
       }).join('')+'</tbody></table>':'<div class="loading">Keine User gefunden.</div>';
-  }).catch(function(e){document.getElementById('users-table').innerHTML='<div class="alert alert-error" style="margin:1rem">'+esc(e.message||'Fehler')+'</div>';});
+  }).catch(function(e){
+    document.getElementById('users-table').innerHTML='<div class="alert alert-error" style="margin:1rem">'+esc(e.message||'Fehler')+'</div>';
+  });
 }
 function createAdminUser(){
   var body={username:document.getElementById('nu-user').value,password:document.getElementById('nu-pass').value,role:document.getElementById('nu-role').value};
@@ -997,6 +1048,42 @@ function createAdminUser(){
 function deleteUser(username){
   if(!confirm('Admin-User '+username+' l\u00F6schen?'))return;
   API('/admin/users/'+username,{method:'DELETE'}).then(function(){loadUsers();}).catch(function(e){alert('Fehler: '+(e.message||e));});
+}
+
+function openChangePassword(username){
+  document.getElementById('cp-username').value=username;
+  document.getElementById('cp-pass').value='';
+  document.getElementById('cp-pass2').value='';
+  document.getElementById('cp-alert').innerHTML='';
+  openModal('modal-change-password');
+}
+
+function savePassword(){
+  var username=document.getElementById('cp-username').value;
+  var pass=document.getElementById('cp-pass').value;
+  var pass2=document.getElementById('cp-pass2').value;
+  if(pass.length<12){showAlert('cp-alert','Passwort muss mindestens 12 Zeichen lang sein.','error');return;}
+  if(pass!==pass2){showAlert('cp-alert','Passwörter stimmen nicht überein.','error');return;}
+  API('/admin/users/'+encodeURIComponent(username)+'/password',{method:'PATCH',body:JSON.stringify({password:pass})})
+    .then(function(){closeModal('modal-change-password');showAlert('users-table','','success');loadUsers();})
+    .catch(function(e){showAlert('cp-alert',esc(e.message||'Fehler beim Speichern.'),'error');});
+}
+
+function openEditUser(username,role,active){
+  document.getElementById('eu-username').value=username;
+  document.getElementById('eu-role').value=role;
+  document.getElementById('eu-active').value=String(active);
+  document.getElementById('eu-alert').innerHTML='';
+  openModal('modal-edit-user');
+}
+
+function saveUserEdit(){
+  var username=document.getElementById('eu-username').value;
+  var role=document.getElementById('eu-role').value;
+  var active=parseInt(document.getElementById('eu-active').value);
+  API('/admin/users/'+encodeURIComponent(username),{method:'PATCH',body:JSON.stringify({role:role,active:active})})
+    .then(function(){closeModal('modal-edit-user');loadUsers();})
+    .catch(function(e){showAlert('eu-alert',esc(e.message||'Fehler beim Speichern.'),'error');});
 }
 
 // ── SMTP ─────────────────────────────────────────────────────────────────────

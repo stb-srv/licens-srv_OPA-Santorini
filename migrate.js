@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS admins (
     username VARCHAR(64) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     role ENUM('admin','superadmin') NOT NULL DEFAULT 'admin',
+    active TINYINT(1) DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

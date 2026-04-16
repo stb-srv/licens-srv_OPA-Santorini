@@ -76,7 +76,7 @@ router.post('/logout', requireAuth, asyncHandler(async (req, res) => {
 
 // ── Admin Users ──────────────────────────────────────────────────────────────
 router.get('/users', requireAuth, requireSuperAdmin, asyncHandler(async (req, res) => {
-  const [rows] = await db.query('SELECT id, username, role, created_at FROM admins');
+  const [rows] = await db.query('SELECT id, username, role, active, created_at FROM admins');
   res.json({ users: rows });
 }));
 
@@ -109,6 +109,31 @@ router.delete('/users/:username', requireAuth, requireSuperAdmin, asyncHandler(a
   } catch (e) {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
+}));
+
+router.patch('/users/:username', requireAuth, requireSuperAdmin, asyncHandler(async (req, res) => {
+  const { role, active } = req.body;
+  const updates = [];
+  const params = [];
+
+  if (role !== undefined) {
+    const assignedRole = ['admin', 'superadmin'].includes(role) ? role : 'admin';
+    updates.push('role = ?');
+    params.push(assignedRole);
+  }
+  if (active !== undefined) {
+    updates.push('active = ?');
+    params.push(active ? 1 : 0);
+  }
+
+  if (updates.length === 0) {
+    return res.status(400).json({ success: false, message: 'No fields to update' });
+  }
+
+  params.push(req.params.username);
+  await db.query(`UPDATE admins SET ${updates.join(', ')} WHERE username = ?`, params);
+  await addAuditLog('admin_user_updated', { username: req.params.username, changes: Object.keys(req.body), by: req.admin.username }, req.admin.username);
+  res.json({ success: true });
 }));
 
 router.patch('/users/:username/password', requireAuth, asyncHandler(async (req, res) => {
