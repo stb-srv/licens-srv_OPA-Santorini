@@ -4,21 +4,44 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OPA! Santorini &ndash; Lizenzserver</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root, [data-theme="dark"] {
-      --bg:#0a0a0f;--bg2:#12121a;--bg3:#1a1a26;--border:#2a2a3a;--text:#e8e8f0;--text2:#9090b0;
-      --accent:#6c63ff;--accent2:#ff6b6b;--accent3:#51cf66;--gold:#fcc419;--card:#16161f;
-      --radius:12px;--shadow:0 4px 24px rgba(0,0,0,.4);--nav-bg:rgba(10,10,15,.92);
+      --bg:#08080c;--bg2:#0f0f17;--bg3:#161625;--border:rgba(255,255,255,0.08);--text:#ececf3;--text2:#a2a2c0;
+      --accent:#7c72ff;--accent-glow:rgba(124,114,255,0.3);--accent2:#ff6b6b;--accent3:#51cf66;--gold:#fcc419;--card:rgba(20,20,31,0.6);
+      --radius:16px;--shadow:0 8px 32px rgba(0,0,0,0.4);--nav-bg:rgba(8,8,12,0.85);
     }
     [data-theme="light"] {
-      --bg:#f4f4f8;--bg2:#ffffff;--bg3:#e8e8f0;--border:#d0d0e0;--text:#1a1a2e;--text2:#5a5a7a;
-      --accent:#5a52e0;--accent2:#e03030;--accent3:#2eaa50;--gold:#d4a017;--card:#ffffff;
-      --radius:12px;--shadow:0 4px 24px rgba(0,0,0,.10);--nav-bg:rgba(244,244,248,.95);
+      --bg:#f8f9fc;--bg2:#ffffff;--bg3:#f1f3f9;--border:rgba(0,0,0,0.08);--text:#1e1e2f;--text2:#64648c;
+      --accent:#6359e9;--accent-glow:rgba(99,89,233,0.15);--accent2:#e03131;--accent3:#2f9e44;--gold:#d4a017;--card:rgba(255,255,255,0.85);
+      --radius:16px;--shadow:0 8px 32px rgba(100,100,150,0.1);--nav-bg:rgba(248,249,252,0.9);
     }
     *{box-sizing:border-box;margin:0;padding:0;}
-    body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;line-height:1.6;transition:background .25s,color .25s;}
-    nav{position:sticky;top:0;z-index:100;background:var(--nav-bg);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-items:center;justify-content:space-between;height:60px;}
-    .nav-logo{font-size:1.1rem;font-weight:700;color:var(--accent);letter-spacing:.03em;}
+    body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-height:1.6;transition:background .3s,color .3s;overflow-x:hidden;}
+    h1,h2,h3,h4,.nav-logo,.sidebar-brand{font-family:'Outfit',sans-serif;letter-spacing:-0.02em;}
+    
+    /* Premium Glassmorphism & Effects */
+    .glass{background:var(--card);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--border);box-shadow:var(--shadow);}
+    
+    nav{position:sticky;top:0;z-index:100;background:var(--nav-bg);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 2.5rem;display:flex;align-items:center;justify-content:space-between;height:70px;}
+    .nav-logo{font-size:1.4rem;font-weight:800;background:linear-gradient(135deg, #fff, var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent;display:flex;align-items:center;gap:0.5rem;}
+    .nav-links{display:flex;gap:1.8rem;align-items:center;}
+    .nav-links a{color:var(--text2);text-decoration:none;font-size:0.95rem;font-weight:500;transition:all 0.2s;cursor:pointer;position:relative;}
+    .nav-links a:hover{color:var(--accent);}
+    .nav-links a::after{content:'';position:absolute;bottom:-4px;left:0;width:0;height:2px;background:var(--accent);transition:width 0.2s;}
+    .nav-links a:hover::after{width:100%;}
+    
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.6rem 1.4rem;border-radius:10px;border:none;cursor:pointer;font-size:.9rem;font-weight:600;transition:all .25s;text-decoration:none;white-space:nowrap;}
+    .btn-primary{background:var(--accent);color:#fff;box-shadow:0 4px 15px var(--accent-glow);}.btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 20px var(--accent-glow);opacity:.95;}
+    .btn-danger{background:linear-gradient(135deg, #ff6b6b, #fa5252);color:#fff;}.btn-danger:hover{transform:translateY(-1px);opacity:.9;}
+    .btn-success{background:linear-gradient(135deg, #51cf66, #40c057);color:#fff;}.btn-success:hover{transform:translateY(-1px);opacity:.9;}
+    .btn-ghost{background:rgba(255,255,255,0.03);color:var(--text2);border:1px solid var(--border);}.btn-ghost:hover{background:rgba(255,255,255,0.06);border-color:var(--accent);color:var(--text);}
+    .btn-warning{background:var(--gold);color:#0a0a0f;}.btn-warning:hover{transform:translateY(-1px);opacity:.95;}
+    .btn-sm{padding:.4rem .9rem;font-size:.8rem;border-radius:8px;}
+    .btn-xs{padding:.25rem .6rem;font-size:.75rem;border-radius:6px;}
     .nav-links{display:flex;gap:1.5rem;align-items:center;}
     .nav-links a{color:var(--text2);text-decoration:none;font-size:.9rem;transition:color .2s;cursor:pointer;}
     .nav-links a:hover{color:var(--text);}
@@ -122,10 +145,8 @@
     .badge-enterprise{background:rgba(252,196,25,.15);color:var(--gold);}
     .badge-superadmin{background:rgba(255,107,107,.15);color:var(--accent2);}
     .badge-purchase{background:rgba(81,207,102,.15);color:var(--accent3);}
-    .badge-renewal{background:rgba(108,99,255,.15);color:var(--accent);}
-    .badge-upgrade{background:rgba(252,196,25,.15);color:var(--gold);}
-    .badge-downgrade{background:rgba(255,107,107,.15);color:var(--accent2);}
-    .badge-cancellation{background:rgba(255,107,107,.15);color:var(--accent2);}
+    .badge-ghost{background:rgba(255,255,255,0.05);color:var(--text2);border:1px solid var(--border);}
+    .tag-pill{display:inline-flex;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:2px 6px;font-size:0.7rem;color:var(--text2);margin-right:4px;}
     .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;display:none;align-items:center;justify-content:center;padding:1rem;}
     .modal-overlay.open{display:flex;}
     .modal{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:2rem;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow);}
@@ -288,13 +309,24 @@
 
 <div id="page-admin">
   <div id="admin-login" class="login-wrap">
-    <div class="login-card">
-      <h2>&#128272; Login</h2>
+    <div class="login-card glass">
+      <h2>&#128272; Admin Login</h2>
       <div id="login-alert"></div>
-      <div class="form-group"><label>Benutzername</label><input type="text" id="login-user" placeholder="admin" autocomplete="username"></div>
-      <div class="form-group"><label>Passwort</label><input type="password" id="login-pass" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="current-password"></div>
-      <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Einloggen</button>
-      <button class="btn btn-ghost" style="width:100%;margin-top:.6rem" onclick="closeAdmin()">&larr; Zur&uuml;ck</button>
+      <div id="login-form-step">
+        <div class="form-group"><label>Benutzername</label><input type="text" id="login-user" placeholder="admin" autocomplete="username"></div>
+        <div class="form-group"><label>Passwort</label><input type="password" id="login-pass" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="current-password"></div>
+        <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Einloggen</button>
+      </div>
+      <div id="2fa-form-step" style="display:none">
+        <div class="form-group">
+          <label>2FA-Best&auml;tigungscode</label>
+          <p style="font-size:0.8rem; color:var(--text2); margin-bottom:0.8rem;">Bitte gib den 6-stelligen Code aus deiner Authenticator-App ein.</p>
+          <input type="text" id="login-2fa-code" placeholder="000000" maxlength="6" style="text-align:center; font-size:1.5rem; letter-spacing:0.5rem;">
+        </div>
+        <button class="btn btn-primary" style="width:100%" onclick="doVerify2FA()">Code verifizieren</button>
+        <button class="btn btn-ghost" style="width:100%; margin-top:0.6rem" onclick="resetLogin()">Abbrechen</button>
+      </div>
+      <button class="btn btn-ghost" id="login-back-btn" style="width:100%;margin-top:.6rem" onclick="closeAdmin()">&larr; Zur&uuml;ck</button>
     </div>
   </div>
 
@@ -320,22 +352,41 @@
 
     <main class="main-area">
       <div id="tab-overview" class="tab-panel active">
-        <div class="dash-header"><h2>&#128202; &Uuml;bersicht</h2></div>
+        <div class="dash-header"><h2>&#128202; Dashboard</h2></div>
         <div class="stats-row" id="stats-row"><div class="loading"><div class="spinner"></div></div></div>
-        <div style="margin-top:1.5rem">
-          <h3 style="margin-bottom:.8rem;font-size:.95rem">🏆 Top 10 Lizenzen nach Nutzung</h3>
-          <div class="table-wrap" id="top-licenses"><div class="loading"><div class="spinner"></div></div></div>
+        
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(400px, 1fr));gap:1.5rem;margin-top:1.5rem;">
+          <div class="stat-card glass" style="grid-column: span 1.5;">
+            <h3 style="margin-bottom:1rem;font-size:0.95rem;">📈 Lizenz-Validierungen (letzte 30 Tage)</h3>
+            <div style="height:300px;"><canvas id="validationsChart"></canvas></div>
+          </div>
+          <div class="stat-card glass">
+            <h3 style="margin-bottom:1rem;font-size:0.95rem;">📊 Lizenz-Verteilung</h3>
+            <div style="height:300px;"><canvas id="typesChart"></canvas></div>
+          </div>
         </div>
-        <div style="margin-top:1.5rem">
-          <h3 style="margin-bottom:.8rem;font-size:.95rem">⚠️ Bald ablaufende Lizenzen (30 Tage)</h3>
-          <div class="table-wrap" id="expiring-licenses"><div class="loading"><div class="spinner"></div></div></div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(400px, 1fr));gap:1.5rem;margin-top:1.5rem;">
+          <div style="min-width:0;">
+            <h3 style="margin-bottom:.8rem;font-size:.95rem">🏆 Top 10 Lizenzen nach Nutzung</h3>
+            <div class="table-wrap glass" id="top-licenses"><div class="loading"><div class="spinner"></div></div></div>
+          </div>
+          <div style="min-width:0;">
+            <h3 style="margin-bottom:.8rem;font-size:.95rem">⚠️ Bald ablaufend (30 Tage)</h3>
+            <div class="table-wrap glass" id="expiring-licenses"><div class="loading"><div class="spinner"></div></div></div>
+          </div>
         </div>
       </div>
 
       <div id="tab-licenses" class="tab-panel">
-        <div class="dash-header"><h2>&#128273; Lizenzen</h2><button class="btn btn-primary btn-sm" onclick="openModal('modal-new-license')">+ Neue Lizenz</button></div>
+        <div class="dash-header"><h2>&#128273; Lizenzen</h2>
+          <div style="display:flex;gap:.6rem;">
+            <button class="btn btn-ghost btn-sm" onclick="exportData('licenses', 'csv')">&#128229; CSV Export</button>
+            <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-license')">+ Neue Lizenz</button>
+          </div>
+        </div>
         <div class="toolbar">
-          <input type="text" id="lic-search" placeholder="Suche nach Key oder Name&hellip;" oninput="debounceSearch()">
+          <input type="text" id="lic-search" placeholder="Suche nach Key, Name oder Tag&hellip;" oninput="debounceSearch()">
           <button class="btn btn-ghost btn-sm" onclick="loadLicenses()">&#128260; Neu laden</button>
         </div>
         <div class="table-wrap" id="lic-table"><div class="loading"><div class="spinner"></div></div></div>
@@ -350,6 +401,7 @@
             <label style="font-size:.82rem;color:var(--text2);display:flex;align-items:center;gap:.4rem;cursor:pointer">
               <input type="checkbox" id="cust-show-archived" onchange="loadCustomers()" style="width:auto"> Archivierte anzeigen
             </label>
+            <button class="btn btn-ghost btn-sm" onclick="exportData('customers', 'csv')">&#128229; Export</button>
             <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-customer')">+ Neuer Kunde</button>
           </div>
         </div>
@@ -390,6 +442,7 @@
           <div class="toolbar" style="margin-bottom:.8rem">
             <input type="text" id="ph-search-customer" placeholder="Kunden-ID oder Lizenz-Key&hellip;" style="max-width:340px">
             <button class="btn btn-ghost btn-sm" onclick="loadPurchaseHistory()">&#128269; Filtern</button>
+            <button class="btn btn-ghost btn-sm" onclick="exportData('purchase-history', 'csv')">&#128229; Export</button>
             <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-ph')">+ Eintrag hinzuf&uuml;gen</button>
           </div>
           <div class="table-wrap" id="ph-table"><div class="loading"><div class="spinner"></div></div></div>
@@ -424,6 +477,7 @@
   <div class="form-group"><label>Domain (z.B. meinrestaurant.de oder *)</label><input type="text" id="nl-domain" placeholder="meinrestaurant.de"></div>
   <div class="form-group"><label>Ablaufdatum (leer = Plan-Standard)</label><input type="datetime-local" id="nl-expires"></div>
   <div class="form-group"><label>Max. Ger&auml;te (0 = unbegrenzt)</label><input type="number" id="nl-devices" value="0" min="0"></div>
+  <div class="form-group"><label>Tags (kommagetrennt)</label><input type="text" id="nl-tags" placeholder="region-nord, reseller-xyz"></div>
   <div class="form-group"><label>Kunden-ID (optional)</label><input type="text" id="nl-customer-id" placeholder="UUID des Kunden"></div>
   <div class="form-group"><label>Betrag in EUR (optional)</label><input type="number" step="0.01" id="nl-amount" placeholder="49.99"></div>
   <div class="modal-footer">
@@ -560,6 +614,23 @@
   </div>
 </div></div>
 
+<div class="modal-overlay" id="modal-2fa-setup"><div class="modal">
+  <h3>&#128274; 2-Faktor-Authentifizierung einrichten</h3>
+  <div id="2fa-setup-content" style="text-align:center;">
+    <p style="font-size:0.9rem; margin-bottom:1rem; color:var(--text2);">Scanne diesen QR-Code mit einer App wie Google Authenticator oder Authy.</p>
+    <img id="2fa-qr-img" style="background:#fff; padding:10px; border-radius:8px; margin-bottom:1rem;">
+    <div class="form-group" style="text-align:left;">
+      <label>Verifizierungscode eingeben</label>
+      <input type="text" id="2fa-verify-code" placeholder="000000" maxlength="6">
+    </div>
+    <div id="2fa-alert"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal('modal-2fa-setup')">Schlie&szlig;en</button>
+    <button class="btn btn-primary" onclick="verify2FASetup()">Aktivieren</button>
+  </div>
+</div></div>
+
 <script>
 (function(){
   var saved=localStorage.getItem('theme')||'dark';
@@ -609,7 +680,6 @@ function API(path,opts){
     .then(function(r){
       return r.json().then(function(d){
         if(r.status===401){
-          // Token abgelaufen oder ungültig → automatisch ausloggen
           TOKEN='';ROLE='';USER='';
           localStorage.removeItem('admin_token');
           localStorage.removeItem('admin_role');
@@ -621,6 +691,75 @@ function API(path,opts){
         return d;
       });
     });
+}
+
+function exportData(type, format) {
+  var url = '/api/admin/export/' + type + '?format=' + format;
+  fetch(url, { headers: { 'Authorization': 'Bearer ' + TOKEN } })
+    .then(res => res.blob())
+    .then(blob => {
+      var url = window.URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = type + '_export_' + new Date().toISOString().slice(0, 10) + '.' + format;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    })
+    .catch(e => alert('Export fehlgeschlagen: ' + e.message));
+}
+
+var vChart, tChart;
+function renderCharts(ana) {
+  if (!window.Chart) return;
+  const ctxV = document.getElementById('validationsChart').getContext('2d');
+  if (vChart) vChart.destroy();
+  const valData = ana.validations_per_day || [];
+  vChart = new Chart(ctxV, {
+    type: 'line',
+    data: {
+      labels: valData.map(d => d.date),
+      datasets: [{
+        label: 'Validierungen',
+        data: valData.map(d => d.count),
+        borderColor: '#7c72ff',
+        backgroundColor: 'rgba(124,114,255,0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 4,
+        pointHoverRadius: 6
+      }]
+    },
+    options: { 
+      responsive: true, 
+      maintainAspectRatio: false, 
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+
+  const ctxT = document.getElementById('typesChart').getContext('2d');
+  if (tChart) tChart.destroy();
+  const typeData = ana.type_distribution || [];
+  tChart = new Chart(ctxT, {
+    type: 'doughnut',
+    data: {
+      labels: typeData.map(d => d.type),
+      datasets: [{
+        data: typeData.map(d => d.count),
+        backgroundColor: ['#7c72ff', '#51cf66', '#fcc419', '#ff6b6b', '#a2a2c0'],
+        borderWidth: 0
+      }]
+    },
+    options: { 
+      responsive: true, 
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { color: '#a2a2c0', usePointStyle: true } } }
+    }
+  });
 }
 
 function fmtDate(d){return d?new Date(d).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'\u2014';}
@@ -688,12 +827,22 @@ function showDashboard(){
   switchTab('overview');
 }
 
+var TEMP_2FA_TOKEN = '';
+
 function doLogin(){
   var username=document.getElementById('login-user').value.trim();
   var password=document.getElementById('login-pass').value;
   if(!username||!password){showAlert('login-alert','Benutzername und Passwort eingeben.');return;}
   API('/admin/login',{method:'POST',body:JSON.stringify({username:username,password:password})})
     .then(function(d){
+      if (d.two_factor_required) {
+        TEMP_2FA_TOKEN = d.temp_token;
+        document.getElementById('login-form-step').style.display = 'none';
+        document.getElementById('2fa-form-step').style.display = 'block';
+        document.getElementById('login-back-btn').style.display = 'none';
+        document.getElementById('login-alert').innerHTML = '';
+        return;
+      }
       TOKEN=d.token;ROLE=d.role;USER=d.username;
       localStorage.setItem('admin_token',TOKEN);
       localStorage.setItem('admin_role',ROLE);
@@ -701,6 +850,56 @@ function doLogin(){
       document.getElementById('login-pass').value='';
       showDashboard();
     }).catch(function(e){showAlert('login-alert',esc(e.message||'Login fehlgeschlagen.'));});
+}
+
+function doVerify2FA(){
+  var code = document.getElementById('login-2fa-code').value.trim();
+  if(!code) { showAlert('login-alert','Bitte Code eingeben.'); return; }
+  API('/admin/login/2fa', { method: 'POST', body: JSON.stringify({ code: code, temp_token: TEMP_2FA_TOKEN }) })
+    .then(function(d){
+      TOKEN=d.token;ROLE=d.role;USER=d.username;
+      localStorage.setItem('admin_token',TOKEN);
+      localStorage.setItem('admin_role',ROLE);
+      localStorage.setItem('admin_user',USER);
+      resetLogin();
+      showDashboard();
+    }).catch(function(e){ showAlert('login-alert', esc(e.message||'Ungültiger Code.')); });
+}
+
+function resetLogin(){
+  document.getElementById('login-form-step').style.display = 'block';
+  document.getElementById('2fa-form-step').style.display = 'none';
+  document.getElementById('login-back-btn').style.display = 'inline-flex';
+  document.getElementById('login-2fa-code').value = '';
+  TEMP_2FA_TOKEN = '';
+}
+
+function setup2FA(){
+  API('/admin/2fa/setup', { method: 'POST' }).then(function(d){
+    document.getElementById('2fa-qr-img').src = d.qr_code;
+    document.getElementById('2fa-verify-code').value = '';
+    document.getElementById('2fa-alert').innerHTML = '';
+    openModal('modal-2fa-setup');
+  }).catch(function(e){ alert('Setup fehlgeschlagen: '+(e.message||e)); });
+}
+
+function verify2FASetup(){
+  var code = document.getElementById('2fa-verify-code').value.trim();
+  if(!code) return showAlert('2fa-alert','Code eingeben.');
+  API('/admin/2fa/verify', { method: 'POST', body: JSON.stringify({ code: code }) })
+    .then(function(d){
+      alert('2FA erfolgreich aktiviert!');
+      closeModal('modal-2fa-setup');
+      loadUsers();
+    }).catch(function(e){ showAlert('2fa-alert', esc(e.message||'Fehler.')); });
+}
+
+function disable2FA(){
+  if(!confirm('Möchtest du 2FA wirklich deaktivieren?')) return;
+  API('/admin/2fa/disable', { method: 'POST' }).then(function(){
+    alert('2FA wurde deaktiviert.');
+    loadUsers();
+  }).catch(function(e){ alert('Fehler: '+(e.message||e)); });
 }
 function doLogout(){
   TOKEN='';ROLE='';USER='';
@@ -747,6 +946,13 @@ function typeBadge(t){
   return '<span class="badge '+(map[t]||'')+'">'+ esc(t)+'</span>';
 }
 function statusBadge(s){return '<span class="badge badge-'+esc(s)+'">'+ esc(s)+'</span>';}
+function tagsBadges(tags){
+  if(!tags)return'';
+  try {
+    var arr=Array.isArray(tags)?tags:JSON.parse(tags);
+    return arr.map(function(t){return '<span class="tag-pill">'+esc(t)+'</span>';}).join('');
+  } catch(e){return'';}
+}
 
 function loadOverview(){
   API('/admin/licenses?limit=10').then(function(lic){
@@ -775,6 +981,7 @@ function loadOverview(){
             return '<tr><td><code>'+esc(l.license_key.slice(0,12))+'&hellip;</code></td><td>'+esc(l.customer_name||'\u2014')+'</td><td>'+typeBadge(l.type)+'</td><td>'+fmtDate(l.expires_at)+'</td><td style="color:var(--gold)">noch '+d+'d</td><td><button class="btn btn-success btn-xs" onclick="renewLicense(\''+esc(l.license_key)+'\')" >Verl\u00E4ngern</button></td></tr>';
           }).join('')+'</tbody></table>':'<div class="loading">Aktuell keine ablaufenenden Lizenzen in den n\u00E4chsten 30 Tagen.</div>';
       });
+      renderCharts(ana);
     });
   }).catch(function(e){document.getElementById('stats-row').innerHTML='<div class="alert alert-error">'+esc(e.message||'Fehler')+'</div>';});
 }
@@ -786,19 +993,19 @@ function loadLicenses(page){
   API(url).then(function(d){
     var licenses=d.licenses||[],pg=d.pagination||{};
     var html=licenses.length?
-      '<table class="data-table"><thead><tr><th>Key</th><th>Typ</th><th>Kunde</th><th>Domain</th><th>Status</th><th>L\u00E4uft ab</th><th>Aktionen</th></tr></thead><tbody>'+
+      '<table class="data-table"><thead><tr><th>Key</th><th>Typ</th><th>Kunde</th><th>Tags</th><th>Status</th><th>L\u00E4uft ab</th><th>Aktionen</th></tr></thead><tbody>'+
       licenses.map(function(l){
         var days=daysLeft(l.expires_at);
         var expClass=days<0?'color:var(--accent2)':days<30?'color:var(--gold)':'';
         return '<tr>'+
           '<td><code title="'+esc(l.license_key)+'">'+esc(l.license_key.slice(0,16))+'&hellip;</code></td>'+
           '<td>'+typeBadge(l.type)+'</td><td>'+esc(l.customer_name||'\u2014')+'</td>'+
-          '<td>'+esc(l.associated_domain||'\u2014')+'</td><td>'+statusBadge(l.status)+'</td>'+
+          '<td>'+tagsBadges(l.tags)+'</td><td>'+statusBadge(l.status)+'</td>'+
           '<td style="'+expClass+'">'+fmtDate(l.expires_at)+'</td>'+
           '<td style="white-space:nowrap">'+
-            '<button class="btn btn-ghost btn-sm" onclick="viewLicense(\''+esc(l.license_key)+'\')" >Details</button> '+
-            '<button class="btn btn-success btn-sm" onclick="renewLicense(\''+esc(l.license_key)+'\')" >+365d</button> '+
-            '<button class="btn btn-danger btn-sm" onclick="deleteLicense(\''+esc(l.license_key)+'\')" >&#128465;</button>'+
+            '<button class="btn btn-ghost btn-xs" onclick="viewLicense(\''+esc(l.license_key)+'\')" >Details</button> '+
+            '<button class="btn btn-success btn-xs" onclick="renewLicense(\''+esc(l.license_key)+'\')" >+365d</button> '+
+            '<button class="btn btn-danger btn-xs" onclick="deleteLicense(\''+esc(l.license_key)+'\')" >&#128465;</button>'+
           '</td></tr>';
       }).join('')+'</tbody></table>' + renderPagination(pg, 'loadLicenses') :
       '<div class="loading">Keine Lizenzen gefunden.</div>';
@@ -818,6 +1025,7 @@ function viewLicense(key){
       '<div class="form-group"><label>Domain</label><input readonly value="'+esc(l.associated_domain||'')+'"></div>'+
       '<div class="form-group"><label>Ablaufdatum</label><input readonly value="'+esc(fmtDate(l.expires_at))+'"></div>'+
       '<div class="form-group"><label>Validierungen</label><input readonly value="'+esc(l.usage_count||0)+'"></div>'+
+      '<div class="form-group"><label>Tags (kommagetrennt)</label><input id="edit-tags" value="'+esc((l.tags?JSON.parse(l.tags):[]).join(', '))+'"></div>'+
       '<div class="form-group"><label>Letzter Check</label><input readonly value="'+esc(fmtDate(l.last_validated))+'"></div>'+
       '<div class="form-group"><label>Status \u00E4ndern</label>'+
         '<select id="edit-status-sel">'+statuses.map(function(s){return'<option value="'+s+'"'+(s===l.status?' selected':'')+'>'+s+'</option>';}).join('')+'</select>'+
@@ -828,7 +1036,8 @@ function viewLicense(key){
 }
 function saveStatus(key){
   var status=document.getElementById('edit-status-sel').value;
-  API('/admin/licenses/'+encodeURIComponent(key)+'/status',{method:'PATCH',body:JSON.stringify({status:status})})
+  var tags=document.getElementById('edit-tags').value.split(',').map(function(t){return t.trim();}).filter(function(t){return t!=='';});
+  API('/admin/licenses/'+encodeURIComponent(key)+'/status',{method:'PATCH',body:JSON.stringify({status:status, tags:tags})})
     .then(function(){closeModal('modal-edit-license');loadLicenses();})
     .catch(function(e){alert('Fehler: '+(e.message||e));});
 }
@@ -848,6 +1057,7 @@ function createLicense(){
     customer_name:document.getElementById('nl-name').value||null,
     associated_domain:document.getElementById('nl-domain').value||'*',
     max_devices:parseInt(document.getElementById('nl-devices').value)||0,
+    tags:document.getElementById('nl-tags').value.split(',').map(function(t){return t.trim();}).filter(function(t){return t!=='';}),
     customer_id:document.getElementById('nl-customer-id').value||null,
     amount:document.getElementById('nl-amount').value||null
   };

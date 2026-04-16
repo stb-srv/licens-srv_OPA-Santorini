@@ -322,4 +322,14 @@ router.post('/verify-offline-token', asyncHandler(async (req, res) => {
     }
 }));
 
+// ── Health Check ──────────────────────────────────────────────────────────────
+router.get('/health', async (req, res) => {
+    try {
+        await db.query('SELECT 1');
+        res.json({ status: 'ok', database: 'connected', timestamp: new Date().toISOString() });
+    } catch (e) {
+        res.status(503).json({ status: 'degraded', database: 'disconnected', error: e.message });
+    }
+});
+
 export default router;

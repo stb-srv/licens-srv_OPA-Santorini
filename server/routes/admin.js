@@ -8,8 +8,12 @@ import { fireWebhook } from '../webhook.js';
 import { generateKey, getClientIp, addAuditLog, parseJsonField } from '../helpers.js';
 import {
   requireAuth, requireSuperAdmin, loginLimiter,
-  MIN_PASSWORD_LENGTH, signAdminToken, asyncHandler, bulkLimiter
+  MIN_PASSWORD_LENGTH, signAdminToken, asyncHandler, bulkLimiter,
+  signTempToken
 } from '../middleware.js';
+import * as otplibPkg from 'otplib';
+const { authenticator } = otplibPkg;
+import QRCode from 'qrcode';
 
 const router = Router();
 
@@ -42,12 +46,18 @@ router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Username and password required' });
 
   const [rows] = await db.query(
-    'SELECT id, username, password_hash, role FROM admins WHERE username = ?', [username]
+    'SELECT id, username, password_hash, role, two_factor_enabled, two_factor_secret FROM admins WHERE username = ?', [username]
   );
   const admin = rows[0];
   if (!admin || !(await bcrypt.compare(password, admin.password_hash))) {
     await addAuditLog('admin_login_failed', { username, ip: getClientIp(req) });
     return res.status(401).json({ success: false, message: 'Invalid credentials' });
+  }
+
+  // Check 2FA
+  if (admin.two_factor_enabled) {
+    const tempToken = signTempToken({ username: admin.username, id: admin.id });
+    return res.json({ success: true, two_factor_required: true, temp_token: tempToken });
   }
 
   const token = signAdminToken({ username: admin.username, role: admin.role });
@@ -74,9 +84,79 @@ router.post('/logout', requireAuth, asyncHandler(async (req, res) => {
   res.json({ success: true, message: 'Erfolgreich ausgeloggt.' });
 }));
 
+router.post('/login/2fa', loginLimiter, asyncHandler(async (req, res) => {
+  const { code, temp_token } = req.body;
+  if (!code || !temp_token)
+    return res.status(400).json({ success: false, message: 'Code and temp_token required' });
+
+  try {
+    const ADMIN_SECRET = process.env.ADMIN_SECRET || 'change-me-in-production';
+    const payload = (await import('jsonwebtoken')).default.verify(temp_token, ADMIN_SECRET);
+    if (!payload.temp) throw new Error('Invalid token');
+
+    const [rows] = await db.query('SELECT username, role, two_factor_secret FROM admins WHERE id = ?', [payload.id]);
+    const admin = rows[0];
+    if (!admin) return res.status(401).json({ success: false, message: 'Admin not found' });
+
+    const isValid = authenticator.verify({ token: code, secret: admin.two_factor_secret });
+    if (!isValid) return res.status(401).json({ success: false, message: 'Invalid 2FA code' });
+
+    const token = signAdminToken({ username: admin.username, role: admin.role });
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    await db.query(
+      `INSERT INTO admin_sessions (id, admin_username, token_hash, ip, user_agent, expires_at)
+       VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 8 HOUR))`,
+      [crypto.randomUUID(), admin.username, tokenHash, getClientIp(req), (req.headers['user-agent'] || '').slice(0, 512)]
+    );
+
+    res.json({ success: true, token, username: admin.username, role: admin.role });
+  } catch (e) {
+    res.status(401).json({ success: false, message: 'Invalid or expired temporary token' });
+  }
+}));
+
+// ── 2FA Setup ────────────────────────────────────────────────────────────────
+router.post('/2fa/setup', requireAuth, asyncHandler(async (req, res) => {
+  const [rows] = await db.query('SELECT two_factor_enabled, two_factor_secret FROM admins WHERE username = ?', [req.admin.username]);
+  const admin = rows[0];
+
+  let secret = admin.two_factor_secret;
+  if (!secret) {
+    secret = authenticator.generateSecret();
+    await db.query('UPDATE admins SET two_factor_secret = ? WHERE username = ?', [secret, req.admin.username]);
+  }
+
+  const otpauth = authenticator.keyuri(req.admin.username, 'OPA Santorini License', secret);
+  const qrCodeUrl = await QRCode.toDataURL(otpauth);
+
+  res.json({ success: true, secret, qr_code: qrCodeUrl, enabled: !!admin.two_factor_enabled });
+}));
+
+router.post('/2fa/verify', requireAuth, asyncHandler(async (req, res) => {
+  const { code } = req.body;
+  const [rows] = await db.query('SELECT two_factor_secret FROM admins WHERE username = ?', [req.admin.username]);
+  const secret = rows[0]?.two_factor_secret;
+
+  if (!secret) return res.status(400).json({ success: false, message: '2FA not set up' });
+
+  const isValid = authenticator.verify({ token: code, secret });
+  if (!isValid) return res.status(400).json({ success: false, message: 'Ungültiger Code' });
+
+  await db.query('UPDATE admins SET two_factor_enabled = 1 WHERE username = ?', [req.admin.username]);
+  await addAuditLog('2fa_enabled', { username: req.admin.username }, req.admin.username);
+
+  res.json({ success: true, message: '2FA erfolgreich aktiviert' });
+}));
+
+router.post('/2fa/disable', requireAuth, asyncHandler(async (req, res) => {
+  await db.query('UPDATE admins SET two_factor_enabled = 0, two_factor_secret = NULL WHERE username = ?', [req.admin.username]);
+  await addAuditLog('2fa_disabled', { username: req.admin.username }, req.admin.username);
+  res.json({ success: true, message: '2FA deaktiviert' });
+}));
+
 // ── Admin Users ──────────────────────────────────────────────────────────────
 router.get('/users', requireAuth, requireSuperAdmin, asyncHandler(async (req, res) => {
-  const [rows] = await db.query('SELECT id, username, role, active, created_at FROM admins');
+  const [rows] = await db.query('SELECT id, username, role, active, created_at, two_factor_enabled FROM admins');
   res.json({ users: rows });
 }));
 
@@ -167,6 +247,8 @@ router.get('/licenses', requireAuth, asyncHandler(async (req, res) => {
     : null;
 
   const expiring = req.query.expiring === '1';
+  const tag = req.query.tag;
+
   let where = '1=1';
   const params = [];
   if (search) {
@@ -175,6 +257,10 @@ router.get('/licenses', requireAuth, asyncHandler(async (req, res) => {
   }
   if (expiring) {
     where += ' AND expires_at BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 30 DAY) AND status = "active"';
+  }
+  if (tag) {
+    where += ' AND JSON_CONTAINS(tags, JSON_QUOTE(?))';
+    params.push(tag);
   }
 
   const [[{ total }]] = await db.query(`SELECT COUNT(*) as total FROM licenses WHERE ${where}`, params);
@@ -223,15 +309,15 @@ router.post('/licenses', requireAuth, asyncHandler(async (req, res) => {
     await db.query(`
       INSERT INTO licenses
         (license_key, type, customer_id, customer_name, status, associated_domain,
-         expires_at, allowed_modules, limits, max_devices, analytics_daily, analytics_features, validated_domains)
-      VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, '{}', '{}', '[]')
+         expires_at, allowed_modules, limits, max_devices, analytics_daily, analytics_features, validated_domains, tags)
+      VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, '{}', '{}', '[]', ?)
       ON DUPLICATE KEY UPDATE
         type=VALUES(type), customer_id=VALUES(customer_id), customer_name=VALUES(customer_name),
         associated_domain=VALUES(associated_domain), expires_at=VALUES(expires_at),
         allowed_modules=VALUES(allowed_modules), limits=VALUES(limits), max_devices=VALUES(max_devices)`,
       [key, raw.type || 'FREE', raw.customer_id || null, raw.customer_name || null,
        raw.associated_domain || '*', expiresAt, JSON.stringify(modules), JSON.stringify(limits),
-       raw.max_devices ? parseInt(raw.max_devices) : 0]
+       raw.max_devices ? parseInt(raw.max_devices) : 0, JSON.stringify(raw.tags || [])]
     );
 
     if (raw.customer_id) {
@@ -311,6 +397,7 @@ router.patch('/licenses/:key', requireAuth, asyncHandler(async (req, res) => {
   if (customer_id !== undefined)       { updates.push('customer_id = ?');        params.push(customer_id || null); }
   if (allowed_modules !== undefined)   { updates.push('allowed_modules = ?');    params.push(JSON.stringify(allowed_modules)); }
   if (limits !== undefined)            { updates.push('limits = ?');             params.push(JSON.stringify(limits)); }
+  if (tags !== undefined)              { updates.push('tags = ?');               params.push(JSON.stringify(tags || [])); }
 
   if (updates.length === 0)
     return res.status(400).json({ success: false, message: 'Keine änderbaren Felder angegeben.' });
@@ -1004,5 +1091,66 @@ router.get('/webhooks/signing-info', requireAuth, (req, res) => {
     description: 'Jeder Webhook-Request enthält den Header "X-OPA-Signature" (wenn ein Secret konfiguriert ist).'
   });
 });
+
+// ── Export ───────────────────────────────────────────────────────────────────
+router.get('/export/licenses', requireAuth, asyncHandler(async (req, res) => {
+  const format = req.query.format === 'json' ? 'json' : 'csv';
+  const [rows] = await db.query('SELECT * FROM licenses ORDER BY created_at DESC');
+
+  if (format === 'json') {
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename=licenses_export.json');
+    return res.send(JSON.stringify(rows, null, 2));
+  }
+
+  // CSV Export
+  const headers = ['license_key', 'type', 'customer_name', 'status', 'associated_domain', 'expires_at', 'usage_count', 'created_at'];
+  let csv = headers.join(';') + '\n';
+  for (const row of rows) {
+    const line = headers.map(h => {
+      let val = row[h];
+      if (val instanceof Date) val = val.toISOString();
+      if (val === null || val === undefined) val = '';
+      return `"${String(val).replace(/"/g, '""')}"`;
+    });
+    csv += line.join(';') + '\n';
+  }
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename=licenses_export.csv');
+  res.send('\ufeff' + csv); // BOM for Excel
+}));
+
+router.get('/export/history', requireAuth, asyncHandler(async (req, res) => {
+  const format = req.query.format === 'json' ? 'json' : 'csv';
+  const [rows] = await db.query(`
+    SELECT ph.*, c.name as customer_name, c.email as customer_email
+    FROM purchase_history ph LEFT JOIN customers c ON ph.customer_id = c.id
+    ORDER BY ph.created_at DESC
+  `);
+
+  if (format === 'json') {
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename=purchase_history_export.json');
+    return res.send(JSON.stringify(rows, null, 2));
+  }
+
+  // CSV Export
+  const headers = ['id', 'customer_id', 'customer_name', 'license_key', 'plan', 'action', 'amount', 'created_at'];
+  let csv = headers.join(';') + '\n';
+  for (const row of rows) {
+    const line = headers.map(h => {
+      let val = row[h];
+      if (val instanceof Date) val = val.toISOString();
+      if (val === null || val === undefined) val = '';
+      return `"${String(val).replace(/"/g, '""')}"`;
+    });
+    csv += line.join(';') + '\n';
+  }
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename=purchase_history_export.csv');
+  res.send('\ufeff' + csv); // BOM for Excel
+}));
 
 export default router;

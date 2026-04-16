@@ -13,12 +13,13 @@ import publicRoutes from './server/routes/public.js';
 import adminRoutes from './server/routes/admin.js';
 import portalRoutes from './server/routes/customer-portal.js';
 import { envSmtp } from './server/smtp.js';
-import { adminTokenAlgorithm } from './server/middleware.js';
+import { adminTokenAlgorithm, requireIpWhitelist } from './server/middleware.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+export { app };
 const PORT = process.env.PORT || 4000;
 const ADMIN_SECRET  = process.env.ADMIN_SECRET  || 'change-me-in-production';
 const HMAC_SECRET   = process.env.HMAC_SECRET   || 'hmac-change-me-in-production';
@@ -60,8 +61,10 @@ if (!SETUP_TOKEN)      console.warn('⚠️  SETUP_TOKEN nicht gesetzt – POST 
 console.log(`🔐  Admin-JWT Algorithmus: ${adminTokenAlgorithm}${adminTokenAlgorithm === 'HS256' ? ' (RS256 wird empfohlen – RSA_PRIVATE_KEY setzen)' : ' ✅'}`);
 
 // ── DB ───────────────────────────────────────────────────────────────────────
-try { await testConnection(); }
-catch (e) { console.error('❌  MySQL Verbindungsfehler:', e.message); process.exit(1); }
+if (process.env.NODE_ENV !== 'test') {
+    try { await testConnection(); }
+    catch (e) { console.error('❌  MySQL Verbindungsfehler:', e.message); process.exit(1); }
+}
 
 // ── Security Headers (Helmet) ─────────────────────────────────────────────────
 app.use(helmet({
@@ -122,7 +125,7 @@ app.use(express.json());
 
 // ── Routes (vor express.static, damit API-Routen nie durch Static-Files überschattet werden) ──
 app.use('/api/v1', publicRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api/admin', requireIpWhitelist, adminRoutes);
 app.use('/api/portal', portalRoutes);
 
 // ── Static Files (nach API-Routen) ───────────────────────────────────────────
@@ -149,16 +152,20 @@ app.use((err, req, res, next) => {
 });
 
 // ── Cron ─────────────────────────────────────────────────────────────────────
-startCron();
+if (process.env.NODE_ENV !== 'test') {
+    startCron();
+}
 
 // ── Start ────────────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-    console.log(`\n🏛️  OPA! Santorini License Server v2.1 läuft auf http://localhost:${PORT}`);
-    console.log(`📋  Pläne: ${Object.keys(PLAN_DEFINITIONS).join(' | ')}`);
-    console.log(`🌐  CORS: ${staticAllowedOrigins.length > 0 ? staticAllowedOrigins.join(', ') + ' + dynamisch aus DB' : 'nur dynamisch aus DB (CORS_ORIGINS nicht gesetzt)'}`);
-    console.log(`🔐  HMAC Signing: ${isHmacActive() ? 'AKTIV' : 'INAKTIV'}`);
-    console.log(`🔑  RSA JWT Signing: ${RSA_PRIVATE_KEY ? 'AKTIV (RS256)' : 'INAKTIV'}`);
-    console.log(`📧  SMTP: ${(envSmtp.host && envSmtp.user) ? `${envSmtp.host}:${envSmtp.port}` : 'nicht konfiguriert'}`);
-    console.log(`🔒  Setup-Endpoint: ${SETUP_TOKEN ? 'AKTIV' : 'DEAKTIVIERT'}`);
-    console.log(`🧑‍💼  Kunden-Portal: ${PORTAL_SECRET ? 'AKTIV (/portal.html)' : 'DEAKTIVIERT (PORTAL_SECRET fehlt)'}\n`);
-});
+if (process.env.NODE_ENV !== 'test') {
+    app.listen(PORT, () => {
+        console.log(`\n🏛️  OPA! Santorini License Server v2.1 läuft auf http://localhost:${PORT}`);
+        console.log(`📋  Pläne: ${Object.keys(PLAN_DEFINITIONS).join(' | ')}`);
+        console.log(`🌐  CORS: ${staticAllowedOrigins.length > 0 ? staticAllowedOrigins.join(', ') + ' + dynamisch aus DB' : 'nur dynamisch aus DB (CORS_ORIGINS nicht gesetzt)'}`);
+        console.log(`🔐  HMAC Signing: ${isHmacActive() ? 'AKTIV' : 'INAKTIV'}`);
+        console.log(`🔑  RSA JWT Signing: ${RSA_PRIVATE_KEY ? 'AKTIV (RS256)' : 'INAKTIV'}`);
+        console.log(`📧  SMTP: ${(envSmtp.host && envSmtp.user) ? `${envSmtp.host}:${envSmtp.port}` : 'nicht konfiguriert'}`);
+        console.log(`🔒  Setup-Endpoint: ${SETUP_TOKEN ? 'AKTIV' : 'DEAKTIVIERT'}`);
+        console.log(`🧑‍💼  Kunden-Portal: ${PORTAL_SECRET ? 'AKTIV (/portal.html)' : 'DEAKTIVIERT (PORTAL_SECRET fehlt)'}\n`);
+    });
+}

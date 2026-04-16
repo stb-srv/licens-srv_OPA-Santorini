@@ -7,14 +7,38 @@ import { RSA_PRIVATE_KEY, RSA_PUBLIC_KEY } from './crypto.js';
 // ── Admin JWT: RS256 wenn RSA-Keys vorhanden, sonst HS256 Fallback ────────────
 const ADMIN_SECRET    = process.env.ADMIN_SECRET || 'change-me-in-production';
 const USE_RS256_ADMIN = !!(RSA_PRIVATE_KEY && RSA_PUBLIC_KEY);
+const ADMIN_IP_WHITELIST = process.env.ADMIN_IP_WHITELIST ? process.env.ADMIN_IP_WHITELIST.split(',').map(ip => ip.trim()) : [];
 
 export const MIN_PASSWORD_LENGTH = 12;
+
+// ── IP Whitelist Middleware ──────────────────────────────────────────────────
+export const requireIpWhitelist = (req, res, next) => {
+    if (ADMIN_IP_WHITELIST.length === 0) return next();
+    
+    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    // Simple check (could be improved with CIDR support)
+    const isWhitelisted = ADMIN_IP_WHITELIST.some(ip => {
+        if (ip === '*') return true;
+        return clientIp.includes(ip);
+    });
+
+    if (!isWhitelisted) {
+        console.warn(`🛑  IP Blocked: ${clientIp} attempted to access admin routes.`);
+        return res.status(403).json({ success: false, message: 'Access denied: IP not whitelisted.' });
+    }
+    next();
+};
 
 export function signAdminToken(payload, expiresIn = '8h') {
     if (USE_RS256_ADMIN) {
         return jwt.sign(payload, RSA_PRIVATE_KEY, { algorithm: 'RS256', expiresIn });
     }
     return jwt.sign(payload, ADMIN_SECRET, { expiresIn });
+}
+
+export function signTempToken(payload, expiresIn = '5m') {
+    // Immer HS256 für kurze Temp-Tokens (einfacher)
+    return jwt.sign({ ...payload, temp: true }, ADMIN_SECRET, { expiresIn });
 }
 
 function verifyAdminToken(token) {
