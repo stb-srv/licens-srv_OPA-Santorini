@@ -822,41 +822,68 @@ router.delete('/devices/:id', requireAuth, asyncHandler(async (req, res) => {
 
 // ── Analytics ────────────────────────────────────────────────────────────────
 router.get('/analytics', requireAuth, asyncHandler(async (req, res) => {
-  const [licenses] = await db.query(
-    'SELECT license_key, customer_name, type, usage_count, last_validated, analytics_daily, analytics_features FROM licenses ORDER BY usage_count DESC LIMIT 10'
+  // 1. Top Licenses by usage
+  const [topLics] = await db.query(
+    'SELECT license_key, customer_name, type, usage_count, last_validated FROM licenses ORDER BY usage_count DESC LIMIT 10'
   );
-  const topLicenses = licenses.map(l => ({
-    license_key: l.license_key, customer_name: l.customer_name,
-    type: l.type, usage_count: l.usage_count || 0, last_validated: l.last_validated
-  }));
 
-  const [allLicenses] = await db.query('SELECT analytics_daily, analytics_features FROM licenses');
+  // 2. Status Distribution
+  const [statusStats] = await db.query('SELECT status, COUNT(*) as count FROM licenses GROUP BY status');
+  
+  // 3. Type Distribution
+  const [typeStats] = await db.query('SELECT type, COUNT(*) as count FROM licenses GROUP BY type');
+
+  // 4. Growth Metrics (last 30 days)
+  const [[{ count_30d }]] = await db.query('SELECT COUNT(*) as count_30d FROM licenses WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)');
+  const [[{ count_7d }]] = await db.query('SELECT COUNT(*) as count_7d FROM licenses WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)');
+
+  // 5. Aggregate Daily validations & Feature usage
+  const [allLics] = await db.query('SELECT analytics_daily, analytics_features FROM licenses');
   const daily = {}, features = {};
-  for (const l of allLicenses) {
+  for (const l of allLics) {
     const d = parseJsonField(l.analytics_daily, {});
     for (const [day, count] of Object.entries(d)) daily[day] = (daily[day] || 0) + count;
     const f = parseJsonField(l.analytics_features, {});
     for (const [feat, count] of Object.entries(f)) features[feat] = (features[feat] || 0) + count;
   }
 
+  // 6. Device Metrics
   const [[{ total_devices }]] = await db.query('SELECT COUNT(*) as total_devices FROM devices');
   const [[{ active_devices }]] = await db.query('SELECT COUNT(*) as active_devices FROM devices WHERE active = 1');
 
+  // 7. Revenue Metrics
   const [[{ revenue_total }]] = await db.query('SELECT SUM(amount) as revenue_total FROM purchase_history');
   const [[{ revenue_month }]] = await db.query(
     'SELECT SUM(amount) as revenue_month FROM purchase_history WHERE created_at >= DATE_FORMAT(NOW(), "%Y-%m-01")'
   );
+  const [[{ revenue_30d }]] = await db.query(
+    'SELECT SUM(amount) as revenue_30d FROM purchase_history WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)'
+  );
+
+  // 8. Top Customers (by license count)
+  const [topCustomers] = await db.query(
+    `SELECT c.name, COUNT(l.id) as lic_count 
+     FROM customers c JOIN licenses l ON c.id = l.customer_id 
+     GROUP BY c.id ORDER BY lic_count DESC LIMIT 10`
+  );
+
+  // Format Daily Stats for Chart (last 30 days)
+  const validations_per_day = Object.entries(daily)
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-30);
 
   res.json({
-    top_licenses: topLicenses,
-    daily_requests: daily,
+    success: true,
+    top_licenses: topLics,
+    validations_per_day,
+    status_distribution: statusStats,
+    type_distribution: typeStats,
     feature_usage: features,
-    total_devices,
-    active_devices,
-    revenue: {
-      total: revenue_total || 0,
-      month: revenue_month || 0
-    }
+    growth: { last_7d: count_7d, last_30d: count_30d },
+    devices: { total: total_devices, active: active_devices },
+    revenue: { total: revenue_total || 0, month: revenue_month || 0, last_30d: revenue_30d || 0 },
+    top_customers: topCustomers
   });
 }));
 

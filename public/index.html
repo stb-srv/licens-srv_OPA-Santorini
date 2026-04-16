@@ -128,7 +128,9 @@
     .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:1.5rem;}
     .stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.2rem;}
     .stat-label{font-size:.78rem;color:var(--text2);margin-bottom:.3rem;}
-    .stat-value{font-size:1.8rem;font-weight:800;}
+    .stat-value{font-size:1.8rem;font-weight:800;font-family:'Outfit',sans-serif;}
+    .stat-trend{font-size:0.75rem; color:var(--accent3); margin-top:0.2rem; font-weight:600;}
+    .stat-trend.down{color:var(--accent2);}
     .table-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:auto;}
     table.data-table{width:100%;border-collapse:collapse;font-size:.85rem;}
     table.data-table th{background:var(--bg3);padding:.65rem 1rem;text-align:left;color:var(--text2);font-weight:600;white-space:nowrap;}
@@ -361,8 +363,23 @@
             <div style="height:300px;"><canvas id="validationsChart"></canvas></div>
           </div>
           <div class="stat-card glass">
-            <h3 style="margin-bottom:1rem;font-size:0.95rem;">📊 Lizenz-Verteilung</h3>
+            <h3 style="margin-bottom:1rem;font-size:0.95rem;">📊 Lizenz-Pläne</h3>
             <div style="height:300px;"><canvas id="typesChart"></canvas></div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:1.5rem;margin-top:1.5rem;">
+          <div class="stat-card glass">
+            <h3 style="margin-bottom:1rem;font-size:0.95rem;">🛠 Feature-Nutzung</h3>
+            <div style="height:250px;"><canvas id="featuresChart"></canvas></div>
+          </div>
+          <div class="stat-card glass">
+            <h3 style="margin-bottom:1rem;font-size:0.95rem;">🔘 Lizenz-Status</h3>
+            <div style="height:250px;"><canvas id="statusChart"></canvas></div>
+          </div>
+          <div class="stat-card glass">
+            <h3 style="margin-bottom:1rem;font-size:0.95rem;">🤝 Top Kunden</h3>
+            <div id="top-customers-list" style="font-size:0.85rem;"></div>
           </div>
         </div>
 
@@ -709,19 +726,21 @@ function exportData(type, format) {
     .catch(e => alert('Export fehlgeschlagen: ' + e.message));
 }
 
-var vChart, tChart;
+var vChart, tChart, fChart, sChart;
 function renderCharts(ana) {
   if (!window.Chart) return;
+  
+  // 1. Validations Chart
   const ctxV = document.getElementById('validationsChart').getContext('2d');
   if (vChart) vChart.destroy();
   const valData = ana.validations_per_day || [];
   vChart = new Chart(ctxV, {
     type: 'line',
     data: {
-      labels: valData.map(d => d.date),
+      labels: valData.map(function(d){return d.date;}),
       datasets: [{
         label: 'Validierungen',
-        data: valData.map(d => d.count),
+        data: valData.map(function(d){return d.count;}),
         borderColor: '#7c72ff',
         backgroundColor: 'rgba(124,114,255,0.1)',
         fill: true,
@@ -731,8 +750,7 @@ function renderCharts(ana) {
       }]
     },
     options: { 
-      responsive: true, 
-      maintainAspectRatio: false, 
+      responsive: true, maintainAspectRatio: false, 
       plugins: { legend: { display: false } },
       scales: {
         y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
@@ -741,25 +759,82 @@ function renderCharts(ana) {
     }
   });
 
+  // 2. Types Chart
   const ctxT = document.getElementById('typesChart').getContext('2d');
   if (tChart) tChart.destroy();
   const typeData = ana.type_distribution || [];
   tChart = new Chart(ctxT, {
     type: 'doughnut',
     data: {
-      labels: typeData.map(d => d.type),
+      labels: typeData.map(function(d){return d.type;}),
       datasets: [{
-        data: typeData.map(d => d.count),
+        data: typeData.map(function(d){return d.count;}),
         backgroundColor: ['#7c72ff', '#51cf66', '#fcc419', '#ff6b6b', '#a2a2c0'],
         borderWidth: 0
       }]
     },
     options: { 
-      responsive: true, 
-      maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: false,
       plugins: { legend: { position: 'bottom', labels: { color: '#a2a2c0', usePointStyle: true } } }
     }
   });
+
+  // 3. Features Bar Chart
+  const ctxF = document.getElementById('featuresChart').getContext('2d');
+  if (fChart) fChart.destroy();
+  const featUsage = ana.feature_usage || {};
+  const featLabels = Object.keys(featUsage);
+  const featData = Object.values(featUsage);
+  fChart = new Chart(ctxF, {
+    type: 'bar',
+    data: {
+      labels: featLabels,
+      datasets: [{
+        label: 'Aufrufe',
+        data: featData,
+        backgroundColor: 'rgba(124,114,255,0.8)',
+        borderRadius: 4
+      }]
+    },
+    options: { 
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { 
+        x: { grid: { color: 'rgba(255,255,255,0.05)' } }, 
+        y: { grid: { display: false } } 
+      }
+    }
+  });
+
+  // 4. Status Pie Chart
+  const ctxS = document.getElementById('statusChart').getContext('2d');
+  if (sChart) sChart.destroy();
+  const statusDist = ana.status_distribution || [];
+  sChart = new Chart(ctxS, {
+    type: 'pie',
+    data: {
+      labels: statusDist.map(function(d){return d.status;}),
+      datasets: [{
+        data: statusDist.map(function(d){return d.count;}),
+        backgroundColor: ['#51cf66', '#ff6b6b', '#fcc419', '#7c72ff', '#a2a2c0'],
+        borderWidth: 0
+      }]
+    },
+    options: { 
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { color: '#a2a2c0', usePointStyle: true } } }
+    }
+  });
+
+  // 5. Top Customers List
+  const custHtml = (ana.top_customers || []).map(function(c){
+    return '<div style="display:flex; justify-content:space-between; padding:0.6rem 0; border-bottom:1px solid var(--border);">' +
+      '<span style="font-weight:500">' + esc(c.name) + '</span>' +
+      '<span class="badge badge-purchase">' + c.lic_count + ' Lizenzen</span>' +
+    '</div>';
+  }).join('') || '<div style="color:var(--text2); text-align:center; padding:2rem;">Keine Kundendaten</div>';
+  document.getElementById('top-customers-list').innerHTML = custHtml;
 }
 
 function fmtDate(d){return d?new Date(d).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'\u2014';}
@@ -958,19 +1033,24 @@ function loadOverview(){
   API('/admin/licenses?limit=10').then(function(lic){
     return API('/admin/analytics').then(function(ana){
       var s=lic.stats||{};
-      var rev=ana.revenue||{total:0,month:0};
+      var rev=ana.revenue||{total:0,month:0,last_30d:0};
+      var val30d = (ana.validations_per_day||[]).reduce(function(a,b){return a+b.count;},0);
+      
       document.getElementById('stats-row').innerHTML=
-        '<div class="stat-card"><div class="stat-label">Gesamt Lizenzen</div><div class="stat-value">'+(s.total||0)+'</div></div>'+
-        '<div class="stat-card"><div class="stat-label">Aktiv</div><div class="stat-value" style="color:var(--accent3)">'+(s.active||0)+'</div></div>'+
-        '<div class="stat-card"><div class="stat-label">L\u00E4uft bald ab</div><div class="stat-value" style="color:var(--gold)">'+(s.expiring||0)+'</div></div>'+
-        '<div class="stat-card"><div class="stat-label">Validierungen</div><div class="stat-value">'+(s.total_usage||0)+'</div></div>'+
-        '<div class="stat-card"><div class="stat-label">Umsatz (Gesamt)</div><div class="stat-value" style="color:var(--accent3)">'+Number(rev.total).toLocaleString('de-DE',{style:'currency',currency:'EUR'})+'</div></div>'+
-        '<div class="stat-card"><div class="stat-label">Umsatz (Monat)</div><div class="stat-value">'+Number(rev.month).toLocaleString('de-DE',{style:'currency',currency:'EUR'})+'</div></div>';
+        '<div class="stat-card glass"><div class="stat-label">Gesamt Lizenzen</div><div class="stat-value">'+(s.total||0)+'</div><div class="stat-trend">+'+(ana.growth.last_30d)+' mtl.</div></div>'+
+        '<div class="stat-card glass"><div class="stat-label">Aktive Lizenzen</div><div class="stat-value" style="color:var(--accent3)">'+(s.active||0)+'</div></div>'+
+        '<div class="stat-card glass"><div class="stat-label">Validierungen (30d)</div><div class="stat-value">'+val30d+'</div></div>'+
+        '<div class="stat-card glass"><div class="stat-label">Umsatz (30d)</div><div class="stat-value" style="color:var(--accent3)">'+fmtEur(rev.last_30d)+'</div><div class="stat-trend">+'+(ana.growth.last_7d)+' neue Verkäufe (7d)</div></div>'+
+        '<div class="stat-card glass"><div class="stat-label">Umsatz (Gesamt)</div><div class="stat-value" style="color:var(--gold)">'+fmtEur(rev.total)+'</div></div>'+
+        '<div class="stat-card glass"><div class="stat-label">Ger\u00E4te</div><div class="stat-value">'+(ana.devices.total)+'</div><div class="stat-trend">'+ana.devices.active+' aktiv</div></div>';
+      
       var top=ana.top_licenses||[];
       document.getElementById('top-licenses').innerHTML=top.length?
         '<table class="data-table"><thead><tr><th>Lizenz-Key</th><th>Kunde</th><th>Typ</th><th>Validierungen</th><th>Zuletzt</th></tr></thead><tbody>'+
-        top.map(function(l){return'<tr><td><code>'+esc(l.license_key.slice(0,18))+'&hellip;</code></td><td>'+esc(l.customer_name||'\u2014')+'</td><td>'+typeBadge(l.type)+'</td><td>'+l.usage_count+'</td><td>'+fmtDate(l.last_validated)+'</td></tr>';}).join('')+
+        top.map(function(l){return'<tr><td><code>'+esc((l.license_key||'').slice(0,18))+'&hellip;</code></td><td>'+esc(l.customer_name||'\u2014')+'</td><td>'+typeBadge(l.type)+'</td><td>'+(l.usage_count||0)+'</td><td>'+fmtDate(l.last_validated)+'</td></tr>';}).join('')+
         '</tbody></table>':'<div class="loading">Keine Daten</div>';
+      
+      renderCharts(ana);
       
       return API('/admin/licenses?expiring=1&limit=20').then(function(exp){
         var list=exp.licenses||[];
@@ -978,10 +1058,9 @@ function loadOverview(){
           '<table class="data-table"><thead><tr><th>Key</th><th>Kunde</th><th>Typ</th><th>Ablaufdatum</th><th>Tage</th><th>Aktionen</th></tr></thead><tbody>'+
           list.map(function(l){
             var d=daysLeft(l.expires_at);
-            return '<tr><td><code>'+esc(l.license_key.slice(0,12))+'&hellip;</code></td><td>'+esc(l.customer_name||'\u2014')+'</td><td>'+typeBadge(l.type)+'</td><td>'+fmtDate(l.expires_at)+'</td><td style="color:var(--gold)">noch '+d+'d</td><td><button class="btn btn-success btn-xs" onclick="renewLicense(\''+esc(l.license_key)+'\')" >Verl\u00E4ngern</button></td></tr>';
+            return '<tr><td><code>'+esc((l.license_key||'').slice(0,12))+'&hellip;</code></td><td>'+esc(l.customer_name||'\u2014')+'</td><td>'+typeBadge(l.type)+'</td><td>'+fmtDate(l.expires_at)+'</td><td style="color:var(--gold)">noch '+d+'d</td><td><button class="btn btn-success btn-xs" onclick="renewLicense(\''+esc(l.license_key)+'\')" >Verl\u00E4ngern</button></td></tr>';
           }).join('')+'</tbody></table>':'<div class="loading">Aktuell keine ablaufenenden Lizenzen in den n\u00E4chsten 30 Tagen.</div>';
       });
-      renderCharts(ana);
     });
   }).catch(function(e){document.getElementById('stats-row').innerHTML='<div class="alert alert-error">'+esc(e.message||'Fehler')+'</div>';});
 }
@@ -1298,19 +1377,24 @@ function loadUsers(){
     var users=d.users||[];
     document.getElementById('users-table').innerHTML=users.length?
       '<table class="data-table"><thead><tr>'+
-        '<th>Benutzername</th><th>Rolle</th><th>Status</th><th>Erstellt</th><th>Aktionen</th>'+
+        '<th>Benutzername</th><th>Rolle</th><th>Status</th><th>2FA</th><th>Erstellt</th><th>Aktionen</th>'+
       '</tr></thead><tbody>'+
       users.map(function(u){
         var isSelf=u.username===USER;
         var isActive=u.active===1||u.active===true||u.active===undefined;
+        var tfa = u.two_factor_enabled ? '<span class="badge badge-active">&#128274; Aktiv</span>' : '<span class="badge badge-revoked">&#9888; Inaktiv</span>';
         return '<tr style="'+(isActive?'':'opacity:.55')+'">' +
           '<td>'+esc(u.username)+(isSelf?' <span class="badge badge-pro">Ich</span>':'')+'</td>'+
           '<td><span class="badge '+(u.role==='superadmin'?'badge-superadmin':'badge-active')+'">'+esc(u.role)+'</span></td>'+
           '<td><span class="badge '+(isActive?'badge-active':'badge-suspended')+'">'+(isActive?'Aktiv':'Gesperrt')+'</span></td>'+
+          '<td>'+tfa+'</td>'+
           '<td>'+fmtDate(u.created_at)+'</td>'+
           '<td style="white-space:nowrap;display:flex;gap:.4rem;flex-wrap:wrap">'+
             '<button class="btn btn-ghost btn-sm" onclick="openEditUser(\''+esc(u.username)+'\',\''+esc(u.role)+'\','+(isActive?1:0)+')">✏️ Bearbeiten</button>'+
             '<button class="btn btn-warning btn-sm" onclick="openChangePassword(\''+esc(u.username)+'\')">🔑 Passwort</button>'+
+            (isSelf ? (u.two_factor_enabled ? 
+              '<button class="btn btn-danger btn-sm" onclick="disable2FA()">&#128275; 2FA aus</button>' : 
+              '<button class="btn btn-primary btn-sm" onclick="setup2FA()">&#128274; 2FA ein</button>') : '') +
             (!isSelf?'<button class="btn btn-danger btn-sm" onclick="deleteUser(\''+esc(u.username)+'\')">🗑 Löschen</button>':'')+
           '</td>'+
         '</tr>';
