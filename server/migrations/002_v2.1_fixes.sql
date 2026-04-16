@@ -1,9 +1,3 @@
--- ============================================================
--- OPA! Santorini – Migration: Fehlende Tabellen & Spalten
--- Ausführen auf dem Server direkt in MySQL/MariaDB
--- oder via: mysql -u USER -p DB_NAME < migrate-v2.1-fix.sql
--- ============================================================
-
 -- 1. purchase_history Tabelle
 CREATE TABLE IF NOT EXISTS purchase_history (
     id CHAR(36) NOT NULL PRIMARY KEY,
@@ -47,7 +41,6 @@ ALTER TABLE customers
 CREATE INDEX IF NOT EXISTS idx_portal_username ON customers (portal_username);
 
 -- 4. licenses – ENUM für cancelled-Status erweitern
--- Falls diese Abfrage fehlschlägt, ist der Status schon korrekt
 ALTER TABLE licenses
     MODIFY COLUMN status ENUM('active','suspended','revoked','expired','cancelled') NOT NULL DEFAULT 'active';
 
@@ -58,5 +51,3 @@ ALTER TABLE licenses
 -- 6. licenses – validated_domains Spalte
 ALTER TABLE licenses
     ADD COLUMN IF NOT EXISTS validated_domains JSON;
-
-SELECT 'Migration abgeschlossen!' AS status;

@@ -166,18 +166,21 @@ router.get('/licenses', requireAuth, asyncHandler(async (req, res) => {
     ? `%${req.query.search.replace(/[%_\\]/g, '\\$&')}%`
     : null;
 
-  const [[{ total }]] = await db.query(
-    search
-      ? 'SELECT COUNT(*) as total FROM licenses WHERE license_key LIKE ? OR customer_name LIKE ?'
-      : 'SELECT COUNT(*) as total FROM licenses',
-    search ? [search, search] : []
-  );
+  const expiring = req.query.expiring === '1';
+  let where = '1=1';
+  const params = [];
+  if (search) {
+    where += ' AND (license_key LIKE ? OR customer_name LIKE ?)';
+    params.push(search, search);
+  }
+  if (expiring) {
+    where += ' AND expires_at BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 30 DAY) AND status = "active"';
+  }
 
+  const [[{ total }]] = await db.query(`SELECT COUNT(*) as total FROM licenses WHERE ${where}`, params);
   const [licenses] = await db.query(
-    search
-      ? 'SELECT * FROM licenses WHERE license_key LIKE ? OR customer_name LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?'
-      : 'SELECT * FROM licenses ORDER BY created_at DESC LIMIT ? OFFSET ?',
-    search ? [search, search, limit, offset] : [limit, offset]
+    `SELECT * FROM licenses WHERE ${where} ORDER BY expires_at ASC, created_at DESC LIMIT ? OFFSET ?`,
+    [...params, limit, offset]
   );
 
   const [[statsRow]] = await db.query(`
@@ -440,11 +443,27 @@ async function uniquePortalUsername(name, company = null) {
 
 router.get('/customers', requireAuth, asyncHandler(async (req, res) => {
   const includeArchived = req.query.include_archived === '1';
-  const query = includeArchived
-    ? `SELECT ${CUSTOMER_SAFE_FIELDS} FROM customers ORDER BY archived ASC, created_at DESC`
-    : `SELECT ${CUSTOMER_SAFE_FIELDS} FROM customers WHERE archived = 0 OR archived IS NULL ORDER BY created_at DESC`;
-  const [rows] = await db.query(query);
-  res.json({ customers: rows });
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = Math.min(500, Math.max(1, parseInt(req.query.limit) || 100));
+  const offset = (page - 1) * limit;
+  const search = req.query.search ? `%${req.query.search.replace(/[%_\\]/g, '\\$&')}%` : null;
+
+  let where = includeArchived ? '1=1' : '(archived = 0 OR archived IS NULL)';
+  const params = [];
+  if (search) {
+    where += ' AND (name LIKE ? OR email LIKE ? OR company LIKE ? OR portal_username LIKE ?)';
+    params.push(search, search, search, search);
+  }
+
+  const [[{ total }]] = await db.query(`SELECT COUNT(*) as total FROM customers WHERE ${where}`, params);
+  const [rows] = await db.query(
+    `SELECT ${CUSTOMER_SAFE_FIELDS} FROM customers WHERE ${where} ORDER BY archived ASC, created_at DESC LIMIT ? OFFSET ?`,
+    [...params, limit, offset]
+  );
+  res.json({
+    customers: rows,
+    pagination: { page, limit, total: parseInt(total), pages: Math.ceil(total / limit) }
+  });
 }));
 
 router.post('/customers', requireAuth, asyncHandler(async (req, res) => {
@@ -653,12 +672,32 @@ router.get('/login-log', requireAuth, asyncHandler(async (req, res) => {
 
 // ── Devices ──────────────────────────────────────────────────────────────────
 router.get('/devices', requireAuth, asyncHandler(async (req, res) => {
-  const { license_key } = req.query;
-  let query = 'SELECT * FROM devices';
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = Math.min(500, Math.max(1, parseInt(req.query.limit) || 100));
+  const offset = (page - 1) * limit;
+  const { license_key, search } = req.query;
+
+  let where = '1=1';
   const params = [];
-  if (license_key) { query += ' WHERE license_key = ?'; params.push(license_key); }
-  const [devices] = await db.query(query, params);
-  res.json({ devices });
+  if (license_key) {
+    where += ' AND license_key = ?';
+    params.push(license_key);
+  }
+  if (search) {
+    const s = `%${search.replace(/[%_\\]/g, '\\$&')}%`;
+    where += ' AND (device_id LIKE ? OR ip LIKE ? OR device_type LIKE ? OR license_key LIKE ?)';
+    params.push(s, s, s, s);
+  }
+
+  const [[{ total }]] = await db.query(`SELECT COUNT(*) as total FROM devices WHERE ${where}`, params);
+  const [devices] = await db.query(
+    `SELECT * FROM devices WHERE ${where} ORDER BY last_seen DESC LIMIT ? OFFSET ?`,
+    [...params, limit, offset]
+  );
+  res.json({
+    devices,
+    pagination: { page, limit, total: parseInt(total), pages: Math.ceil(total / limit) }
+  });
 }));
 
 router.patch('/devices/:id/deactivate', requireAuth, asyncHandler(async (req, res) => {
@@ -716,7 +755,22 @@ router.get('/analytics', requireAuth, asyncHandler(async (req, res) => {
   const [[{ total_devices }]] = await db.query('SELECT COUNT(*) as total_devices FROM devices');
   const [[{ active_devices }]] = await db.query('SELECT COUNT(*) as active_devices FROM devices WHERE active = 1');
 
-  res.json({ top_licenses: topLicenses, daily_requests: daily, feature_usage: features, total_devices, active_devices });
+  const [[{ revenue_total }]] = await db.query('SELECT SUM(amount) as revenue_total FROM purchase_history');
+  const [[{ revenue_month }]] = await db.query(
+    'SELECT SUM(amount) as revenue_month FROM purchase_history WHERE created_at >= DATE_FORMAT(NOW(), "%Y-%m-01")'
+  );
+
+  res.json({
+    top_licenses: topLicenses,
+    daily_requests: daily,
+    feature_usage: features,
+    total_devices,
+    active_devices,
+    revenue: {
+      total: revenue_total || 0,
+      month: revenue_month || 0
+    }
+  });
 }));
 
 // ── Audit Log ────────────────────────────────────────────────────────────────

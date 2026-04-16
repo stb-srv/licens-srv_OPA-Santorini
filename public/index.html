@@ -151,6 +151,8 @@
     .subtab-btn{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:.35rem .9rem;color:var(--text2);font-size:.85rem;cursor:pointer;font-weight:600;transition:all .2s;}
     .subtab-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
     .subtab-panel{display:none;}.subtab-panel.active{display:block;}
+    .pagination-area{display:flex;justify-content:space-between;align-items:center;padding:1rem;background:var(--bg3);border-top:1px solid var(--border);border-bottom-left-radius:12px;border-bottom-right-radius:12px;font-size:.85rem;color:var(--text2);flex-wrap:wrap;gap:.8rem;}
+    .pagination-btns{display:flex;gap:.5rem;}
     @media(max-width:700px){
       .sidebar{width:52px;}.sidebar-brand,.sidebar-user,.sidebar-menu li a span{display:none;}
       .sidebar-menu li a{justify-content:center;padding:.7rem;}
@@ -321,8 +323,12 @@
         <div class="dash-header"><h2>&#128202; &Uuml;bersicht</h2></div>
         <div class="stats-row" id="stats-row"><div class="loading"><div class="spinner"></div></div></div>
         <div style="margin-top:1.5rem">
-          <h3 style="margin-bottom:.8rem;font-size:.95rem">Top 10 Lizenzen nach Nutzung</h3>
+          <h3 style="margin-bottom:.8rem;font-size:.95rem">🏆 Top 10 Lizenzen nach Nutzung</h3>
           <div class="table-wrap" id="top-licenses"><div class="loading"><div class="spinner"></div></div></div>
+        </div>
+        <div style="margin-top:1.5rem">
+          <h3 style="margin-bottom:.8rem;font-size:.95rem">⚠️ Bald ablaufende Lizenzen (30 Tage)</h3>
+          <div class="table-wrap" id="expiring-licenses"><div class="loading"><div class="spinner"></div></div></div>
         </div>
       </div>
 
@@ -340,6 +346,7 @@
         <div class="dash-header">
           <h2>&#128101; Kunden</h2>
           <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
+            <input type="text" id="cust-search" placeholder="Suche..." onkeyup="filterCustomers()" class="form-control" style="width:160px;margin:0;padding:.3rem .6rem;font-size:0.85rem">
             <label style="font-size:.82rem;color:var(--text2);display:flex;align-items:center;gap:.4rem;cursor:pointer">
               <input type="checkbox" id="cust-show-archived" onchange="loadCustomers()" style="width:auto"> Archivierte anzeigen
             </label>
@@ -350,7 +357,13 @@
       </div>
 
       <div id="tab-devices" class="tab-panel">
-        <div class="dash-header"><h2>&#128241; Ger&auml;te</h2><button class="btn btn-ghost btn-sm" onclick="loadDevices()">&#128260; Neu laden</button></div>
+        <div class="dash-header">
+          <h2>&#128241; Ger&auml;te</h2>
+          <div style="display:flex;gap:.6rem;align-items:center;">
+            <input type="text" id="dev-search" placeholder="Suche..." onkeyup="filterDevices()" class="form-control" style="width:160px;margin:0;padding:.3rem .6rem;font-size:0.85rem">
+            <button class="btn btn-ghost btn-sm" onclick="loadDevices()">&#128260; Neu laden</button>
+          </div>
+        </div>
         <div class="table-wrap" id="dev-table"><div class="loading"><div class="spinner"></div></div></div>
       </div>
 
@@ -571,8 +584,22 @@ var TOKEN=localStorage.getItem('admin_token')||'';
 var ROLE=localStorage.getItem('admin_role')||'';
 var USER=localStorage.getItem('admin_user')||'';
 var licPage=1,licSearch='',searchTimer;
+var custPage=1,custSearch='';
+var devPage=1,devSearch='';
+var phPage=1,phSearch='';
 var activeSubTab='login-log';
 var CUSTS=[];
+
+function renderPagination(pg, funcName) {
+  if (!pg || pg.pages <= 1) return '';
+  var html = '<div class="pagination-area">';
+  html += '<span>Seite ' + (pg.page || 1) + ' / ' + (pg.pages || 1) + ' (' + (pg.total || 0) + ' gesamt)</span>';
+  html += '<div class="pagination-btns">';
+  html += '<button class="btn btn-ghost btn-xs" onclick="' + funcName + '(' + ((pg.page || 1) - 1) + ')"' + (pg.page <= 1 ? ' disabled' : '') + '>&#9664;</button>';
+  html += '<button class="btn btn-ghost btn-xs" onclick="' + funcName + '(' + ((pg.page || 1) + 1) + ')"' + (pg.page >= pg.pages ? ' disabled' : '') + '>&#9654;</button>';
+  html += '</div></div>';
+  return html;
+}
 
 function API(path,opts){
   opts=opts||{};
@@ -725,27 +752,40 @@ function loadOverview(){
   API('/admin/licenses?limit=10').then(function(lic){
     return API('/admin/analytics').then(function(ana){
       var s=lic.stats||{};
+      var rev=ana.revenue||{total:0,month:0};
       document.getElementById('stats-row').innerHTML=
         '<div class="stat-card"><div class="stat-label">Gesamt Lizenzen</div><div class="stat-value">'+(s.total||0)+'</div></div>'+
         '<div class="stat-card"><div class="stat-label">Aktiv</div><div class="stat-value" style="color:var(--accent3)">'+(s.active||0)+'</div></div>'+
         '<div class="stat-card"><div class="stat-label">L\u00E4uft bald ab</div><div class="stat-value" style="color:var(--gold)">'+(s.expiring||0)+'</div></div>'+
         '<div class="stat-card"><div class="stat-label">Validierungen</div><div class="stat-value">'+(s.total_usage||0)+'</div></div>'+
-        '<div class="stat-card"><div class="stat-label">Aktive Ger\u00E4te</div><div class="stat-value">'+(ana.active_devices||0)+'</div></div>';
+        '<div class="stat-card"><div class="stat-label">Umsatz (Gesamt)</div><div class="stat-value" style="color:var(--accent3)">'+Number(rev.total).toLocaleString('de-DE',{style:'currency',currency:'EUR'})+'</div></div>'+
+        '<div class="stat-card"><div class="stat-label">Umsatz (Monat)</div><div class="stat-value">'+Number(rev.month).toLocaleString('de-DE',{style:'currency',currency:'EUR'})+'</div></div>';
       var top=ana.top_licenses||[];
       document.getElementById('top-licenses').innerHTML=top.length?
         '<table class="data-table"><thead><tr><th>Lizenz-Key</th><th>Kunde</th><th>Typ</th><th>Validierungen</th><th>Zuletzt</th></tr></thead><tbody>'+
         top.map(function(l){return'<tr><td><code>'+esc(l.license_key.slice(0,18))+'&hellip;</code></td><td>'+esc(l.customer_name||'\u2014')+'</td><td>'+typeBadge(l.type)+'</td><td>'+l.usage_count+'</td><td>'+fmtDate(l.last_validated)+'</td></tr>';}).join('')+
         '</tbody></table>':'<div class="loading">Keine Daten</div>';
+      
+      return API('/admin/licenses?expiring=1&limit=20').then(function(exp){
+        var list=exp.licenses||[];
+        document.getElementById('expiring-licenses').innerHTML=list.length?
+          '<table class="data-table"><thead><tr><th>Key</th><th>Kunde</th><th>Typ</th><th>Ablaufdatum</th><th>Tage</th><th>Aktionen</th></tr></thead><tbody>'+
+          list.map(function(l){
+            var d=daysLeft(l.expires_at);
+            return '<tr><td><code>'+esc(l.license_key.slice(0,12))+'&hellip;</code></td><td>'+esc(l.customer_name||'\u2014')+'</td><td>'+typeBadge(l.type)+'</td><td>'+fmtDate(l.expires_at)+'</td><td style="color:var(--gold)">noch '+d+'d</td><td><button class="btn btn-success btn-xs" onclick="renewLicense(\''+esc(l.license_key)+'\')" >Verl\u00E4ngern</button></td></tr>';
+          }).join('')+'</tbody></table>':'<div class="loading">Aktuell keine ablaufenenden Lizenzen in den n\u00E4chsten 30 Tagen.</div>';
+      });
     });
   }).catch(function(e){document.getElementById('stats-row').innerHTML='<div class="alert alert-error">'+esc(e.message||'Fehler')+'</div>';});
 }
 
-function loadLicenses(){
+function loadLicenses(page){
+  if(page!==undefined) licPage=page;
   document.getElementById('lic-table').innerHTML='<div class="loading"><div class="spinner"></div></div>';
   var url='/admin/licenses?page='+licPage+'&limit=25'+(licSearch?'&search='+encodeURIComponent(licSearch):'');
   API(url).then(function(d){
     var licenses=d.licenses||[],pg=d.pagination||{};
-    document.getElementById('lic-table').innerHTML=licenses.length?
+    var html=licenses.length?
       '<table class="data-table"><thead><tr><th>Key</th><th>Typ</th><th>Kunde</th><th>Domain</th><th>Status</th><th>L\u00E4uft ab</th><th>Aktionen</th></tr></thead><tbody>'+
       licenses.map(function(l){
         var days=daysLeft(l.expires_at);
@@ -760,15 +800,12 @@ function loadLicenses(){
             '<button class="btn btn-success btn-sm" onclick="renewLicense(\''+esc(l.license_key)+'\')" >+365d</button> '+
             '<button class="btn btn-danger btn-sm" onclick="deleteLicense(\''+esc(l.license_key)+'\')" >&#128465;</button>'+
           '</td></tr>';
-      }).join('')+'</tbody></table>':'<div class="loading">Keine Lizenzen gefunden.</div>';
-    var pgHtml='<span>Seite '+(pg.page||1)+' / '+(pg.pages||1)+' ('+(pg.total||0)+' gesamt)</span>';
-    pgHtml+='<button onclick="changeLicPage(-1)"'+(licPage<=1?' disabled':'')+'>&#9664;</button>';
-    pgHtml+='<button onclick="changeLicPage(1)"'+(licPage>=(pg.pages||1)?' disabled':'')+'>&#9654;</button>';
-    document.getElementById('lic-pagination').innerHTML=pgHtml;
+      }).join('')+'</tbody></table>' + renderPagination(pg, 'loadLicenses') :
+      '<div class="loading">Keine Lizenzen gefunden.</div>';
+    document.getElementById('lic-table').innerHTML=html;
   }).catch(function(e){document.getElementById('lic-table').innerHTML='<div class="alert alert-error" style="margin:1rem">'+esc(e.message||'Fehler')+'</div>';});
 }
-function changeLicPage(dir){licPage=Math.max(1,licPage+dir);loadLicenses();}
-function debounceSearch(){clearTimeout(searchTimer);searchTimer=setTimeout(function(){licSearch=document.getElementById('lic-search').value;licPage=1;loadLicenses();},350);}
+function filterLic(){ clearTimeout(searchTimer); searchTimer=setTimeout(function(){ licSearch=document.getElementById('lic-search').value; licPage=1; loadLicenses(); },400); }
 
 function viewLicense(key){
   API('/admin/licenses/'+encodeURIComponent(key)).then(function(d){
@@ -822,11 +859,16 @@ function createLicense(){
 }
 
 // ── Customers ────────────────────────────────────────────────────────────────
-function loadCustomers(){
+function loadCustomers(page){
+  if(page!==undefined) custPage=page;
   var showArchived=document.getElementById('cust-show-archived')&&document.getElementById('cust-show-archived').checked;
-  API('/admin/customers'+(showArchived?'?include_archived=1':'')).then(function(d){
+  var url='/admin/customers?page='+custPage+'&limit=25'+(showArchived?'&include_archived=1':'');
+  if(custSearch) url+='&search='+encodeURIComponent(custSearch);
+  
+  API(url).then(function(d){
     CUSTS=d.customers||[];
-    document.getElementById('cust-table').innerHTML=CUSTS.length?
+    var pag=d.pagination||{page:1,pages:1};
+    var html=CUSTS.length?
       '<table class="data-table"><thead><tr><th>Name</th><th>E-Mail</th><th>Firma</th><th>Telefon</th><th>Zahlung</th><th>Status</th><th>Seit</th><th>Aktionen</th></tr></thead><tbody>'+
       CUSTS.map(function(c,idx){
         var isArchived=c.archived==1||c.archived===true;
@@ -846,8 +888,19 @@ function loadCustomers(){
               : '<button class="btn btn-warning btn-sm" onclick="toggleArchiveCustomer(\''+esc(c.id)+'\',true)" >&#128452; Archivieren</button>')+
             ' <button class="btn btn-danger btn-sm" onclick="deleteCustomer(\''+esc(c.id)+'\')" >&#128465;</button>'+
           '</td></tr>';
-      }).join('')+'</tbody></table>':'<div class="loading">Keine Kunden gefunden.</div>';
+      }).join('')+'</tbody></table>' + renderPagination(pag,'loadCustomers') :
+      '<div class="loading">Keine Kunden gefunden.</div>';
+    document.getElementById('cust-table').innerHTML=html;
   }).catch(function(e){document.getElementById('cust-table').innerHTML='<div class="alert alert-error" style="margin:1rem">'+esc(e.message||'Fehler')+'</div>';});
+}
+
+function filterCustomers(){
+  clearTimeout(searchTimer);
+  searchTimer=setTimeout(function(){
+    custSearch=document.getElementById('cust-search').value;
+    custPage=1;
+    loadCustomers();
+  },400);
 }
 
 function openEditCustomer(idx){
@@ -909,10 +962,14 @@ function filterPurchaseByCustomer(customerId){
   },100);
 }
 
-function loadDevices(){
-  API('/admin/devices').then(function(d){
-    var devs=d.devices||[];
-    document.getElementById('dev-table').innerHTML=devs.length?
+function loadDevices(page){
+  if(page!==undefined) devPage=page;
+  var url='/admin/devices?page='+devPage+'&limit=25';
+  if(devSearch) url+='&search='+encodeURIComponent(devSearch);
+
+  API(url).then(function(d){
+    var devs=d.devices||[], pg=d.pagination||{};
+    var html=devs.length?
       '<table class="data-table"><thead><tr><th>Device-ID</th><th>Lizenz-Key</th><th>Typ</th><th>IP</th><th>Zuletzt</th><th>Status</th><th>Aktionen</th></tr></thead><tbody>'+
       devs.map(function(dv){
         return '<tr>'+
@@ -925,8 +982,18 @@ function loadDevices(){
             (dv.active?'<button class="btn btn-ghost btn-sm" onclick="deactivateDevice(\''+esc(dv.id)+'\')" >Deaktivieren</button> ':'')+
             '<button class="btn btn-danger btn-sm" onclick="deleteDevice(\''+esc(dv.id)+'\')" >&#128465;</button>'+
           '</td></tr>';
-      }).join('')+'</tbody></table>':'<div class="loading">Keine Ger\u00E4te gefunden.</div>';
+      }).join('')+'</tbody></table>' + renderPagination(pg,'loadDevices') :
+      '<div class="loading">Keine Ger\u00E4te gefunden.</div>';
+    document.getElementById('dev-table').innerHTML=html;
   }).catch(function(e){document.getElementById('dev-table').innerHTML='<div class="alert alert-error" style="margin:1rem">'+esc(e.message||'Fehler')+'</div>';});
+}
+function filterDevices(){
+  clearTimeout(searchTimer);
+  searchTimer=setTimeout(function(){
+    devSearch=document.getElementById('dev-search').value;
+    devPage=1;
+    loadDevices();
+  },400);
 }
 function deactivateDevice(id){
   API('/admin/devices/'+id+'/deactivate',{method:'PATCH'}).then(function(){loadDevices();}).catch(function(e){alert('Fehler: '+(e.message||e));});
