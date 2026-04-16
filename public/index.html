@@ -572,6 +572,7 @@ var ROLE=localStorage.getItem('admin_role')||'';
 var USER=localStorage.getItem('admin_user')||'';
 var licPage=1,licSearch='',searchTimer;
 var activeSubTab='login-log';
+var CUSTS=[];
 
 function API(path,opts){
   opts=opts||{};
@@ -824,10 +825,10 @@ function createLicense(){
 function loadCustomers(){
   var showArchived=document.getElementById('cust-show-archived')&&document.getElementById('cust-show-archived').checked;
   API('/admin/customers'+(showArchived?'?include_archived=1':'')).then(function(d){
-    var custs=d.customers||[];
-    document.getElementById('cust-table').innerHTML=custs.length?
+    CUSTS=d.customers||[];
+    document.getElementById('cust-table').innerHTML=CUSTS.length?
       '<table class="data-table"><thead><tr><th>Name</th><th>E-Mail</th><th>Firma</th><th>Telefon</th><th>Zahlung</th><th>Status</th><th>Seit</th><th>Aktionen</th></tr></thead><tbody>'+
-      custs.map(function(c){
+      CUSTS.map(function(c,idx){
         var isArchived=c.archived==1||c.archived===true;
         return '<tr'+(isArchived?' style="opacity:.55"':'')+'>'+
           '<td>'+esc(c.name)+(isArchived?' <span class="badge badge-archived">archiviert</span>':'')+'</td>'+
@@ -838,7 +839,7 @@ function loadCustomers(){
           '<td>'+(isArchived?'<span class="badge badge-archived">Archiviert</span>':'<span class="badge badge-active">Aktiv</span>')+'</td>'+
           '<td>'+fmtDate(c.created_at)+'</td>'+
           '<td style="white-space:nowrap">'+
-            '<button class="btn btn-ghost btn-sm" onclick="openEditCustomer('+JSON.stringify(c)+')">&#9999;&#65039; Bearbeiten</button> '+
+            '<button class="btn btn-ghost btn-sm" onclick="openEditCustomer('+idx+')">&#9999;&#65039; Bearbeiten</button> '+
             '<button class="btn btn-ghost btn-sm" onclick="filterPurchaseByCustomer(\''+esc(c.id)+'\')" >&#128717; K\u00E4ufe</button> '+
             (isArchived
               ? '<button class="btn btn-success btn-sm" onclick="toggleArchiveCustomer(\''+esc(c.id)+'\',false)" >&#8617; Reaktivieren</button>'
@@ -849,7 +850,9 @@ function loadCustomers(){
   }).catch(function(e){document.getElementById('cust-table').innerHTML='<div class="alert alert-error" style="margin:1rem">'+esc(e.message||'Fehler')+'</div>';});
 }
 
-function openEditCustomer(c){
+function openEditCustomer(idx){
+  var c = (typeof idx === 'number') ? CUSTS[idx] : idx;
+  if(!c) return;
   document.getElementById('ec-id').value=c.id;
   document.getElementById('ec-name').value=c.name||'';
   document.getElementById('ec-email').value=c.email||'';
