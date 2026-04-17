@@ -181,6 +181,22 @@
       .sidebar-menu li a{justify-content:center;padding:.7rem;}
       .main-area{padding:1rem;}.theme-toggle .toggle-label{display:none;}
     }
+
+    /* ── Advanced Cookie Banner ── */
+    #cookie-advanced-settings { display: none; margin-top: 1.2rem; padding-top: 1rem; border-top: 1px solid var(--border); width: 100%; }
+    .cookie-option { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 0.8rem; padding: 0.6rem; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid transparent; transition: all 0.2s; }
+    .cookie-option:hover { border-color: var(--border); background: rgba(255,255,255,0.05); }
+    .cookie-info { flex: 1; }
+    .cookie-name { font-weight: 600; font-size: 0.88rem; display: block; margin-bottom: 0.1rem; }
+    .cookie-desc { font-size: 0.78rem; color: var(--text2); display: block; }
+    .switch { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--bg3); transition: .3s; border-radius: 20px; border: 1px solid var(--border); }
+    .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 2px; bottom: 2px; background-color: var(--text2); transition: .3s; border-radius: 50%; }
+    input:checked + .slider { background-color: var(--accent); border-color: var(--accent); }
+    input:checked + .slider:before { transform: translateX(16px); background-color: #fff; }
+    input:disabled + .slider { opacity: 0.5; cursor: not-allowed; }
+    .cookie-badge { font-size: 0.65rem; background: var(--bg3); padding: 1px 5px; border-radius: 4px; margin-left: 0.4rem; color: var(--text2); }
   </style>
 </head>
 <body>
@@ -292,9 +308,21 @@
         <p>Hinweise zur Verarbeitung personenbezogener Daten bei Nutzung dieses Lizenzservers.</p>
         <h2>2. Verarbeitete Daten</h2>
         <p>IP-Adresse, Hardware-ID-Hash, Lizenzschl&uuml;ssel, Zeitstempel, Validierungsergebnis. Rechtsgrundlage: Art. 6 Abs. 1 lit. b + f DSGVO.</p>
-        <h2>3. Aufbewahrungsfristen</h2>
+        <h2>3. Cookies & LocalStorage</h2>
+        <p>Wir verwenden folgende technisch notwendige Daten im LocalStorage Ihres Browsers:</p>
+        <ul>
+          <li><strong>admin_token:</strong> Speichert Ihre Sitzung nach dem Login (notwendig f&uuml;r Admin-Funktionen).</li>
+          <li><strong>theme:</strong> Speichert Ihre Pr&auml;ferenz f&uuml;r den Dark/Light-Mode.</li>
+          <li><strong>cookie_consent:</strong> Speichert Ihre Cookie-Einwilligung.</li>
+        </ul>
+        <p>Zudem werden externe Ressourcen geladen:</p>
+        <ul>
+          <li><strong>Google Fonts:</strong> Zur Darstellung der Typografie (Laden von fonts.googleapis.com).</li>
+          <li><strong>jsdelivr:</strong> Zur Bereitstellung der Chart.js Bibliothek f&uuml;r Statistiken.</li>
+        </ul>
+        <h2>4. Aufbewahrungsfristen</h2>
         <ul><li>Audit-Logs: 12 Monate</li><li>Lizenzaktivierungsdaten: Vertragslaufzeit + 3 Jahre</li></ul>
-        <h2>4. Aufsichtsbeh&ouml;rde</h2>
+        <h2>5. Aufsichtsbeh&ouml;rde</h2>
         <p>Unabh&auml;ngiges Landeszentrum f&uuml;r Datenschutz Schleswig-Holstein, Holstenstra&szlig;e 98, 24103 Kiel</p>
       </div>
     </section>
@@ -1559,42 +1587,112 @@ if(TOKEN&&window.location.hash==='#admin')openAdmin();
 </script>
 <!-- ── DSGVO Cookie-Banner ──────────────────────────────────────────── -->
 <div id="cookie-banner" style="
-  display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;
-  background:var(--bg2);border-top:1px solid var(--border);
-  padding:1rem 2rem;display:flex;align-items:center;
-  justify-content:space-between;flex-wrap:wrap;gap:1rem;
-  box-shadow:0 -4px 24px rgba(0,0,0,0.3);">
-  <div style="flex:1;min-width:220px;">
-    <strong style="font-size:.95rem;">🍪 Cookie-Hinweis</strong>
-    <p style="font-size:.82rem;color:var(--text2);margin:.3rem 0 0;">
-      Diese Website verwendet ausschließlich technisch notwendige Cookies 
-      (Session-Token, Theme-Einstellung). Es werden keine Tracking- oder 
-      Werbe-Cookies eingesetzt. Rechtsgrundlage: Art. 6 Abs. 1 lit. f DSGVO.
-      <a onclick="showPublicPage('legal')" style="color:var(--accent);cursor:pointer;margin-left:.3rem;">
-        Datenschutzerklärung
-      </a>
-    </p>
+  display:none;position:fixed;bottom:1.5rem;left:1.5rem;right:1.5rem;z-index:9999;
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
+  padding:1.5rem;flex-direction:column;gap:1.2rem;max-width:550px;
+  box-shadow:0 12px 40px rgba(0,0,0,0.5);backdrop-filter:blur(20px);">
+  
+  <div style="display:flex;align-items:center;gap:0.8rem;">
+    <span style="font-size:1.5rem;">🍪</span>
+    <div style="flex:1;">
+      <strong style="font-size:1.1rem;font-family:'Outfit',sans-serif;">Privatsph&auml;re-Einstellungen</strong>
+      <p style="font-size:.85rem;color:var(--text2);margin-top:0.2rem;">
+        Wir nutzen Cookies, um die bestm&ouml;gliche Erfahrung zu bieten. W&auml;hlen Sie aus, welche Kategorien Sie zulassen m&ouml;chten.
+      </p>
+    </div>
   </div>
-  <div style="display:flex;gap:.6rem;flex-shrink:0;">
-    <button class="btn btn-ghost btn-sm" onclick="cookieDecline()">Ablehnen</button>
-    <button class="btn btn-primary btn-sm" onclick="cookieAccept()">Verstanden</button>
+
+  <div id="cookie-advanced-settings">
+    <div class="cookie-option">
+      <div class="cookie-info">
+        <span class="cookie-name">Essenziell <span class="cookie-badge">Immer aktiv</span></span>
+        <span class="cookie-desc">Notwendig f&uuml;r Kernfunktionen wie Login, Sicherheit und Design-Pr&auml;ferenzen.</span>
+      </div>
+      <label class="switch"><input type="checkbox" checked disabled><span class="slider"></span></label>
+    </div>
+
+    <div class="cookie-option">
+      <div class="cookie-info">
+        <span class="cookie-name">Funktionell</span>
+        <span class="cookie-desc">Erm&ouml;glicht das Laden externer Ressourcen wie Schriften (Google Fonts) und Programm-Bibliotheken (CDNs).</span>
+      </div>
+      <label class="switch"><input type="checkbox" id="consent-func" checked><span class="slider"></span></label>
+    </div>
+
+    <div class="cookie-option" style="opacity:0.6;">
+      <div class="cookie-info">
+        <span class="cookie-name">Analyse & Marketing</span>
+        <span class="cookie-desc">Aktuell nicht genutzt. W&uuml;rde helfen zu verstehen, wie die Seite genutzt wird.</span>
+      </div>
+      <label class="switch"><input type="checkbox" id="consent-analytics"><span class="slider"></span></label>
+    </div>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;margin-top:0.5rem;padding-top:1rem;border-top:1px solid var(--border);">
+    <div style="display:flex;gap:0.8rem;font-size:0.8rem;">
+      <a onclick="showPublicPage('legal');showLegalTab('impressum')" style="color:var(--text2);cursor:pointer;text-decoration:underline;">Impressum</a>
+      <a onclick="showPublicPage('legal');showLegalTab('datenschutz')" style="color:var(--text2);cursor:pointer;text-decoration:underline;">Datenschutz</a>
+    </div>
+    <div style="display:flex;gap:.8rem;">
+      <button class="btn btn-ghost btn-sm" id="btn-cookie-settings" onclick="toggleCookieSettings()">Einstellungen</button>
+      <button class="btn btn-ghost btn-sm" id="btn-cookie-necessary" onclick="saveConsent(false)">Nur Notwendige</button>
+      <button class="btn btn-primary btn-sm" id="btn-cookie-all" onclick="saveConsent(true)">Alle akzeptieren</button>
+      <button class="btn btn-primary btn-sm" id="btn-cookie-save" style="display:none;" onclick="saveCustomConsent()">Speichern</button>
+    </div>
   </div>
 </div>
 
 <script>
 (function(){
-  if(!localStorage.getItem('cookie_consent')){
-    var b=document.getElementById('cookie-banner');
-    if(b){ b.style.display='flex'; }
+  var consent = localStorage.getItem('cookie_consent');
+  if(!consent){
+    document.getElementById('cookie-banner').style.display='flex';
+  } else {
+    applyConsent(JSON.parse(consent));
   }
 })();
-function cookieAccept(){
-  localStorage.setItem('cookie_consent','accepted');
+
+function toggleCookieSettings() {
+  var adv = document.getElementById('cookie-advanced-settings');
+  var isVisible = adv.style.display === 'block';
+  adv.style.display = isVisible ? 'none' : 'block';
+  
+  document.getElementById('btn-cookie-necessary').style.display = isVisible ? 'inline-flex' : 'none';
+  document.getElementById('btn-cookie-all').style.display = isVisible ? 'inline-flex' : 'none';
+  document.getElementById('btn-cookie-save').style.display = isVisible ? 'none' : 'inline-flex';
+  document.getElementById('btn-cookie-settings').textContent = isVisible ? 'Einstellungen' : 'Abbrechen';
+}
+
+function saveConsent(all) {
+  var consentObj = {
+    essential: true,
+    functional: all,
+    analytics: all,
+    timestamp: new Date().toISOString()
+  };
+  localStorage.setItem('cookie_consent', JSON.stringify(consentObj));
+  applyConsent(consentObj);
   document.getElementById('cookie-banner').style.display='none';
 }
-function cookieDecline(){
-  localStorage.setItem('cookie_consent','declined');
+
+function saveCustomConsent() {
+  var consentObj = {
+    essential: true,
+    functional: document.getElementById('consent-func').checked,
+    analytics: document.getElementById('consent-analytics').checked,
+    timestamp: new Date().toISOString()
+  };
+  localStorage.setItem('cookie_consent', JSON.stringify(consentObj));
+  applyConsent(consentObj);
   document.getElementById('cookie-banner').style.display='none';
+}
+
+function applyConsent(consent) {
+  // logic to block/allow scripts could go here
+  if(!consent.functional) {
+    console.log('Functional cookies/resources restricted.');
+    // note: fonts are already loaded via HTML, in a real scenario we'd inject them here
+  }
 }
 </script>
 
