@@ -111,6 +111,19 @@ CREATE TABLE IF NOT EXISTS webhooks (
     active TINYINT(1) DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS menu (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    license_key VARCHAR(64),
+    category VARCHAR(64),
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    price DECIMAL(10,2),
+    sort_order INT DEFAULT 0,
+    active TINYINT(1) DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (license_key) REFERENCES licenses(license_key) ON DELETE CASCADE
+);
 `);
 
 console.log('✅ Schema erfolgreich erstellt.');

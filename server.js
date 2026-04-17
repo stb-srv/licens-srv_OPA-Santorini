@@ -72,7 +72,7 @@ app.use(helmet({
             styleSrc:       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             styleSrcElem:   ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             imgSrc:         ["'self'", "data:", "https:"],
-            connectSrc:     ["'self'", "https://cdn.jsdelivr.net"],
+            connectSrc:     ["'self'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com"],
             fontSrc:        ["'self'", "https:", "data:", "https://fonts.gstatic.com"],
             objectSrc:      ["'none'"],
             upgradeInsecureRequests: [],
