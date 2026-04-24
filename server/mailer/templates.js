@@ -251,7 +251,47 @@ const TEMPLATES = {
           </p>
         `),
         text: `Passwort zur\u00fccksetzen\n\nHallo ${d.name},\n\nBitte klicke auf folgenden Link um dein Passwort zur\u00fcckzusetzen:\n${d.reset_url}\n\nDer Link ist 2 Stunden g\u00fcltig.\n\nFalls du keinen Reset angefordert hast, ignoriere diese E-Mail.`
-    })
+    }),
+
+    trialWelcome: (d) => {
+        const expDate = new Date(d.expires_at).toLocaleDateString('de-DE', {
+            day: '2-digit', month: 'long', year: 'numeric'
+        });
+        return {
+            subject: `🍽️ Ihr OPA! Santorini Trial ist aktiv – Key: ${d.license_key}`,
+            html: layout('Willkommen bei OPA! Santorini', `
+                <h1 style="color:#1b3a5c; font-size:1.4rem; margin:0 0 16px;">
+                    Willkommen bei OPA! Santorini &#127881;
+                </h1>
+                <p style="margin:0 0 16px; color:#555; line-height:1.7;">Hallo ${d.restaurant_name},</p>
+                <p style="margin:0 0 16px; color:#555; line-height:1.7;">Ihr <strong>30-Tage Trial</strong> ist jetzt aktiv. Hier sind Ihre Zugangsdaten:</p>
+
+                <div style="background:#f8fafc; border-radius:12px; padding:20px; margin:24px 0; border-left:4px solid #1b3a5c;">
+                    <p style="margin:0 0 8px;"><strong>Lizenz-Key:</strong><br>
+                       <code style="font-size:1.1rem; letter-spacing:2px; color:#1b3a5c;">
+                         ${d.license_key}
+                       </code></p>
+                    <p style="margin:8px 0;"><strong>Plan:</strong> ${d.plan_label}</p>
+                    <p style="margin:8px 0;"><strong>Domain:</strong> ${d.domain}</p>
+                    <p style="margin:8px 0 0;"><strong>Gültig bis:</strong> ${expDate}</p>
+                </div>
+
+                <p style="margin:0 0 12px;"><strong>Im Trial enthalten:</strong></p>
+                <ul style="margin:0; padding:0 0 0 20px; color:#555; line-height:1.7;">
+                    <li>Bis zu ${d.limits.max_dishes} Gerichte</li>
+                    <li>Bis zu ${d.limits.max_tables} Tische</li>
+                    <li>Küchen-Bestellsystem</li>
+                    <li>Telefonische Reservierungen</li>
+                </ul>
+
+                <p style="color:#6b7280; font-size:.85rem; margin-top:32px;">
+                    Bei Fragen antworten Sie einfach auf diese E-Mail.<br>
+                    – Das OPA! Santorini Team
+                </p>
+            `),
+            text: `Willkommen bei OPA! Santorini!\n\nIhr 30-Tage Trial ist jetzt aktiv.\n\nLizenz-Key: ${d.license_key}\nPlan: ${d.plan_label}\nDomain: ${d.domain}\nGültig bis: ${expDate}\n\nBei Fragen: support@stb-srv.de`
+        };
+    }
 };
 
 export function renderTemplate(name, data = {}) {

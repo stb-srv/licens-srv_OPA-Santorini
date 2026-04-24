@@ -5,6 +5,8 @@ import db from '../db.js';
 import { PLAN_DEFINITIONS } from '../plans.js';
 import { RSA_PUBLIC_KEY, createSignedLicenseToken, signResponse, isHmacActive, HMAC_SECRET } from '../crypto.js';
 import { domainMatches, getClientIp, addAuditLog, parseJsonField } from '../helpers.js';
+import { fireWebhook } from '../webhook.js';
+import { sendTemplateMail } from '../mailer/index.js';
 import { validateLimiter, setupLimiter, trialLimiter, offlineTokenLimiter, MIN_PASSWORD_LENGTH, asyncHandler } from '../middleware.js';
 
 const router = Router();
@@ -96,6 +98,37 @@ router.post('/trial/register', trialLimiter, asyncHandler(async (req, res) => {
     console.log(`🎉 Neuer Trial registriert: ${restaurant_name || domain} (${domain}) – Key: ${key}`);
 
     const plan = PLAN_DEFINITIONS['TRIAL'];
+
+    // Webhook: trial.registered
+    await fireWebhook('trial.registered', {
+        license_key:     key,
+        domain,
+        restaurant_name: restaurant_name || domain,
+        contact_email:   contact_email || null,
+        expires_at:      expiresAt,
+        registered_ip:   clientIp
+    });
+
+    // Willkommens-Mail an contact_email (falls angegeben)
+    if (contact_email) {
+        try {
+            await sendTemplateMail('trialWelcome', contact_email, {
+                restaurant_name: restaurant_name || domain,
+                license_key:     key,
+                expires_at:      expiresAt,
+                domain,
+                plan_label:      plan.label,
+                modules:         plan.modules,
+                limits: {
+                    max_dishes: plan.menu_items,
+                    max_tables: plan.max_tables
+                }
+            });
+            console.log(`📧 Willkommens-Mail gesendet an: ${contact_email}`);
+        } catch (mailErr) {
+            console.warn(`📧 Willkommens-Mail fehlgeschlagen:`, mailErr.message);
+        }
+    }
 
     return res.status(201).json({
         success:     true,
