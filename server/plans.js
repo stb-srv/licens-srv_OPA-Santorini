@@ -4,6 +4,26 @@
  * Änderungen hier wirken sich automatisch auf Validierung, Tokens und Admin-Panel aus.
  */
 export const PLAN_DEFINITIONS = {
+    TRIAL: {
+        label: 'Trial (30 Tage)',
+        menu_items: 50,
+        max_tables: 8,
+        expires_days: 30,
+        modules: {
+            menu_edit:            true,
+            multilanguage:        false,
+            seasonal_menu:        false,
+            orders_kitchen:       true,
+            reservations_online:  false,
+            reservations_phone:   true,
+            custom_branding:      false,
+            analytics:            false,
+            qr_pay:               false,
+            online_orders:        false,
+            backup:               false,
+            image_ai:             false
+        }
+    },
     FREE: {
         label: 'Free',
         menu_items: 30,

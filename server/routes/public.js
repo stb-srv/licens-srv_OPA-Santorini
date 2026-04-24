@@ -5,7 +5,7 @@ import db from '../db.js';
 import { PLAN_DEFINITIONS } from '../plans.js';
 import { RSA_PUBLIC_KEY, createSignedLicenseToken, signResponse, isHmacActive, HMAC_SECRET } from '../crypto.js';
 import { domainMatches, getClientIp, addAuditLog, parseJsonField } from '../helpers.js';
-import { validateLimiter, setupLimiter, offlineTokenLimiter, MIN_PASSWORD_LENGTH, asyncHandler } from '../middleware.js';
+import { validateLimiter, setupLimiter, trialLimiter, offlineTokenLimiter, MIN_PASSWORD_LENGTH, asyncHandler } from '../middleware.js';
 
 const router = Router();
 const SETUP_TOKEN = process.env.SETUP_TOKEN || '';
@@ -42,6 +42,73 @@ router.post('/setup', setupLimiter, asyncHandler(async (req, res) => {
         console.error('Setup-Fehler:', e.message);
         res.status(500).json({ success: false, message: 'Internal server error' });
     }
+}));
+
+// ── Trial Self-Registration ────────────────────────────────────────────────────
+router.post('/trial/register', trialLimiter, asyncHandler(async (req, res) => {
+    const { domain, contact_email, restaurant_name, instance_id } = req.body;
+    if (!domain) return res.status(400).json({ success: false, message: 'Domain ist Pflichtfeld.' });
+
+    const clientIp = getClientIp(req);
+
+    // Prüfen ob für diese Domain bereits ein Trial existiert
+    const [existing] = await db.query(
+        "SELECT id FROM licenses WHERE associated_domain = ? AND type = 'TRIAL'",
+        [domain]
+    );
+    if (existing.length > 0) {
+        return res.status(409).json({
+            success: false,
+            message: 'Für diese Domain ist bereits ein Trial aktiv.',
+            hint: 'Bitte nutzen Sie Ihren bestehenden Trial-Key oder kontaktieren Sie den Support.'
+        });
+    }
+
+    // Trial-Key generieren: OPA-TRIAL-XXXXXXXX-XXXXXXXX
+    const key = `OPA-TRIAL-${crypto.randomBytes(4).toString('hex').toUpperCase()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 Tage
+
+    const notes = JSON.stringify({
+        contact_email: contact_email || null,
+        instance_id:   instance_id   || null,
+        registered_ip: clientIp,
+        registered_at: new Date().toISOString(),
+        source:        'self-registration'
+    });
+
+    await db.query(
+        `INSERT INTO licenses 
+            (id, license_key, type, status, customer_name, associated_domain, expires_at, notes, max_devices)
+         VALUES (?, ?, 'TRIAL', 'active', ?, ?, ?, ?, 1)`,
+        [crypto.randomUUID(), key, restaurant_name || domain, domain, expiresAt, notes]
+    );
+
+    await addAuditLog('trial_registered', {
+        license_key:     key,
+        domain,
+        contact_email:   contact_email || null,
+        restaurant_name: restaurant_name || null,
+        instance_id:     instance_id || null,
+        ip:              clientIp
+    });
+
+    console.log(`🎉 Neuer Trial registriert: ${restaurant_name || domain} (${domain}) – Key: ${key}`);
+
+    const plan = PLAN_DEFINITIONS['TRIAL'];
+
+    return res.status(201).json({
+        success:     true,
+        license_key: key,
+        plan:        'TRIAL',
+        plan_label:  plan.label,
+        expires_at:  expiresAt,
+        modules:     plan.modules,
+        limits: {
+            max_dishes: plan.menu_items,
+            max_tables: plan.max_tables
+        },
+        message: `Ihr 30-Tage Trial wurde aktiviert. Key: ${key}`
+    });
 }));
 
 // ── Validate ───────────────────────────────────────────────────────────────────

@@ -119,6 +119,13 @@ export const bulkLimiter = rateLimit({
     message: { success: false, message: 'Too many bulk requests. Max 10 per minute.' }
 });
 
+export const trialLimiter = rateLimit({
+    windowMs: 24 * 60 * 60 * 1000, // 24 Stunden
+    max: 3,
+    keyGenerator: (req) => req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+    message: { success: false, message: 'Maximale Trial-Registrierungen pro IP erreicht (3/Tag).' }
+});
+
 // ── asyncHandler ──────────────────────────────────────────────────────────────────
 import { asyncHandler as actualAsyncHandler } from './helpers.js';
 export const asyncHandler = actualAsyncHandler;
