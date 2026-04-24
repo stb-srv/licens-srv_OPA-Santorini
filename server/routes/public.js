@@ -51,9 +51,9 @@ router.post('/trial/register', trialLimiter, asyncHandler(async (req, res) => {
 
     const clientIp = getClientIp(req);
 
-    // Prüfen ob für diese Domain bereits ein Trial existiert
+    // Prüfen ob für diese Domain bereits ein Trial existiert (license_key ist PK, kein id)
     const [existing] = await db.query(
-        "SELECT id FROM licenses WHERE associated_domain = ? AND type = 'TRIAL'",
+        "SELECT license_key FROM licenses WHERE associated_domain = ? AND type = 'TRIAL'",
         [domain]
     );
     if (existing.length > 0) {
@@ -76,11 +76,12 @@ router.post('/trial/register', trialLimiter, asyncHandler(async (req, res) => {
         source:        'self-registration'
     });
 
+    // Fix #2: license_key ist der PRIMARY KEY – kein id-Feld in der licenses-Tabelle
     await db.query(
-        `INSERT INTO licenses 
-            (id, license_key, type, status, customer_name, associated_domain, expires_at, notes, max_devices)
-         VALUES (?, ?, 'TRIAL', 'active', ?, ?, ?, ?, 1)`,
-        [crypto.randomUUID(), key, restaurant_name || domain, domain, expiresAt, notes]
+        `INSERT INTO licenses
+            (license_key, type, status, customer_name, associated_domain, expires_at, notes, max_devices)
+         VALUES (?, 'TRIAL', 'active', ?, ?, ?, ?, 1)`,
+        [key, restaurant_name || domain, domain, expiresAt, notes]
     );
 
     await addAuditLog('trial_registered', {
@@ -210,7 +211,6 @@ router.post('/validate', validateLimiter, asyncHandler(async (req, res) => {
             ...(customer ? { account_email: customer.email, company: customer.company } : {})
         };
 
-        // Token-Gültigkeit: 73h (72h Check-Intervall + 1h Puffer)
         const signedToken = createSignedLicenseToken({
             license_key, type: l.type, plan_label: plan.label, expires_at: l.expires_at,
             allowed_modules: allowedModules, limits, domain: domain || l.associated_domain,
@@ -289,6 +289,7 @@ router.post('/refresh', validateLimiter, asyncHandler(async (req, res) => {
             await addAuditLog('refresh_failed', { license_key, reason: 'not_found', ip: clientIp });
             return res.status(404).json({ status: 'invalid', message: 'Lizenz-Key nicht gefunden.' });
         }
+        // Fix #5: 'cancelled' ist jetzt im ENUM – Prüfung bleibt korrekt
         if (l.status === 'revoked' || l.status === 'cancelled') {
             await addAuditLog('refresh_failed', { license_key, reason: l.status, ip: clientIp });
             return res.status(403).json({ status: l.status, message: `Lizenz wurde widerrufen (${l.status}).` });
