@@ -553,6 +553,55 @@ router.post('/licenses/:key/extend', requireAuth, asyncHandler(async (req, res) 
     });
 }));
 
+// ── Lizenz-Domain-Transfer ─────────────────────────────────────────────────────
+router.post('/licenses/:key/transfer', requireAuth, asyncHandler(async (req, res) => {
+    const { key } = req.params;
+    const { new_domain } = req.body;
+    if (!new_domain) return res.status(400).json({ success: false, message: 'new_domain fehlt.' });
+
+    const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [key]);
+    if (!rows[0]) return res.status(404).json({ success: false, message: 'Lizenz nicht gefunden.' });
+
+    const old_domain = rows[0].associated_domain;
+
+    await db.query(
+        'UPDATE licenses SET associated_domain = ? WHERE license_key = ?',
+        [new_domain, key]
+    );
+
+    await addAuditLog('license_transferred', {
+        license_key: key,
+        old_domain,
+        new_domain,
+        actor: req.admin?.username || 'admin'
+    });
+
+    await fireWebhook('license.transferred', { license_key: key, old_domain, new_domain });
+
+    return res.json({
+        success: true,
+        message: `Lizenz von ${old_domain} → ${new_domain} transferiert.`,
+        license_key: key,
+        new_domain
+    });
+}));
+
+// ── Inaktive Instanzen (kein Heartbeat > 14 Tage) ─────────────────────────────
+router.get('/licenses/inactive', requireAuth, asyncHandler(async (req, res) => {
+    const [rows] = await db.query(`
+        SELECT l.license_key, l.customer_name, l.type, l.associated_domain AS domain, l.status,
+               h.ts AS last_heartbeat,
+               DATEDIFF(NOW(), COALESCE(h.ts, l.created_at)) AS days_inactive
+        FROM licenses l
+        LEFT JOIN license_heartbeats h ON h.license_key = l.license_key
+        WHERE l.status = 'active'
+          AND (h.ts IS NULL OR h.ts < DATE_SUB(NOW(), INTERVAL 14 DAY))
+        ORDER BY days_inactive DESC
+        LIMIT 50
+    `);
+    return res.json({ success: true, inactive: rows });
+}));
+
 router.patch('/licenses/:key/customer', requireAuth, asyncHandler(async (req, res) => {
   try {
     await db.query('UPDATE licenses SET customer_id = ? WHERE license_key = ?',

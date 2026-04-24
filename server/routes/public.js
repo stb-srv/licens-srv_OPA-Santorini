@@ -145,6 +145,27 @@ router.post('/trial/register', trialLimiter, asyncHandler(async (req, res) => {
     });
 }));
 
+// ── Heartbeat: CMS meldet sich täglich ────────────────────────────────────────
+router.post('/heartbeat', asyncHandler(async (req, res) => {
+    const licenseKey = req.headers['x-license-key'] || req.body?.license_key;
+    if (!licenseKey) return res.status(400).json({ success: false, message: 'x-license-key Header fehlt.' });
+
+    const [rows] = await db.query(
+        'SELECT license_key, status, type FROM licenses WHERE license_key = ?', [licenseKey]
+    );
+    if (!rows[0]) return res.status(404).json({ success: false, message: 'Lizenz nicht gefunden.' });
+    if (rows[0].status !== 'active') return res.status(403).json({ success: false, message: 'Lizenz nicht aktiv.' });
+
+    await db.query(
+        `INSERT INTO license_heartbeats (license_key, ip, user_agent, ts)
+         VALUES (?, ?, ?, NOW())
+         ON DUPLICATE KEY UPDATE ip = VALUES(ip), user_agent = VALUES(user_agent), ts = NOW()`,
+        [rows[0].license_key, req.ip, req.headers['user-agent']?.slice(0, 200) || null]
+    );
+
+    return res.json({ success: true, status: rows[0].status, type: rows[0].type });
+}));
+
 // ── Validate ───────────────────────────────────────────────────────────────────
 router.post('/validate', validateLimiter, asyncHandler(async (req, res) => {
     const { license_key, domain, device_id, device_type, nonce, features_used } = req.body;
@@ -267,46 +288,6 @@ router.post('/validate', validateLimiter, asyncHandler(async (req, res) => {
 router.get('/public-key', (req, res) => {
     res.json({ public_key: RSA_PUBLIC_KEY, algorithm: 'RS256' });
 });
-
-// ── Heartbeat ────────────────────────────────────────────────────────────────────
-router.post('/heartbeat', validateLimiter, asyncHandler(async (req, res) => {
-    const { license_key, domain } = req.body;
-    if (!license_key) return res.status(400).json({ status: 'invalid', message: 'No key provided' });
-    const clientIp = getClientIp(req);
-
-    try {
-        const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [license_key]);
-        const l = rows[0];
-        if (!l || l.status !== 'active' || new Date(l.expires_at) < new Date()) {
-            await addAuditLog('heartbeat_failed', { license_key, reason: 'invalid_or_expired', ip: clientIp });
-            return res.status(403).json({ status: 'invalid', message: 'Lizenz ungültig oder abgelaufen.' });
-        }
-        if (domain && !domainMatches(l.associated_domain, domain)) {
-            await addAuditLog('heartbeat_failed', { license_key, reason: 'domain_mismatch', domain, ip: clientIp });
-            return res.status(403).json({ status: 'domain_mismatch', message: 'Domain stimmt nicht überein.' });
-        }
-
-        await db.query('UPDATE licenses SET last_heartbeat = NOW() WHERE license_key = ?', [license_key]);
-        await addAuditLog('heartbeat_ok', { license_key, domain, ip: clientIp });
-
-        const plan = PLAN_DEFINITIONS[l.type] || PLAN_DEFINITIONS['FREE'];
-        const allowedModules = l.allowed_modules ? parseJsonField(l.allowed_modules, plan.modules) : plan.modules;
-        const limits = l.limits
-            ? parseJsonField(l.limits, { max_dishes: plan.menu_items, max_tables: plan.max_tables })
-            : { max_dishes: plan.menu_items, max_tables: plan.max_tables };
-
-        const signedToken = createSignedLicenseToken({
-            license_key, type: l.type, plan_label: plan.label, expires_at: l.expires_at,
-            allowed_modules: allowedModules, limits, domain: domain || l.associated_domain,
-            issued_at: Math.floor(Date.now() / 1000)
-        }, '73h');
-
-        res.json({ status: 'ok', next_heartbeat_in_hours: 72, license_token: signedToken, token: signedToken, expires_at: l.expires_at });
-    } catch (e) {
-        console.error(e);
-        res.status(500).json({ status: 'error', message: 'Internal server error' });
-    }
-}));
 
 // ── Refresh ──────────────────────────────────────────────────────────────────────
 router.post('/refresh', validateLimiter, asyncHandler(async (req, res) => {
