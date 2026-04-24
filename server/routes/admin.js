@@ -469,6 +469,90 @@ router.delete('/licenses/:key', requireAuth, asyncHandler(async (req, res) => {
   }
 }));
 
+// ── Lizenz upgraden ────────────────────────────────────────────────────────────
+router.post('/licenses/:key/upgrade', requireAuth, asyncHandler(async (req, res) => {
+    const { key } = req.params;
+    const { new_type, extend_days } = req.body;
+
+    const validTypes = ['FREE', 'STARTER', 'PRO', 'PRO_PLUS', 'ENTERPRISE'];
+    if (!new_type || !validTypes.includes(new_type)) {
+        return res.status(400).json({ success: false, message: `Ungültiger Plan. Erlaubt: ${validTypes.join(', ')}` });
+    }
+
+    const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [key]);
+    if (!rows[0]) return res.status(404).json({ success: false, message: 'Lizenz nicht gefunden.' });
+
+    const plan = PLAN_DEFINITIONS[new_type];
+    const days = extend_days || plan.expires_days;
+    const newExpiry = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+
+    await db.query(
+        `UPDATE licenses SET type = ?, status = 'active', expires_at = ?,
+         expiry_notified_at = NULL WHERE license_key = ?`,
+        [new_type, newExpiry, key]
+    );
+
+    await addAuditLog('license_upgraded', {
+        license_key: key,
+        old_type: rows[0].type,
+        new_type,
+        new_expiry: newExpiry,
+        actor: req.admin?.username || 'admin'
+    });
+
+    await fireWebhook('license.upgraded', {
+        license_key: key,
+        old_type: rows[0].type,
+        new_type,
+        expires_at: newExpiry
+    });
+
+    return res.json({
+        success: true,
+        message: `Lizenz auf ${new_type} upgraded. Läuft ab: ${newExpiry.toISOString()}`,
+        license_key: key,
+        new_type,
+        expires_at: newExpiry
+    });
+}));
+
+// ── Lizenz verlängern ──────────────────────────────────────────────────────────
+router.post('/licenses/:key/extend', requireAuth, asyncHandler(async (req, res) => {
+    const { key } = req.params;
+    const { days } = req.body;
+    if (!days || isNaN(days) || days < 1) {
+        return res.status(400).json({ success: false, message: 'days muss eine positive Zahl sein.' });
+    }
+
+    const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [key]);
+    if (!rows[0]) return res.status(404).json({ success: false, message: 'Lizenz nicht gefunden.' });
+
+    const base = new Date(rows[0].expires_at) > new Date()
+        ? new Date(rows[0].expires_at)
+        : new Date();
+    const newExpiry = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
+
+    await db.query(
+        `UPDATE licenses SET expires_at = ?, status = 'active', expiry_notified_at = NULL
+         WHERE license_key = ?`,
+        [newExpiry, key]
+    );
+
+    await addAuditLog('license_extended', {
+        license_key: key,
+        extended_by_days: days,
+        new_expiry: newExpiry,
+        actor: req.admin?.username || 'admin'
+    });
+
+    return res.json({
+        success: true,
+        message: `Lizenz um ${days} Tage verlängert.`,
+        license_key: key,
+        expires_at: newExpiry
+    });
+}));
+
 router.patch('/licenses/:key/customer', requireAuth, asyncHandler(async (req, res) => {
   try {
     await db.query('UPDATE licenses SET customer_id = ? WHERE license_key = ?',
@@ -1178,6 +1262,53 @@ router.get('/export/history', requireAuth, asyncHandler(async (req, res) => {
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename=purchase_history_export.csv');
   res.send('\ufeff' + csv); // BOM for Excel
+}));
+
+
+// ── Dashboard-Statistiken ──────────────────────────────────────────────────────
+router.get('/stats', requireAuth, asyncHandler(async (req, res) => {
+    const [[totals]] = await db.query(`
+        SELECT
+            COUNT(*) AS total,
+            SUM(status = 'active') AS active,
+            SUM(status = 'expired') AS expired,
+            SUM(status = 'suspended') AS suspended,
+            SUM(type = 'TRIAL') AS trials,
+            SUM(type = 'FREE') AS free,
+            SUM(type = 'STARTER') AS starter,
+            SUM(type = 'PRO') AS pro,
+            SUM(type = 'PRO_PLUS') AS pro_plus,
+            SUM(type = 'ENTERPRISE') AS enterprise
+        FROM licenses
+    `);
+
+    const [[newTrials]] = await db.query(`
+        SELECT COUNT(*) AS count FROM licenses
+        WHERE type = 'TRIAL' AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+    `);
+
+    const [expiringSoon] = await db.query(`
+        SELECT license_key, customer_name, type, expires_at
+        FROM licenses
+        WHERE status = 'active'
+          AND expires_at BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 14 DAY)
+        ORDER BY expires_at ASC
+        LIMIT 10
+    `);
+
+    const [[revenue]] = await db.query(`
+        SELECT COUNT(*) AS paid_licenses
+        FROM licenses
+        WHERE type NOT IN ('FREE', 'TRIAL') AND status = 'active'
+    `);
+
+    return res.json({
+        success: true,
+        totals,
+        new_trials_last_7_days: newTrials.count,
+        expiring_soon: expiringSoon,
+        paid_licenses: revenue.paid_licenses
+    });
 }));
 
 export default router;
