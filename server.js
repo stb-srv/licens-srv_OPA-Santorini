@@ -12,6 +12,7 @@ import { PLAN_DEFINITIONS } from './server/plans.js';
 import publicRoutes from './server/routes/public.js';
 import adminRoutes from './server/routes/admin.js';
 import portalRoutes from './server/routes/customer-portal.js';
+import resellerRoutes from './server/routes/reseller.js';
 import { envSmtp } from './server/smtp.js';
 import { adminTokenAlgorithm, requireIpWhitelist } from './server/middleware.js';
 
@@ -123,6 +124,7 @@ app.use(express.json());
 app.use('/api/v1', publicRoutes);
 app.use('/api/admin', requireIpWhitelist, adminRoutes);
 app.use('/api/portal', portalRoutes);
+app.use('/api/v1/reseller', resellerRoutes);
 
 // ── Static Files ──────────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));

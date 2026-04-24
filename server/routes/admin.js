@@ -1360,4 +1360,32 @@ router.get('/stats', requireAuth, asyncHandler(async (req, res) => {
     });
 }));
 
+// ── Admin: Reseller verwalten ──────────────────────────────────────────────────
+router.get('/resellers', requireAuth, asyncHandler(async (req, res) => {
+    const [rows] = await db.query('SELECT * FROM reseller_keys ORDER BY created_at DESC');
+    return res.json({ success: true, resellers: rows });
+}));
+
+router.post('/resellers', requireAuth, asyncHandler(async (req, res) => {
+    const { name, email, max_trials = 10, notes } = req.body;
+    if (!name) return res.status(400).json({ success: false, message: 'name fehlt.' });
+    const apiKey = 'RSL-' + crypto.randomBytes(16).toString('hex').toUpperCase();
+    await db.query(
+        'INSERT INTO reseller_keys (api_key, name, email, max_trials, notes) VALUES (?,?,?,?,?)',
+        [apiKey, name, email, max_trials, notes]
+    );
+    await addAuditLog('reseller_created', { name, email, max_trials }, req.admin.username);
+    return res.status(201).json({ success: true, api_key: apiKey, name, max_trials });
+}));
+
+router.patch('/resellers/:id', requireAuth, asyncHandler(async (req, res) => {
+    const { max_trials, active, notes } = req.body;
+    await db.query(
+        'UPDATE reseller_keys SET max_trials = COALESCE(?,max_trials), active = COALESCE(?,active), notes = COALESCE(?,notes) WHERE id = ?',
+        [max_trials, active, notes, req.params.id]
+    );
+    await addAuditLog('reseller_updated', { reseller_id: req.params.id, max_trials, active }, req.admin.username);
+    return res.json({ success: true });
+}));
+
 export default router;
