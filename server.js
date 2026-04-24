@@ -121,6 +121,20 @@ app.use(cors({
 
 app.use(express.json());
 
+// ── CORS-Ausnahme: Trial-Register (Henne-Ei – Domain noch nicht in DB) ──────
+app.options('/api/v1/trial/register', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.status(204).end();
+});
+app.use('/api/v1/trial/register', (req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    next();
+});
+
 // ── Routes ──────────────────────────────────────────────────────────────────
 app.use('/api/v1', publicRoutes);
 app.use('/api/admin', requireIpWhitelist, adminRoutes);
