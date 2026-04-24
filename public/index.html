@@ -725,6 +725,12 @@ function API(path,opts){
     .then(function(r){
       return r.json().then(function(d){
         if(r.status===401){
+          // Bei Login-Endpunkten: die echte Fehlermeldung durchreichen
+          var isLoginEndpoint = path === '/admin/login' || path === '/admin/login/2fa';
+          if(isLoginEndpoint){
+            throw d;
+          }
+          // Bei allen anderen Endpunkten: Session abgelaufen
           TOKEN='';ROLE='';USER='';
           localStorage.removeItem('admin_token');
           localStorage.removeItem('admin_role');
@@ -952,7 +958,11 @@ function doLogin(){
       localStorage.setItem('admin_user',USER);
       document.getElementById('login-pass').value='';
       showDashboard();
-    }).catch(function(e){showAlert('login-alert',esc(e.message||'Login fehlgeschlagen.'));});
+    }).catch(function(e){
+      var msg = e.message || 'Login fehlgeschlagen.';
+      if(msg === 'Invalid credentials') msg = 'Benutzername oder Passwort falsch.';
+      showAlert('login-alert', esc(msg));
+    });
 }
 
 function doVerify2FA(){
