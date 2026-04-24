@@ -13,6 +13,7 @@ import publicRoutes from './server/routes/public.js';
 import adminRoutes from './server/routes/admin.js';
 import portalRoutes from './server/routes/customer-portal.js';
 import resellerRoutes from './server/routes/reseller.js';
+import statusRoutes from './server/routes/status.js';
 import { envSmtp } from './server/smtp.js';
 import { adminTokenAlgorithm, requireIpWhitelist } from './server/middleware.js';
 
@@ -125,6 +126,7 @@ app.use('/api/v1', publicRoutes);
 app.use('/api/admin', requireIpWhitelist, adminRoutes);
 app.use('/api/portal', portalRoutes);
 app.use('/api/v1/reseller', resellerRoutes);
+app.use('/status', statusRoutes);
 
 // ── Static Files ──────────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));

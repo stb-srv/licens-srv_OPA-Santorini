@@ -93,7 +93,7 @@ export async function verifySmtp(cfg) {
 }
 
 // ── Generische Mail senden ─────────────────────────────────────────────────
-export async function sendMail({ to, subject, html, text }) {
+export async function sendMail({ to, subject, html, text, attachments }) {
     const cfg = await getActiveSmtpConfig();
     if (!cfg) throw new Error('SMTP nicht konfiguriert. Bitte zuerst SMTP-Einstellungen speichern.');
 
@@ -104,7 +104,8 @@ export async function sendMail({ to, subject, html, text }) {
         to,
         subject,
         html,
-        text: text || subject
+        text: text || subject,
+        attachments: attachments || []
     });
 
     console.log(`[Mailer] E-Mail gesendet an ${to} | MessageId: ${info.messageId} | SMTP: ${cfg.source}`);

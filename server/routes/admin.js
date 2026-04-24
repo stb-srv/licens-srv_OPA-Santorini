@@ -479,7 +479,11 @@ router.post('/licenses/:key/upgrade', requireAuth, asyncHandler(async (req, res)
         return res.status(400).json({ success: false, message: `Ungültiger Plan. Erlaubt: ${validTypes.join(', ')}` });
     }
 
-    const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [key]);
+    const [rows] = await db.query(`
+        SELECT l.*, c.email AS customer_email 
+        FROM licenses l 
+        LEFT JOIN customers c ON l.customer_id = c.id 
+        WHERE l.license_key = ?`, [key]);
     if (!rows[0]) return res.status(404).json({ success: false, message: 'Lizenz nicht gefunden.' });
 
     const plan = PLAN_DEFINITIONS[new_type];
@@ -506,6 +510,38 @@ router.post('/licenses/:key/upgrade', requireAuth, asyncHandler(async (req, res)
         new_type,
         expires_at: newExpiry
     });
+
+    // Automatische Rechnung generieren + mailen (nur bei bezahlten Plänen)
+    if (new_type !== 'FREE' && new_type !== 'TRIAL') {
+        try {
+            const { generateInvoicePdf } = await import('../mailer/templates/invoicePdf.js');
+            const { sendMail } = await import('../mailer/index.js');
+            const invoiceNo = `INV-${Date.now()}`;
+            const priceMap  = { STARTER: 29, PRO: 59, PRO_PLUS: 89, ENTERPRISE: 199 };
+            const pdfBuffer = await generateInvoicePdf({
+                invoice_number: invoiceNo,
+                customer_name:  rows[0].customer_name,
+                domain:         rows[0].associated_domain,
+                plan_label:     new_type,
+                price_eur:      priceMap[new_type] || 0,
+                date:           new Date()
+            });
+
+            // Mail mit PDF-Anhang senden
+            const email = rows[0].customer_email || JSON.parse(rows[0].notes || '{}').contact_email;
+            if (email) {
+                await sendMail({
+                    to:      email,
+                    subject: `Ihre OPA! Rechnung – ${invoiceNo}`,
+                    text:    `Vielen Dank für Ihr Upgrade auf ${new_type}. Ihre Rechnung im Anhang.`,
+                    attachments: [{ filename: `${invoiceNo}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }]
+                });
+                console.log(`🧾 Rechnung ${invoiceNo} an ${email} gesendet.`);
+            }
+        } catch(pdfErr) {
+            console.warn('Rechnungs-PDF fehlgeschlagen:', pdfErr.message);
+        }
+    }
 
     return res.json({
         success: true,
