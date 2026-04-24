@@ -5,9 +5,8 @@ import { fireWebhook } from './webhook.js';
 
 export async function runExpiryCron() {
     try {
-        // Fix #3: Nur Lizenzen benachrichtigen, für die noch KEINE Mail gesendet wurde
         const [expiring] = await db.query(`
-            SELECT l.license_key, l.customer_name, l.type, l.expires_at, c.email
+            SELECT l.license_key, l.customer_name, l.type, l.expires_at, l.notes, c.email
             FROM licenses l
             LEFT JOIN customers c ON l.customer_id = c.id
             WHERE l.status = 'active'
@@ -16,22 +15,31 @@ export async function runExpiryCron() {
         `);
 
         for (const lic of expiring) {
-            if (!lic.email) continue;
+            // Fix #9: Für Trial-Lizenzen contact_email aus notes JSON lesen
+            let email = lic.email;
+            if (!email && lic.notes) {
+                try {
+                    const parsed = JSON.parse(lic.notes);
+                    email = parsed.contact_email || null;
+                } catch (e) { /* notes nicht parsebar, ignorieren */ }
+            }
+
+            if (!email) continue;
+
             const daysLeft = Math.ceil((new Date(lic.expires_at) - new Date()) / 86400000);
             try {
-                await sendTemplateMail('licenseExpiringSoon', lic.email, {
+                await sendTemplateMail('licenseExpiringSoon', email, {
                     customer_name: lic.customer_name,
                     license_key:   lic.license_key,
                     type:          lic.type,
                     expires_at:    lic.expires_at,
                     days_left:     daysLeft
                 });
-                // Merken dass wir diese Lizenz benachrichtigt haben
                 await db.query(
                     'UPDATE licenses SET expiry_notified_at = NOW() WHERE license_key = ?',
                     [lic.license_key]
                 );
-                await addAuditLog('expiry_notification_sent', { license_key: lic.license_key, days_left: daysLeft, email: lic.email });
+                await addAuditLog('expiry_notification_sent', { license_key: lic.license_key, days_left: daysLeft, email });
             } catch (e) {
                 console.warn(`📧 Ablauf-Mail fehlgeschlagen für ${lic.license_key}:`, e.message);
             }
@@ -51,25 +59,21 @@ export async function runExpiryCron() {
     }
 }
 
-// Fix #7: Nonce-Cleanup in eigenem Intervall (stündlich), TTL = 2 Stunden
-// Bereinigt auch abgelaufene customer_sessions und admin_sessions
 export async function runNonceCleanup() {
     try {
         const [nonceResult] = await db.query(
             'DELETE FROM used_nonces WHERE ts < ?',
-            [Date.now() - 2 * 60 * 60 * 1000]  // 2h TTL statt 5min
+            [Date.now() - 2 * 60 * 60 * 1000]
         );
         if (nonceResult.affectedRows > 0)
             console.log(`🧹 ${nonceResult.affectedRows} abgelaufene Nonce(s) bereinigt.`);
 
-        // Abgelaufene Portal-Sessions bereinigen
         const [sessResult] = await db.query(
             'DELETE FROM customer_sessions WHERE expires_at < NOW() OR revoked = 1'
         );
         if (sessResult.affectedRows > 0)
             console.log(`🧹 ${sessResult.affectedRows} abgelaufene Kunden-Session(s) bereinigt.`);
 
-        // Abgelaufene Admin-Sessions bereinigen
         const [adminSessResult] = await db.query(
             'DELETE FROM admin_sessions WHERE expires_at < NOW() OR revoked = 1'
         );
@@ -82,11 +86,9 @@ export async function runNonceCleanup() {
 }
 
 export function startCron() {
-    // Expiry-Check: täglich
     setInterval(runExpiryCron, 24 * 60 * 60 * 1000);
     runExpiryCron();
 
-    // Nonce-Cleanup: stündlich (Fix #7)
     setInterval(runNonceCleanup, 60 * 60 * 1000);
     runNonceCleanup();
 }
