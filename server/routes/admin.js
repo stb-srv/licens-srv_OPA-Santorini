@@ -149,9 +149,33 @@ router.post('/2fa/verify', requireAuth, asyncHandler(async (req, res) => {
 }));
 
 router.post('/2fa/disable', requireAuth, asyncHandler(async (req, res) => {
+  const { password, code } = req.body;
+
+  const [rows] = await db.query(
+    'SELECT password_hash, two_factor_secret FROM admins WHERE username = ?',
+    [req.admin.username]
+  );
+  const admin = rows[0];
+  if (!admin) return res.status(404).json({ success: false, message: 'Admin nicht gefunden.' });
+
+  let verified = false;
+  if (password) {
+    verified = await bcrypt.compare(password, admin.password_hash);
+  }
+  if (!verified && code && admin.two_factor_secret) {
+    verified = authenticator.verify({ token: code, secret: admin.two_factor_secret });
+  }
+
+  if (!verified) {
+    return res.status(403).json({ 
+      success: false, 
+      message: 'Bestätigung fehlgeschlagen. Bitte aktuelles Passwort oder gültigen 2FA-Code angeben.' 
+    });
+  }
+
   await db.query('UPDATE admins SET two_factor_enabled = 0, two_factor_secret = NULL WHERE username = ?', [req.admin.username]);
   await addAuditLog('2fa_disabled', { username: req.admin.username }, req.admin.username);
-  res.json({ success: true, message: '2FA deaktiviert' });
+  res.json({ success: true, message: '2FA erfolgreich deaktiviert.' });
 }));
 
 // ── Admin Users ──────────────────────────────────────────────────────────────
@@ -227,6 +251,13 @@ router.patch('/users/:username/password', requireAuth, asyncHandler(async (req, 
   try {
     const hash = await bcrypt.hash(password, 12);
     await db.query('UPDATE admins SET password_hash = ? WHERE username = ?', [hash, req.params.username]);
+    
+    // Bestehende Sessions invalidieren (außer die eigene aktuelle)
+    await db.query(
+      'UPDATE admin_sessions SET revoked = 1 WHERE admin_username = ? AND token_hash != ?',
+      [req.params.username, req.adminTokenHash || 'none']
+    );
+
     await addAuditLog('admin_password_changed', { username: req.params.username, by: req.admin.username }, req.admin.username);
     res.json({ success: true });
   } catch (e) {
