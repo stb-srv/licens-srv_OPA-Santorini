@@ -236,7 +236,7 @@ router.patch('/licenses/:key/domain', requirePortalAuth, async (req, res) => {
 
     // Jeden Label einzeln prüfen – kein verschachteltes Backtracking
     const labels = clean.replace(/^\*\./, '').split('.');
-    const labelRegex = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
+    const labelRegex = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/; // eslint-disable-line security/detect-unsafe-regex
     const valid = labels.length >= 2 
         && labels.every(l => labelRegex.test(l))
         && /^[a-z]{2,}$/.test(labels[labels.length - 1]);
