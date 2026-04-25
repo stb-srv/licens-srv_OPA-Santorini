@@ -229,7 +229,19 @@ router.patch('/licenses/:key/domain', requirePortalAuth, async (req, res) => {
 
     // Domain-Validierung: nur gültige Hostnamen (kein Protokoll, kein Pfad)
     const clean = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-    if (!/^(\*\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/.test(clean))
+    
+    // Maximale Länge begrenzen (verhindert ReDoS durch lange Strings)
+    if (clean.length > 253)
+        return res.status(400).json({ success: false, message: 'Domain zu lang.' });
+
+    // Jeden Label einzeln prüfen – kein verschachteltes Backtracking
+    const labels = clean.replace(/^\*\./, '').split('.');
+    const labelRegex = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
+    const valid = labels.length >= 2 
+        && labels.every(l => labelRegex.test(l))
+        && /^[a-z]{2,}$/.test(labels[labels.length - 1]);
+
+    if (!valid)
         return res.status(400).json({ success: false, message: 'Ungültige Domain. Bitte nur Hostnamen eingeben (z.B. meinrestaurant.de).' });
 
     try {
