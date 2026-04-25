@@ -723,24 +723,25 @@ function API(path,opts){
   if(TOKEN)headers['Authorization']='Bearer '+TOKEN;
   return fetch('/api'+path,Object.assign({headers:headers},opts))
     .then(function(r){
-      return r.json().then(function(d){
-        if(r.status===401){
-          // Bei Login-Endpunkten: die echte Fehlermeldung durchreichen
-          var isLoginEndpoint = path === '/admin/login' || path === '/admin/login/2fa';
-          if(isLoginEndpoint){
-            throw d;
+      var contentType = r.headers.get('content-type') || '';
+      var hasJson = contentType.includes('application/json');
+      return (hasJson ? r.json().catch(function(){ return {}; }) : Promise.resolve({}))
+        .then(function(d){
+          if(r.status===401){
+            var isLoginEndpoint = path === '/admin/login' || path === '/admin/login/2fa';
+            if(isLoginEndpoint){
+              throw d;
+            }
+            TOKEN='';ROLE='';USER='';
+            localStorage.removeItem('admin_token');
+            localStorage.removeItem('admin_role');
+            localStorage.removeItem('admin_user');
+            showLogin('Sitzung abgelaufen. Bitte erneut einloggen.');
+            throw {message:'Sitzung abgelaufen. Bitte erneut einloggen.'};
           }
-          // Bei allen anderen Endpunkten: Session abgelaufen
-          TOKEN='';ROLE='';USER='';
-          localStorage.removeItem('admin_token');
-          localStorage.removeItem('admin_role');
-          localStorage.removeItem('admin_user');
-          showLogin('Sitzung abgelaufen. Bitte erneut einloggen.');
-          throw {message:'Sitzung abgelaufen. Bitte erneut einloggen.'};
-        }
-        if(!r.ok)throw d;
-        return d;
-      });
+          if(!r.ok)throw d;
+          return d;
+        });
     });
 }
 
@@ -757,7 +758,7 @@ function exportData(type, format) {
       a.click();
       a.remove();
     })
-    .catch(e => alert('Export fehlgeschlagen: ' + e.message));
+    .catch(e => showError('Export fehlgeschlagen: ' + e.message));
 }
 
 var vChart, tChart, fChart, sChart;
@@ -993,7 +994,7 @@ function setup2FA(){
     document.getElementById('2fa-verify-code').value = '';
     document.getElementById('2fa-alert').innerHTML = '';
     openModal('modal-2fa-setup');
-  }).catch(function(e){ alert('Setup fehlgeschlagen: '+(e.message||e)); });
+  }).catch(function(e){ showError(e.message||String(e)); });
 }
 
 function verify2FASetup(){
@@ -1001,18 +1002,19 @@ function verify2FASetup(){
   if(!code) return showAlert('2fa-alert','Code eingeben.');
   API('/admin/2fa/verify', { method: 'POST', body: JSON.stringify({ code: code }) })
     .then(function(d){
-      alert('2FA erfolgreich aktiviert!');
+      showError('2FA erfolgreich aktiviert!', 'Erfolg');
       closeModal('modal-2fa-setup');
       loadUsers();
     }).catch(function(e){ showAlert('2fa-alert', esc(e.message||'Fehler.')); });
 }
 
 function disable2FA(){
-  if(!confirm('Möchtest du 2FA wirklich deaktivieren?')) return;
-  API('/admin/2fa/disable', { method: 'POST' }).then(function(){
-    alert('2FA wurde deaktiviert.');
-    loadUsers();
-  }).catch(function(e){ alert('Fehler: '+(e.message||e)); });
+  showConfirm('Möchtest du 2FA wirklich deaktivieren?', function(){
+    API('/admin/2fa/disable', { method: 'POST' }).then(function(){
+      showError('2FA wurde deaktiviert.', 'Information');
+      loadUsers();
+    }).catch(function(e){ showError(e.message||String(e)); });
+  });
 }
 function doLogout(){
   TOKEN='';ROLE='';USER='';
@@ -1149,24 +1151,26 @@ function viewLicense(key){
       '</div>'+
       '<button class="btn btn-primary btn-sm" onclick="saveStatus(\''+esc(l.license_key)+'\')" >Status speichern</button>';
     openModal('modal-edit-license');
-  }).catch(function(e){alert('Fehler: '+(e.message||e));});
+  }).catch(function(e){showError(e.message||String(e));});
 }
 function saveStatus(key){
   var status=document.getElementById('edit-status-sel').value;
   var tags=document.getElementById('edit-tags').value.split(',').map(function(t){return t.trim();}).filter(function(t){return t!=='';});
   API('/admin/licenses/'+encodeURIComponent(key)+'/status',{method:'PATCH',body:JSON.stringify({status:status, tags:tags})})
     .then(function(){closeModal('modal-edit-license');loadLicenses();})
-    .catch(function(e){alert('Fehler: '+(e.message||e));});
+    .catch(function(e){showError(e.message||String(e));});
 }
 function renewLicense(key){
-  if(!confirm('Lizenz um 365 Tage verl\u00E4ngern?'))return;
-  API('/admin/licenses/'+encodeURIComponent(key)+'/renew',{method:'POST',body:JSON.stringify({days:365})})
-    .then(function(){loadLicenses();}).catch(function(e){alert('Fehler: '+(e.message||e));});
+  showConfirm('Lizenz um 365 Tage verl\u00E4ngern?', function(){
+    API('/admin/licenses/'+encodeURIComponent(key)+'/renew',{method:'POST',body:JSON.stringify({days:365})})
+      .then(function(){loadLicenses();}).catch(function(e){showError(e.message||String(e));});
+  });
 }
 function deleteLicense(key){
-  if(!confirm('Lizenz '+key+' unwiderruflich l\u00F6schen?'))return;
-  API('/admin/licenses/'+encodeURIComponent(key),{method:'DELETE'})
-    .then(function(){loadLicenses();}).catch(function(e){alert('Fehler: '+(e.message||e));});
+  showConfirm('Lizenz '+key+' unwiderruflich l\u00F6schen?', function(){
+    API('/admin/licenses/'+encodeURIComponent(key),{method:'DELETE'})
+      .then(function(){loadLicenses();}).catch(function(e){showError(e.message||String(e));});
+  });
 }
 function createLicense(){
   var body={
@@ -1182,7 +1186,7 @@ function createLicense(){
   if(exp)body.expires_at=new Date(exp).toISOString().slice(0,19).replace('T',' ');
   API('/admin/licenses',{method:'POST',body:JSON.stringify(body)})
     .then(function(){closeModal('modal-new-license');loadLicenses();})
-    .catch(function(e){alert('Fehler: '+(e.message||e));});
+    .catch(function(e){showError(e.message||String(e));});
 }
 
 // ── Customers ────────────────────────────────────────────────────────────────
@@ -1262,10 +1266,11 @@ function saveCustomer(){
 
 function toggleArchiveCustomer(id,archive){
   var msg=archive?'Kunden archivieren? Er wird nicht gel\u00F6scht, aber als inaktiv markiert.':'Kunden reaktivieren?';
-  if(!confirm(msg))return;
-  API('/admin/customers/'+id,{method:'PATCH',body:JSON.stringify({archived:archive?1:0})})
-    .then(function(){loadCustomers();})
-    .catch(function(e){alert('Fehler: '+(e.message||e));});
+  showConfirm(msg, function(){
+    API('/admin/customers/'+id,{method:'PATCH',body:JSON.stringify({archived:archive?1:0})})
+      .then(function(){loadCustomers();})
+      .catch(function(e){showError(e.message||String(e));});
+  });
 }
 
 function createCustomer(){
@@ -1274,11 +1279,12 @@ function createCustomer(){
     notes:document.getElementById('nc-notes').value||''};
   API('/admin/customers',{method:'POST',body:JSON.stringify(body)})
     .then(function(){closeModal('modal-new-customer');loadCustomers();})
-    .catch(function(e){alert('Fehler: '+(e.message||e));});
+    .catch(function(e){showError(e.message||String(e));});
 }
 function deleteCustomer(id){
-  if(!confirm('Kunden unwiderruflich l\u00F6schen?'))return;
-  API('/admin/customers/'+id,{method:'DELETE'}).then(function(){loadCustomers();}).catch(function(e){alert('Fehler: '+(e.message||e));});
+  showConfirm('Kunden unwiderruflich l\u00F6schen?', function(){
+    API('/admin/customers/'+id,{method:'DELETE'}).then(function(){loadCustomers();}).catch(function(e){showError(e.message||String(e));});
+  });
 }
 function filterPurchaseByCustomer(customerId){
   switchTab('logs');
@@ -1323,11 +1329,12 @@ function filterDevices(){
   },400);
 }
 function deactivateDevice(id){
-  API('/admin/devices/'+id+'/deactivate',{method:'PATCH'}).then(function(){loadDevices();}).catch(function(e){alert('Fehler: '+(e.message||e));});
+  API('/admin/devices/'+id+'/deactivate',{method:'PATCH'}).then(function(){loadDevices();}).catch(function(e){showError(e.message||String(e));});
 }
 function deleteDevice(id){
-  if(!confirm('Ger\u00E4t l\u00F6schen?'))return;
-  API('/admin/devices/'+id,{method:'DELETE'}).then(function(){loadDevices();}).catch(function(e){alert('Fehler: '+(e.message||e));});
+  showConfirm('Ger\u00E4t l\u00F6schen?', function(){
+    API('/admin/devices/'+id,{method:'DELETE'}).then(function(){loadDevices();}).catch(function(e){showError(e.message||String(e));});
+  });
 }
 
 function loadLoginLog(){
@@ -1407,7 +1414,7 @@ function createPurchaseEntry(){
     note:document.getElementById('ph-note').value||null};
   API('/admin/purchase-history',{method:'POST',body:JSON.stringify(body)})
     .then(function(){closeModal('modal-new-ph');loadPurchaseHistory();})
-    .catch(function(e){alert('Fehler: '+(e.message||e));});
+    .catch(function(e){showError(e.message||String(e));});
 }
 
 function loadUsers(){
@@ -1445,11 +1452,12 @@ function createAdminUser(){
   var body={username:document.getElementById('nu-user').value,password:document.getElementById('nu-pass').value,role:document.getElementById('nu-role').value};
   API('/admin/users',{method:'POST',body:JSON.stringify(body)})
     .then(function(){closeModal('modal-new-user');loadUsers();})
-    .catch(function(e){alert('Fehler: '+(e.message||e));});
+    .catch(function(e){showError(e.message||String(e));});
 }
 function deleteUser(username){
-  if(!confirm('Admin-User '+username+' l\u00F6schen?'))return;
-  API('/admin/users/'+username,{method:'DELETE'}).then(function(){loadUsers();}).catch(function(e){alert('Fehler: '+(e.message||e));});
+  showConfirm('Admin-User '+username+' l\u00F6schen?', function(){
+    API('/admin/users/'+username,{method:'DELETE'}).then(function(){loadUsers();}).catch(function(e){showError(e.message||String(e));});
+  });
 }
 
 function openChangePassword(username){
@@ -1586,14 +1594,33 @@ function createWebhook(){
   var body={url:document.getElementById('nw-url').value,secret:document.getElementById('nw-secret').value||null};
   API('/admin/webhooks',{method:'POST',body:JSON.stringify(body)})
     .then(function(){closeModal('modal-new-webhook');loadWebhooks();})
-    .catch(function(e){alert('Fehler: '+(e.message||e));});
+    .catch(function(e){showError(e.message||String(e));});
 }
 function deleteWebhook(id){
-  if(!confirm('Webhook l\u00F6schen?'))return;
-  API('/admin/webhooks/'+id,{method:'DELETE'}).then(function(){loadWebhooks();}).catch(function(e){alert('Fehler: '+(e.message||e));});
+  showConfirm('Webhook l\u00F6schen?', function(){
+    API('/admin/webhooks/'+id,{method:'DELETE'}).then(function(){loadWebhooks();}).catch(function(e){showError(e.message||String(e));});
+  });
 }
 
 if(TOKEN&&window.location.hash==='#admin')openAdmin();
+
+function showError(msg, title) {
+  document.getElementById('modal-error-title').textContent = title || 'Fehler';
+  document.getElementById('modal-error-msg').textContent = msg || 'Ein unbekannter Fehler ist aufgetreten.';
+  openModal('modal-error');
+}
+
+var confirmCallback = null;
+function showConfirm(msg, callback, title) {
+  document.getElementById('modal-confirm-title').textContent = title || 'Bestätigung';
+  document.getElementById('modal-confirm-msg').textContent = msg || 'Bist du sicher?';
+  confirmCallback = callback;
+  document.getElementById('modal-confirm-btn').onclick = function() {
+    closeModal('modal-confirm');
+    if(confirmCallback) confirmCallback();
+  };
+  openModal('modal-confirm');
+}
 </script>
 <!-- ── DSGVO Cookie-Banner ──────────────────────────────────────────── -->
 <div id="cookie-banner" style="
@@ -1705,6 +1732,32 @@ function applyConsent(consent) {
   }
 }
 </script>
+
+
+<!-- Fehler-Modal -->
+<div class="modal-overlay" id="modal-error">
+  <div class="modal" style="max-width:420px; text-align:center;">
+    <div style="font-size:2rem; margin-bottom:.8rem;">⚠️</div>
+    <h3 id="modal-error-title" style="margin-bottom:.6rem;">Fehler</h3>
+    <p id="modal-error-msg" style="color:var(--text2); font-size:.9rem; margin-bottom:1.4rem;"></p>
+    <div class="modal-footer" style="justify-content:center;">
+      <button class="btn btn-primary" onclick="closeModal('modal-error')">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bestätigungs-Modal -->
+<div class="modal-overlay" id="modal-confirm">
+  <div class="modal" style="max-width:420px; text-align:center;">
+    <div style="font-size:2rem; margin-bottom:.8rem;">❓</div>
+    <h3 id="modal-confirm-title" style="margin-bottom:.6rem;">Bestätigung</h3>
+    <p id="modal-confirm-msg" style="color:var(--text2); font-size:.9rem; margin-bottom:1.4rem;"></p>
+    <div class="modal-footer" style="justify-content:center;">
+      <button class="btn btn-ghost" onclick="closeModal('modal-confirm')">Abbrechen</button>
+      <button class="btn btn-primary" id="modal-confirm-btn">Ja</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
