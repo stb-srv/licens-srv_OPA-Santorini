@@ -386,7 +386,7 @@ router.patch('/licenses/:key', requireAuth, asyncHandler(async (req, res) => {
   const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [req.params.key]);
   if (!rows[0]) return res.status(404).json({ success: false, message: 'Lizenz nicht gefunden' });
 
-  const { type, associated_domain, expires_at, max_devices, customer_name, customer_id, allowed_modules, limits } = req.body;
+  const { type, associated_domain, expires_at, max_devices, customer_name, customer_id, allowed_modules, limits, tags } = req.body;
   const updates = [], params = [];
 
   if (type !== undefined)              { updates.push('type = ?');               params.push(type); }
