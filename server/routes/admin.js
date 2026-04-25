@@ -169,7 +169,7 @@ router.post('/2fa/disable', requireAuth, asyncHandler(async (req, res) => {
   if (!verified) {
     return res.status(403).json({ 
       success: false, 
-      message: 'Bestätigung fehlgeschlagen. Bitte aktuelles Passwort oder gültigen 2FA-Code angeben.' 
+      message: 'Bestätigung erforderlich: Passwort oder TOTP-Code ungültig.' 
     });
   }
 
