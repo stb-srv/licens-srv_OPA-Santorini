@@ -100,6 +100,7 @@ SMTP_PASS=
 | GET/POST/DELETE | `/smtp` | superadmin | SMTP-Konfiguration |
 | POST | `/smtp/test` | superadmin | SMTP-Test |
 | GET/POST/DELETE | `/webhooks` | superadmin | Webhook-Verwaltung |
+| GET | `/webhook-logs` | admin | Webhook-Logs abrufen |
 | POST | `/impersonate` | superadmin | Lizenz-Kontext einsehen |
 
 ---
@@ -115,6 +116,7 @@ SMTP_PASS=
 | `used_nonces` | Nonce-Replay-Protection (TTL-Cleanup per Cron) |
 | `smtp_config` | SMTP-Konfiguration (in DB gespeichert, 1 Zeile) |
 | `webhooks` | Webhook-URLs + Events |
+| `webhook_logs` | Historie der Webhook-Aufrufe (Erfolg/Fehler) |
 
 ---
 

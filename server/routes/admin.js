@@ -395,6 +395,12 @@ router.patch('/licenses/:key/status', requireAuth, asyncHandler(async (req, res)
   if (!rows[0]) return res.status(404).json({ success: false });
   const l = rows[0];
   await db.query('UPDATE licenses SET status = ? WHERE license_key = ?', [req.body.status, req.params.key]);
+  
+  if (['revoked', 'cancelled', 'suspended'].includes(req.body.status) && l.customer_id) {
+    await db.query('DELETE FROM customer_sessions WHERE customer_id = ?', [l.customer_id]);
+    await addAuditLog('portal_sessions_revoked', { license_key: req.params.key, customer_id: l.customer_id }, req.admin.username);
+  }
+
   await addAuditLog('license_status_changed',
     { license_key: req.params.key, from: l.status, to: req.body.status, by: req.admin.username },
     req.admin.username);
@@ -491,7 +497,14 @@ router.post('/licenses/:key/renew', requireAuth, asyncHandler(async (req, res) =
 
 router.delete('/licenses/:key', requireAuth, asyncHandler(async (req, res) => {
   try {
+    const [[lic]] = await db.query('SELECT customer_id FROM licenses WHERE license_key = ?', [req.params.key]);
     await db.query('DELETE FROM licenses WHERE license_key = ?', [req.params.key]);
+    
+    if (lic?.customer_id) {
+      await db.query('DELETE FROM customer_sessions WHERE customer_id = ?', [lic.customer_id]);
+      await addAuditLog('portal_sessions_revoked', { license_key: req.params.key, customer_id: lic.customer_id, action: 'license_deleted' }, req.admin.username);
+    }
+    
     await addAuditLog('license_deleted', { license_key: req.params.key, by: req.admin.username }, req.admin.username);
     await fireWebhook('license.deleted', { license_key: req.params.key });
     res.json({ success: true });
@@ -1288,6 +1301,12 @@ router.post('/licenses/bulk', requireAuth, bulkLimiter, asyncHandler(async (req,
         await addAuditLog('license_renewed', { license_key: key, days: d, bulk: true, by: req.admin.username }, req.admin.username);
       } else if (action === 'revoke' || action === 'suspend') {
         await db.query('UPDATE licenses SET status = ? WHERE license_key = ?', [action === 'revoke' ? 'revoked' : 'suspended', key]);
+        
+        if (l.customer_id) {
+          await db.query('DELETE FROM customer_sessions WHERE customer_id = ?', [l.customer_id]);
+          await addAuditLog('portal_sessions_revoked', { license_key: key, customer_id: l.customer_id, bulk: true }, req.admin.username);
+        }
+
         await addAuditLog('license_status_changed', { license_key: key, to: action, bulk: true, by: req.admin.username }, req.admin.username);
         if (l.customer_email) {
           sendTemplateMail('licenseRevoked', l.customer_email, {
@@ -1453,6 +1472,38 @@ router.patch('/resellers/:id', requireAuth, asyncHandler(async (req, res) => {
     );
     await addAuditLog('reseller_updated', { reseller_id: req.params.id, max_trials, active }, req.admin.username);
     return res.json({ success: true });
+}));
+
+// ── Webhook Logs ─────────────────────────────────────────────────────────────
+router.get('/webhook-logs', requireAuth, asyncHandler(async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 100));
+  const offset = (page - 1) * limit;
+  const status = req.query.status;
+
+  let where = '1=1';
+  const params = [];
+  if (status && ['success', 'failed'].includes(status)) {
+    where += ' AND status = ?';
+    params.push(status);
+  }
+
+  const [[{ total }]] = await db.query(`SELECT COUNT(*) as total FROM webhook_logs WHERE ${where}`, params);
+  const [logs] = await db.query(
+    `SELECT * FROM webhook_logs WHERE ${where} ORDER BY attempted_at DESC LIMIT ? OFFSET ?`,
+    [...params, limit, offset]
+  );
+
+  res.json({
+    success: true,
+    logs,
+    pagination: {
+      page,
+      limit,
+      total: parseInt(total),
+      pages: Math.ceil(total / limit)
+    }
+  });
 }));
 
 export default router;

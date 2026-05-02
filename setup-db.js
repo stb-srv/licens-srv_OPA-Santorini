@@ -59,6 +59,9 @@ CREATE TABLE IF NOT EXISTS licenses (
     analytics_daily JSON,
     analytics_features JSON,
     webhook_url VARCHAR(512),
+    expiry_notified_at DATETIME DEFAULT NULL,
+    expiry_notified_7d_at DATETIME DEFAULT NULL,
+    tags JSON,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL
 );
@@ -75,6 +78,17 @@ CREATE TABLE IF NOT EXISTS devices (
     deactivated_at DATETIME,
     FOREIGN KEY (license_key) REFERENCES licenses(license_key) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS webhook_logs (
+    id CHAR(36) NOT NULL PRIMARY KEY,
+    webhook_url VARCHAR(512) NOT NULL,
+    event VARCHAR(128) NOT NULL,
+    status ENUM('success', 'failed') NOT NULL,
+    error_message TEXT DEFAULT NULL,
+    attempted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_attempted_at (attempted_at),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS audit_log (
     id CHAR(36) NOT NULL PRIMARY KEY,

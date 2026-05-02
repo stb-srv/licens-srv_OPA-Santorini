@@ -45,6 +45,46 @@ export async function runExpiryCron() {
             }
         }
 
+        // 2. 7-Tage Erinnerung (Zweite Mahnung)
+        const [expiring7d] = await db.query(`
+            SELECT l.license_key, l.customer_name, l.type, l.expires_at, l.notes, c.email
+            FROM licenses l
+            LEFT JOIN customers c ON l.customer_id = c.id
+            WHERE l.status = 'active'
+              AND l.expires_at BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 7 DAY)
+              AND l.expiry_notified_7d_at IS NULL
+        `);
+
+        for (const lic of expiring7d) {
+            let email = lic.email;
+            if (!email && lic.notes) {
+                try {
+                    const parsed = JSON.parse(lic.notes);
+                    email = parsed.contact_email || null;
+                } catch (e) {}
+            }
+            if (!email) continue;
+
+            const daysLeft = Math.ceil((new Date(lic.expires_at) - new Date()) / 86400000);
+            try {
+                // Sende die gleiche Vorlage, aber days_left wird der Hinweis auf die 7 Tage sein
+                await sendTemplateMail('licenseExpiringSoon', email, {
+                    customer_name: lic.customer_name,
+                    license_key:   lic.license_key,
+                    type:          lic.type,
+                    expires_at:    lic.expires_at,
+                    days_left:     daysLeft
+                });
+                await db.query(
+                    'UPDATE licenses SET expiry_notified_7d_at = NOW() WHERE license_key = ?',
+                    [lic.license_key]
+                );
+                await addAuditLog('expiry_notification_7d_sent', { license_key: lic.license_key, days_left: daysLeft, email });
+            } catch (e) {
+                console.warn(`📧 7-Tage-Ablauf-Mail fehlgeschlagen für ${lic.license_key}:`, e.message);
+            }
+        }
+
         const [result] = await db.query(`
             UPDATE licenses SET status = 'expired'
             WHERE status = 'active' AND expires_at < NOW()
