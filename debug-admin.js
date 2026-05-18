@@ -6,6 +6,12 @@
  * Mit username + password: Testet den Login.
  */
 import 'dotenv/config';
+
+if (process.env.NODE_ENV === 'production') {
+  console.error('⛔ debug-admin.js darf in production NICHT ausgeführt werden!');
+  process.exit(1);
+}
+
 import mysql from 'mysql2/promise';
 import bcrypt from 'bcryptjs';
 

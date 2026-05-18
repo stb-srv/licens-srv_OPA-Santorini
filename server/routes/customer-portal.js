@@ -8,9 +8,13 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import db from '../db.js';
 import { sendTemplateMail } from '../mailer/index.js';
 import rateLimit from 'express-rate-limit';
+import { getInvoiceWithItems } from '../invoiceHelper.js';
+import { getInvoicePDFBuffer } from '../pdfGenerator.js';
 
 const router = Router();
 const PORTAL_SECRET = process.env.PORTAL_SECRET || '';
@@ -385,6 +389,56 @@ router.post('/forgot-password', inviteLimiter, async (req, res) => {
         // Fehler nicht nach außen leaken
     }
     res.json(genericResponse);
+});
+
+// ── GET /invoices ─────────────────────────────────────────────────────────────
+router.get('/invoices', requirePortalAuth, async (req, res) => {
+    try {
+        const [rows] = await db.query(
+            `SELECT i.*, c.name AS customer_name, c.company AS customer_company
+             FROM invoices i
+             LEFT JOIN customers c ON i.customer_id = c.id
+             WHERE i.customer_id = ?
+             ORDER BY i.created_at DESC`,
+            [req.customer.id]
+        );
+        res.json({ success: true, invoices: rows });
+    } catch (e) {
+        console.error('[Portal/invoices] Error:', e.message);
+        res.status(500).json({ success: false, message: 'Fehler beim Laden der Rechnungen.' });
+    }
+});
+
+// ── GET /invoices/:id/pdf ─────────────────────────────────────────────────────
+router.get('/invoices/:id/pdf', requirePortalAuth, async (req, res) => {
+    const invoiceId = req.params.id;
+    try {
+        const invoice = await getInvoiceWithItems(db, invoiceId);
+        if (!invoice) {
+            return res.status(404).json({ success: false, message: 'Rechnung nicht gefunden.' });
+        }
+        // Sicherheitssperre: Nur eigene Rechnungen herunterladen!
+        if (invoice.customer_id !== req.customer.id) {
+            return res.status(403).json({ success: false, message: 'Zugriff verweigert.' });
+        }
+
+        const filename = `Rechnung-${invoice.invoice_number}.pdf`;
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+        if (invoice.pdf_path && fs.existsSync(invoice.pdf_path)) {
+            const fileStream = fs.createReadStream(invoice.pdf_path);
+            fileStream.pipe(res);
+        } else {
+            const [[settings]] = await db.query('SELECT * FROM invoice_settings WHERE id = 1');
+            const mergedData = { ...settings, ...invoice };
+            const pdfBuffer = await getInvoicePDFBuffer(mergedData);
+            res.send(pdfBuffer);
+        }
+    } catch (e) {
+        console.error('[Portal/invoices/pdf] Error:', e.message);
+        res.status(500).json({ success: false, message: 'Fehler beim Abrufen des PDF-Dokuments.' });
+    }
 });
 
 export default router;

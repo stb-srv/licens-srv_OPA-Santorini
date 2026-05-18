@@ -291,7 +291,91 @@ const TEMPLATES = {
             `),
             text: `Willkommen bei OPA! Santorini!\n\nIhr 30-Tage Trial ist jetzt aktiv.\n\nLizenz-Key: ${d.license_key}\nPlan: ${d.plan_label}\nDomain: ${d.domain}\nGültig bis: ${expDate}\n\nBei Fragen: support@stb-srv.de`
         };
-    }
+    },
+
+    invoiceSent: (d) => ({
+        subject: `Ihre OPA! Santorini Rechnung – ${d.invoice_number}`,
+        html: layout('Ihre Rechnung ist bereit', `
+          <h2 style="margin:0 0 8px;font-size:18px;color:#222">Hallo ${d.customer_name || 'Kunde'},</h2>
+          <p style="margin:0 0 20px;color:#555;line-height:1.7">
+            Ihre neue Rechnung <strong>${d.invoice_number}</strong> ist bereit. Sie finden das PDF-Dokument im Anhang dieser E-Mail oder können es direkt in Ihrem Kunden-Portal einsehen und herunterladen.
+          </p>
+          ${infoBox([
+            ['Rechnungsnummer', d.invoice_number],
+            ['Gesamtbetrag', `${(parseFloat(d.amount_gross) || 0).toFixed(2)} €`],
+            ['Fälligkeitsdatum', d.due_date ? new Date(d.due_date).toLocaleDateString('de-DE') : 'sofort fällig'],
+            ['Kunden-Portal', `<a href="${d.invoice_url}" style="color:#6c63ff">Rechnungen ansehen</a>`]
+          ])}
+          <div style="text-align:center;margin:28px 0">
+            <a href="${d.invoice_url}" style="display:inline-block;background:#6c63ff;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:700;font-size:15px">
+              💳 Zum Kunden-Portal
+            </a>
+          </div>
+          <p style="margin:20px 0 0;color:#aaa;font-size:13px">
+            Vielen Dank für Ihre Treue!<br>
+            Das OPA! Santorini Team
+          </p>
+        `),
+        text: `Ihre OPA! Santorini Rechnung ${d.invoice_number} ist da.\n\nGesamtbetrag: ${(parseFloat(d.amount_gross) || 0).toFixed(2)} €\nFälligkeitsdatum: ${d.due_date ? new Date(d.due_date).toLocaleDateString('de-DE') : 'sofort'}\n\nSie finden die Rechnung als PDF im Anhang oder im Kunden-Portal unter: ${d.invoice_url}`
+    }),
+
+    invoiceOverdue: (d) => ({
+        subject: `⚠️ DRINGEND: Zahlungserinnerung Rechnung ${d.invoice_number} – OPA! Santorini`,
+        html: layout('Zahlungserinnerung', `
+          <h2 style="margin:0 0 8px;font-size:18px;color:#e74c3c">Zahlungserinnerung / Mahnung</h2>
+          <p style="margin:0 0 20px;color:#555;line-height:1.7">
+            Hallo ${d.customer_name || 'Kunde'},<br><br>
+            wir haben festgestellt, dass die folgende Rechnung das Fälligkeitsdatum überschritten hat und noch offen ist.
+          </p>
+          <div style="background:#fde8e8;border:1px solid #f8b4b4;border-radius:8px;padding:14px 18px;margin:20px 0">
+            <p style="margin:0;color:#9b1c1c;font-size:13px;line-height:1.6">
+              ⚠️ <strong>Wichtiger Hinweis:</strong> Bitte begleichen Sie den ausstehenden Betrag umgehend, um eine Unterbrechung Ihrer OPA! Santorini Lizenz-Dienste zu vermeiden.
+            </p>
+          </div>
+          ${infoBox([
+            ['Rechnungsnummer', d.invoice_number],
+            ['Gesamtbetrag', `${(parseFloat(d.amount_gross) || 0).toFixed(2)} €`],
+            ['Ursprünglich fällig am', d.due_date ? new Date(d.due_date).toLocaleDateString('de-DE') : 'unbekannt'],
+            ['Status', badge('ZAHLUNGSVERZUG', '#e74c3c')]
+          ])}
+          <div style="text-align:center;margin:28px 0">
+            <a href="${d.invoice_url}" style="display:inline-block;background:#e74c3c;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:700;font-size:15px">
+              💳 Jetzt bezahlen
+            </a>
+          </div>
+          <p style="margin:20px 0 0;color:#aaa;font-size:13px">
+            Sollten Sie die Zahlung bereits angewiesen haben, betrachten Sie dieses Schreiben bitte als gegenstandslos.<br>
+            Das OPA! Santorini Team
+          </p>
+        `),
+        text: `Dringende Zahlungserinnerung für Rechnung ${d.invoice_number}.\n\nGesamtbetrag: ${(parseFloat(d.amount_gross) || 0).toFixed(2)} €\nFällig war am: ${d.due_date ? new Date(d.due_date).toLocaleDateString('de-DE') : 'sofort'}\n\nBitte begleichen Sie den Betrag umgehend im Kunden-Portal unter: ${d.invoice_url} um eine Sperrung Ihrer Lizenz zu vermeiden.`
+    }),
+
+    licenseExpiring7d: (d) => ({
+        subject: `⚠️ ACHTUNG: Deine OPA! Santorini Lizenz läuft in 7 Tagen ab`,
+        html: layout('Lizenz läuft in 7 Tagen ab', `
+          <h2 style="margin:0 0 8px;font-size:18px;color:#e74c3c">⚠️ Wichtiger Hinweis: Deine Lizenz läuft in 7 Tagen ab!</h2>
+          <p style="margin:0 0 20px;color:#555;line-height:1.7">
+            Hallo ${d.customer_name || 'Kunde'},<br><br>
+            deine OPA! Santorini Lizenz läuft am <strong>${d.expires_at ? new Date(d.expires_at).toLocaleDateString('de-DE') : 'unbekannt'}</strong> (in genau 7 Tagen) ab.
+          </p>
+          <div style="background:#feecdc;border:1px solid #fbd38d;border-radius:8px;padding:14px 18px;margin:20px 0">
+            <p style="margin:0;color:#c05621;font-size:13px;line-height:1.6">
+              🚨 <strong>Dringend handeln:</strong> Ohne Verlängerung wird das System nach dem Ablaufdatum für Bestellungen und Reservierungen gesperrt. Bitte verlängere deine Lizenz im Portal, um Ausfälle in deinem Restaurant zu vermeiden.
+            </p>
+          </div>
+          ${infoBox([
+            ['Lizenzschlüssel', `<code style="background:#f0f2f5;padding:2px 6px;border-radius:4px;font-size:13px">${d.license_key}</code>`],
+            ['Plan', badge(d.type || 'FREE', '#e74c3c')],
+            ['Ablaufdatum', d.expires_at ? new Date(d.expires_at).toLocaleDateString('de-DE') : 'unbekannt']
+          ])}
+          <p style="margin:20px 0 0;color:#aaa;font-size:13px">
+            Wende dich bei Fragen direkt an unseren Support.<br>
+            Das OPA! Santorini Team
+          </p>
+        `),
+        text: `Deine OPA! Santorini Lizenz läuft am ${d.expires_at ? new Date(d.expires_at).toLocaleDateString('de-DE') : 'unbekannt'} (in 7 Tagen) ab.\n\nBitte verlängere deine Lizenz umgehend im Portal, um Ausfälle in deinem Restaurant zu vermeiden.\n\nLizenzschlüssel: ${d.license_key}`
+    })
 };
 
 export function renderTemplate(name, data = {}) {

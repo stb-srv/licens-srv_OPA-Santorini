@@ -141,10 +141,25 @@ CREATE TABLE IF NOT EXISTS menu (
 `);
 
 console.log('✅ Schema erfolgreich erstellt.');
-console.log('👤 Erstelle Standard-Superadmin (admin / admin123) – bitte sofort ändern!');
+import crypto from 'crypto';
+let initPassword = process.env.ADMIN_INIT_PASSWORD;
+let wasGenerated = false;
+if (!initPassword) {
+    initPassword = crypto.randomBytes(12).toString('base64').replace(/[+/=]/g, '').slice(0, 16);
+    if (initPassword.length < 16) {
+        initPassword = crypto.randomBytes(16).toString('hex').slice(0, 16);
+    }
+    wasGenerated = true;
+}
+
+if (wasGenerated) {
+    console.log(`👤 Erstelle Standard-Superadmin (admin / ${initPassword}) – BITTE DIESES PASSWORT SICHER AUFBEWAHREN!`);
+} else {
+    console.log(`👤 Erstelle Standard-Superadmin (admin / [aus ADMIN_INIT_PASSWORD])`);
+}
 
 import bcrypt from 'bcryptjs';
-const hash = await bcrypt.hash('admin123', 12);
+const hash = await bcrypt.hash(initPassword, 12);
 await connection.query(
     `INSERT IGNORE INTO admins (username, password_hash, role) VALUES (?, ?, 'superadmin')`,
     ['admin', hash]
