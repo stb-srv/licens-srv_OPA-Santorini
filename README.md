@@ -110,6 +110,33 @@ export async function down(db) {
 export default up;
 ```
 
+### Neue Migration schreiben — Pflicht-Template
+
+```js
+// server/migrations/NNNN_meine_migration.js
+import { DB_SCHEMA } from '../db-schema.js';
+
+export async function up(db) {
+    // Verwende DB_SCHEMA.PK.customers statt hartcodierten 'CHAR(36)'
+    // Verwende DB_SCHEMA.FIELDS.uuid für neue UUID-Spalten
+    // Verwende DB_SCHEMA.CHARSET und DB_SCHEMA.ENGINE für alle CREATE TABLE
+    await db.query(`
+        CREATE TABLE IF NOT EXISTS meine_tabelle (
+            id          ${DB_SCHEMA.FIELDS.uuid} NOT NULL PRIMARY KEY,
+            customer_id ${DB_SCHEMA.PK.customers} NOT NULL,
+            name        ${DB_SCHEMA.FIELDS.shortText} NOT NULL,
+            created_at  ${DB_SCHEMA.FIELDS.timestamp} DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=${DB_SCHEMA.ENGINE} DEFAULT CHARSET=${DB_SCHEMA.CHARSET};
+    `);
+}
+
+export default up;
+```
+
+> ⚠️ Foreign Keys immer NACH der Tabellenerstellung per ALTER TABLE hinzufügen
+> und vorher den Typ des Referenz-Feldes via information_schema prüfen.
+> Siehe 0017_invoices.js als Referenz-Implementierung.
+
 ---
 
 ## 7. Umgebungsvariablen (.env)
