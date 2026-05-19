@@ -155,7 +155,12 @@ router.get('/me', requirePortalAuth, async (req, res) => {
             phone: c.phone || null,
             payment_status: c.payment_status || 'unknown',
             must_change_password: c.must_change_password ? true : false,
-            created_at: c.created_at
+            created_at: c.created_at,
+            billing_street: c.billing_street || null,
+            billing_city: c.billing_city || null,
+            billing_zip: c.billing_zip || null,
+            billing_country: c.billing_country || null,
+            tax_id: c.tax_id || null
         }
     });
 });
@@ -164,29 +169,48 @@ router.get('/me', requirePortalAuth, async (req, res) => {
 // Kunden können ihren eigenen Namen, Telefonnummer und Firma bearbeiten.
 // E-Mail ist Admin-only und kann hier nicht geändert werden.
 router.patch('/update-profile', requirePortalAuth, async (req, res) => {
-    const { name, phone, company } = req.body;
+    const { name, phone, company, billing_street, billing_city, billing_zip, billing_country, tax_id } = req.body;
 
     if (name !== undefined) {
         if (typeof name !== 'string' || name.trim().length < 2)
             return res.status(400).json({ success: false, message: 'Name muss mindestens 2 Zeichen lang sein.' });
     }
 
+    if (billing_zip !== undefined && billing_zip !== null) {
+        const zipStr = String(billing_zip).trim();
+        if (zipStr.length > 10 || (zipStr.length > 0 && !/^[a-zA-Z0-9]+$/.test(zipStr))) {
+            return res.status(400).json({ success: false, message: 'Postleitzahl ist ungültig (max. 10 Zeichen, nur Zahlen/Buchstaben).' });
+        }
+    }
+
+    if (billing_country !== undefined && billing_country !== null) {
+        const countryStr = String(billing_country).trim();
+        if (!/^[a-zA-Z]{2}$/.test(countryStr)) {
+            return res.status(400).json({ success: false, message: 'Ungültiges Land (2-stelliger ISO-Code erforderlich, z.B. DE).' });
+        }
+    }
+
     const updates = [];
     const params  = [];
 
-    if (name    !== undefined) { updates.push('name = ?');    params.push(name.trim()); }
-    if (phone   !== undefined) { updates.push('phone = ?');   params.push(phone || null); }
-    if (company !== undefined) { updates.push('company = ?'); params.push(company || null); }
+    if (name            !== undefined) { updates.push('name = ?');            params.push(name.trim()); }
+    if (phone           !== undefined) { updates.push('phone = ?');           params.push(phone || null); }
+    if (company         !== undefined) { updates.push('company = ?');         params.push(company || null); }
+    if (billing_street  !== undefined) { updates.push('billing_street = ?');  params.push(billing_street || null); }
+    if (billing_city    !== undefined) { updates.push('billing_city = ?');    params.push(billing_city || null); }
+    if (billing_zip     !== undefined) { updates.push('billing_zip = ?');     params.push(billing_zip ? String(billing_zip).trim() : null); }
+    if (billing_country !== undefined) { updates.push('billing_country = ?'); params.push(billing_country ? String(billing_country).trim().toUpperCase() : null); }
+    if (tax_id          !== undefined) { updates.push('tax_id = ?');          params.push(tax_id || null); }
 
     if (updates.length === 0)
-        return res.status(400).json({ success: false, message: 'Keine änderbaren Felder angegeben. Erlaubt: name, phone, company.' });
+        return res.status(400).json({ success: false, message: 'Keine änderbaren Felder angegeben. Erlaubt: name, phone, company, billing_street, billing_city, billing_zip, billing_country, tax_id.' });
 
     try {
         params.push(req.customer.id);
         await db.query(`UPDATE customers SET ${updates.join(', ')} WHERE id = ?`, params);
 
         const [rows] = await db.query(
-            'SELECT id, name, email, phone, company, portal_username FROM customers WHERE id = ?',
+            'SELECT id, name, email, phone, company, portal_username, billing_street, billing_city, billing_zip, billing_country, tax_id FROM customers WHERE id = ?',
             [req.customer.id]
         );
         const c = rows[0];
@@ -194,12 +218,17 @@ router.patch('/update-profile', requirePortalAuth, async (req, res) => {
             success: true,
             message: 'Profil erfolgreich aktualisiert.',
             customer: {
-                id:       c.id,
-                name:     c.name,
-                email:    c.email,
-                username: c.portal_username || null,
-                phone:    c.phone || null,
-                company:  c.company || null
+                id:              c.id,
+                name:            c.name,
+                email:           c.email,
+                username:        c.portal_username || null,
+                phone:           c.phone || null,
+                company:         c.company || null,
+                billing_street:  c.billing_street || null,
+                billing_city:    c.billing_city || null,
+                billing_zip:     c.billing_zip || null,
+                billing_country: c.billing_country || null,
+                tax_id:          c.tax_id || null
             }
         });
     } catch (e) {
