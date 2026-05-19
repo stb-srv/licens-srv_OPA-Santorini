@@ -9,7 +9,7 @@ dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = path.join(__dirname, 'migrations');
 
-async function migrate() {
+export async function runMigrations() {
     const connection = await mysql.createConnection({
         host: process.env.DB_HOST || '127.0.0.1',
         port: parseInt(process.env.DB_PORT) || 3306,
@@ -58,8 +58,10 @@ async function migrate() {
                 const migrationModule = await import(`file://${path.join(MIGRATIONS_DIR, file)}`);
                 if (typeof migrationModule.default === 'function') {
                     await migrationModule.default(connection);
+                } else if (typeof migrationModule.up === 'function') {
+                    await migrationModule.up(connection);
                 } else {
-                    console.warn(`  ⚠️  Migration ${file} has no default export function.`);
+                    console.warn(`  ⚠️  Migration ${file} has no default or up export function.`);
                 }
             }
 
@@ -72,17 +74,29 @@ async function migrate() {
             count++;
         }
 
+        const alreadyAppliedCount = migrationFiles.filter(f => appliedVersions.has(f)).length;
+
         if (count === 0) {
             console.log('✨ Database is already up to date.');
         } else {
             console.log(`\n🎉 Successfully applied ${count} migration(s).`);
         }
+
+        console.log(`🗄️  Migrationen: ${count} neu ausgeführt, ${alreadyAppliedCount} bereits vorhanden (gesamt ${migrationFiles.length})`);
     } catch (e) {
         console.error('\n❌ Error during migration:', e.stack);
-        process.exit(1);
+        throw e;
     } finally {
         await connection.end();
     }
 }
 
-migrate();
+// Support direct standalone execution from command line
+const isMain = process.argv[1] && (
+    path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url)) ||
+    process.argv[1].endsWith('migrate.js')
+);
+
+if (isMain) {
+    runMigrations().catch(() => process.exit(1));
+}

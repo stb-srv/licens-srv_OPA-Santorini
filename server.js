@@ -65,6 +65,18 @@ if (process.env.NODE_ENV !== 'test') {
     catch (e) { console.error('❌  MySQL Verbindungsfehler:', e.message); process.exit(1); }
 }
 
+// ── Auto-Migration ─────────────────────────────────────────────────────────
+if (process.env.NODE_ENV !== 'test') {
+    try {
+        const { runMigrations } = await import('./server/migrate.js');
+        await runMigrations();
+        console.log('✅  Datenbank-Migrationen erfolgreich abgeschlossen.');
+    } catch (e) {
+        console.error('❌  Migration fehlgeschlagen:', e.message);
+        process.exit(1);
+    }
+}
+
 // ── Security Headers (Helmet) ─────────────────────────────────────────────────
 app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
