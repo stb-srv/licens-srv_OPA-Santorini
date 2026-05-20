@@ -152,7 +152,16 @@ app.use('/api/v1/trial/register', (req, res, next) => {
     next();
 });
 
-// ── CORS-Ausnahme: Public-Key & Heartbeat (immer öffentlich erreichbar) ──────
+app.use(express.json());
+
+// ── Ensure Invoice Storage Exists ───────────────────────────────────────────
+const storageDir = process.env.STORAGE_PATH || './storage/invoices';
+if (!fs.existsSync(storageDir)) {
+    fs.mkdirSync(storageDir, { recursive: true });
+    console.log(`📁 Rechnungs-Speicherverzeichnis erstellt unter: ${storageDir}`);
+}
+
+// ── CORS-Ausnahme: Public-Key & Heartbeat (immer erreichbar, ohne DB-Check) ──
 app.options('/api/v1/public-key', (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -163,6 +172,7 @@ app.use('/api/v1/public-key', (req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
     next();
 });
+
 app.options('/api/v1/heartbeat', (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -173,15 +183,6 @@ app.use('/api/v1/heartbeat', (req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
     next();
 });
-
-app.use(express.json());
-
-// ── Ensure Invoice Storage Exists ───────────────────────────────────────────
-const storageDir = process.env.STORAGE_PATH || './storage/invoices';
-if (!fs.existsSync(storageDir)) {
-    fs.mkdirSync(storageDir, { recursive: true });
-    console.log(`📁 Rechnungs-Speicherverzeichnis erstellt unter: ${storageDir}`);
-}
 
 // ── Routes ──────────────────────────────────────────────────────────────────
 app.use('/api/v1', publicRoutes);
