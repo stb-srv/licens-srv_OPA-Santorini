@@ -109,6 +109,13 @@
       <div class="spinner" style="margin:0 auto 1.5rem"></div>
       <p style="color:var(--text2);font-size:.9rem">Du wirst zum Login weitergeleitet&hellip;</p>
       <p style="margin-top:1rem"><a href="login.html" style="color:var(--accent);font-weight:600">Zur Login-Seite &rarr;</a></p>
+      <div style="text-align:center;margin-top:1rem;font-size:.85rem;color:var(--text2)">
+        Noch kein Account? 
+        <a href="login.html#register" style="color:var(--accent)">Jetzt registrieren</a>
+      </div>
+      <div style="text-align:center;margin-top:.5rem;font-size:.82rem">
+        <a href="login.html#forgot" style="color:var(--text2);text-decoration:none;">Passwort vergessen?</a>
+      </div>
     </div>
   </div>
 </div>
@@ -123,6 +130,42 @@
       <div class="form-group"><label>Neues Passwort <span style="color:var(--text2);font-size:.78rem">(min. 10 Zeichen)</span></label><input type="password" id="setup-pass" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"></div>
       <div class="form-group"><label>Passwort wiederholen</label><input type="password" id="setup-pass2" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"></div>
       <button class="btn btn-primary" style="width:100%" onclick="doSetupPassword()">Passwort setzen &amp; einloggen</button>
+      <div style="text-align:center;margin-top:1.5rem;font-size:.85rem;color:var(--text2)">
+        <a href="login.html" style="color:var(--text2);text-decoration:none;">&larr; Zurück zum Login</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CHANGE PASSWORD PAGE (FORCED) -->
+<div id="page-change-password" class="page">
+  <div class="center-wrap">
+    <div class="auth-card">
+      <h2>🔑 Passwort ändern</h2>
+      <p class="sub">Dein Passwort muss aus Sicherheitsgründen geändert werden.</p>
+      <div id="change-pass-alert"></div>
+      <div class="form-group"><label>Aktuelles Passwort</label><input type="password" id="change-pass-curr"></div>
+      <div class="form-group"><label>Neues Passwort <span style="color:var(--text2);font-size:.78rem">(min. 10 Zeichen)</span></label><input type="password" id="change-pass-new"></div>
+      <div class="form-group"><label>Neues Passwort wiederholen</label><input type="password" id="change-pass-new2"></div>
+      <button class="btn btn-primary" style="width:100%" onclick="doChangePasswordForced()">Passwort ändern</button>
+      <div style="text-align:center;margin-top:1.5rem;font-size:.85rem;color:var(--text2)">
+        <a href="#" onclick="doLogout()" style="color:var(--text2);text-decoration:none;">&larr; Abbrechen &amp; Logout</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EMAIL VERIFICATION PAGE -->
+<div id="page-verify" class="page">
+  <div class="center-wrap">
+    <div class="auth-card" style="text-align:center">
+      <div id="verify-spinner" class="spinner" style="margin:0 auto 1.5rem"></div>
+      <h2 id="verify-title">&#128231; E-Mail-Bestätigung</h2>
+      <div id="verify-alert" style="margin-top: 1rem;"></div>
+      <p id="verify-text" style="color:var(--text2);font-size:.9rem;margin-top:1rem">Deine E-Mail-Adresse wird verifiziert...</p>
+      <div id="verify-login-link" style="text-align:center;margin-top:1.5rem;font-size:.85rem;color:var(--text2);display:none;">
+        <a href="login.html" style="color:var(--text2);text-decoration:none;">&larr; Zurück zum Login</a>
+      </div>
     </div>
   </div>
 </div>
@@ -174,7 +217,7 @@ function toggleTheme(){
   if(btn)btn.textContent=next==='dark'?'\u2600\uFE0F':'\uD83C\uDF19';
 }
 
-var TOKEN=localStorage.getItem('portal_token')||'';
+var TOKEN=sessionStorage.getItem('portal_token')||'';
 var CUSTOMER=null;
 
 function API(path,opts){
@@ -216,6 +259,47 @@ function switchTab(name){
 // ── Startup: invite token prüfen ──────────────────────────────────────────────
 function init(){
   var params=new URLSearchParams(window.location.search);
+  
+  // E-Mail-Verifizierung über Hash oder Query
+  var verifyToken = '';
+  if (window.location.hash && window.location.hash.indexOf('#verify') === 0) {
+    var hashQuery = window.location.hash.split('?')[1];
+    if (hashQuery) {
+      var hashParams = new URLSearchParams(hashQuery);
+      verifyToken = hashParams.get('token') || '';
+    }
+  } else if (params.get('verify_token')) {
+    verifyToken = params.get('verify_token');
+  }
+
+  if (verifyToken) {
+    showPage('verify');
+    fetch('/api/portal/verify-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: verifyToken })
+    }).then(function(r) { return r.json().then(function(d) { if(!r.ok) throw d; return d; }); })
+      .then(function(d) {
+        document.getElementById('verify-spinner').style.display = 'none';
+        showAlert('verify-alert', '&#9989; ' + esc(d.message || 'E-Mail erfolgreich verifiziert!'), 'success');
+        document.getElementById('verify-text').innerHTML = 'Du wirst in Kürze zum Login weitergeleitet...';
+        document.getElementById('verify-login-link').style.display = 'block';
+        setTimeout(function() {
+          window.location.href = 'login.html';
+        }, 3000);
+      })
+      .catch(function(e) {
+        document.getElementById('verify-spinner').style.display = 'none';
+        showAlert('verify-alert', esc(e.message || 'Verifizierung fehlgeschlagen.'), 'error');
+        document.getElementById('verify-text').innerHTML = 'Der Bestätigungslink ist ungültig oder abgelaufen.';
+        document.getElementById('verify-login-link').style.display = 'block';
+        setTimeout(function() {
+          window.location.href = 'login.html';
+        }, 4000);
+      });
+    return;
+  }
+
   var inviteToken=params.get('token');
   if(inviteToken){
     showPage('setup');
@@ -237,10 +321,14 @@ function init(){
     API('/me').then(function(d){
       CUSTOMER=d.customer;
       showDashboard();
-    }).catch(function(){
-      TOKEN='';
-      localStorage.removeItem('portal_token');
-      window.location.href='login.html';
+    }).catch(function(e){
+      if(e && e.must_change_password) {
+        showPage('change-password');
+      } else {
+        TOKEN='';
+        sessionStorage.removeItem('portal_token');
+        window.location.href='login.html';
+      }
     });
   } else {
     // No token: redirect to central login page
@@ -280,17 +368,40 @@ function doSetupPassword(){
       if(d.success){
         showAlert('setup-alert','&#9989; '+esc(d.message)+' Du wirst weitergeleitet&hellip;','success');
         setTimeout(function(){
-          // Direkt einloggen
-          document.getElementById('page-setup').classList.remove('active');
-          showPage('login');
-          window._inviteToken=null;
-          history.replaceState(null,'','/portal.html');
+          window.location.href = 'login.html';
         },2000);
       } else {
         showAlert('setup-alert',esc(d.message),'error');
       }
     })
     .catch(function(e){showAlert('setup-alert',esc(e.message||'Fehler'),'error');});
+}
+
+function doChangePasswordForced(){
+  var curr = document.getElementById('change-pass-curr').value;
+  var newp = document.getElementById('change-pass-new').value;
+  var newp2 = document.getElementById('change-pass-new2').value;
+  if(!curr || !newp || !newp2) { showAlert('change-pass-alert', 'Bitte alle Felder ausfüllen.', 'error'); return; }
+  if(newp.length < 10) { showAlert('change-pass-alert', 'Das neue Passwort muss mindestens 10 Zeichen haben.', 'error'); return; }
+  if(newp !== newp2) { showAlert('change-pass-alert', 'Die neuen Passwörter stimmen nicht überein.', 'error'); return; }
+  if(curr === newp) { showAlert('change-pass-alert', 'Das neue Passwort muss sich vom aktuellen unterscheiden.', 'error'); return; }
+  
+  showAlert('change-pass-alert', 'Passwort wird geändert...', 'info');
+  
+  API('/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ current_password: curr, new_password: newp })
+  }).then(function(d) {
+    showAlert('change-pass-alert', '&#9989; Passwort geändert! Du wirst eingeloggt...', 'success');
+    setTimeout(function() {
+      document.getElementById('change-pass-curr').value = '';
+      document.getElementById('change-pass-new').value = '';
+      document.getElementById('change-pass-new2').value = '';
+      init();
+    }, 2000);
+  }).catch(function(e) {
+    showAlert('change-pass-alert', esc(e.message || 'Fehler beim Passwort-Ändern.'), 'error');
+  });
 }
 
 // ── Logout ────────────────────────────────────────────────────────────────────
@@ -300,7 +411,7 @@ function doLogout(){
   }
   TOKEN='';
   CUSTOMER=null;
-  localStorage.removeItem('portal_token');
+  sessionStorage.removeItem('portal_token');
   showPage('login');
 }
 
@@ -410,9 +521,41 @@ function loadAccount(){
           '<tr><td style="padding:.5rem 0;color:var(--text2)">Kunde seit</td><td style="padding:.5rem 0">'+fmtDateShort(c.created_at)+'</td></tr>'+
         '</table>'+
         '<p style="margin-top:1rem;font-size:.82rem;color:var(--text2)">Möchtest du deine Daten ändern? Bitte kontaktiere uns direkt.</p>'+
+      '</div>' +
+      '<div class="card" style="margin-top:1rem">'+
+        '<div class="card-title">🔑 Passwort ändern</div>'+
+        '<div id="account-pass-alert"></div>'+
+        '<div class="form-group"><label>Aktuelles Passwort</label><input type="password" id="acc-pass-curr"></div>'+
+        '<div class="form-group"><label>Neues Passwort (min. 10 Zeichen)</label><input type="password" id="acc-pass-new"></div>'+
+        '<div class="form-group"><label>Neues Passwort wiederholen</label><input type="password" id="acc-pass-new2"></div>'+
+        '<button class="btn btn-primary btn-sm" onclick="doChangePasswordVoluntary()">Passwort aktualisieren</button>'+
       '</div>';
   }).catch(function(e){
     document.getElementById('account-content').innerHTML='<div class="alert alert-error">'+esc(e.message||'Fehler')+'</div>';
+  });
+}
+
+function doChangePasswordVoluntary(){
+  var curr = document.getElementById('acc-pass-curr').value;
+  var newp = document.getElementById('acc-pass-new').value;
+  var newp2 = document.getElementById('acc-pass-new2').value;
+  if(!curr || !newp || !newp2) { showAlert('account-pass-alert', 'Bitte alle Felder ausfüllen.', 'error'); return; }
+  if(newp.length < 10) { showAlert('account-pass-alert', 'Das neue Passwort muss mindestens 10 Zeichen haben.', 'error'); return; }
+  if(newp !== newp2) { showAlert('account-pass-alert', 'Die neuen Passwörter stimmen nicht überein.', 'error'); return; }
+  if(curr === newp) { showAlert('account-pass-alert', 'Das neue Passwort muss sich vom aktuellen unterscheiden.', 'error'); return; }
+  
+  showAlert('account-pass-alert', 'Passwort wird geändert...', 'info');
+  
+  API('/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ current_password: curr, new_password: newp })
+  }).then(function(d) {
+    showAlert('account-pass-alert', '&#9989; Passwort erfolgreich geändert.', 'success');
+    document.getElementById('acc-pass-curr').value = '';
+    document.getElementById('acc-pass-new').value = '';
+    document.getElementById('acc-pass-new2').value = '';
+  }).catch(function(e) {
+    showAlert('account-pass-alert', esc(e.message || 'Fehler beim Passwort-Ändern.'), 'error');
   });
 }
 

@@ -452,40 +452,6 @@ router.get('/verify-invite-token', async (req, res) => {
     }
 });
 
-// ── POST /forgot-password ──────────────────────────────────────────────
-// Kunden können selbst einen Passwort-Reset anfordern (kein Admin-Eingriff nötig)
-router.post('/forgot-password', inviteLimiter, async (req, res) => {
-    const { email } = req.body;
-    // Immer mit 200 antworten (kein E-Mail-Enumeration)
-    const genericResponse = { success: true, message: 'Falls deine E-Mail registriert ist, hast du in Kürze eine E-Mail mit einem Reset-Link erhalten.' };
-    if (!email) return res.json(genericResponse);
-    try {
-        const [rows] = await db.query(
-            'SELECT id, name, email FROM customers WHERE email = ? AND (archived = 0 OR archived IS NULL)',
-            [email.toLowerCase().trim()]
-        );
-        if (!rows[0]) return res.json(genericResponse); // Kein Leak ob E-Mail existiert
-
-        const resetToken = crypto.randomBytes(32).toString('hex');
-        const expiresAt  = new Date(Date.now() + 2 * 60 * 60 * 1000); // 2 Stunden
-        await db.query(
-            'UPDATE customers SET portal_token = ?, portal_token_expires = ? WHERE id = ?',
-            [resetToken, expiresAt, rows[0].id]
-        );
-
-        const portalUrl  = (process.env.PORTAL_URL || 'https://licens-prod.stb-srv.de').replace(/\/$/, '');
-        const resetUrl   = `${portalUrl}/portal.html?reset=${resetToken}`;
-
-        await sendTemplateMail('passwordReset', rows[0].email, {
-            name:      rows[0].name,
-            reset_url: resetUrl
-        });
-    } catch (e) {
-        console.error('[Portal/forgot-password]', e.message);
-        // Fehler nicht nach außen leaken
-    }
-    res.json(genericResponse);
-});
 
 // ── GET /invoices ─────────────────────────────────────────────────────────────
 router.get('/invoices', requirePortalAuth, async (req, res) => {

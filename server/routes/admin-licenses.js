@@ -31,11 +31,16 @@ router.get('/licenses', requireAuth, asyncHandler(async (req, res) => {
     ? `%${req.query.search.replace(/[%_\\]/g, '\\$&')}%`
     : null;
 
+  const customer_id = req.query.customer_id;
   const expiring = req.query.expiring === '1';
   const tag = req.query.tag;
 
   let where = '1=1';
   const params = [];
+  if (customer_id) {
+    where += ' AND customer_id = ?';
+    params.push(customer_id);
+  }
   if (search) {
     where += ' AND (license_key LIKE ? OR customer_name LIKE ? OR associated_domain LIKE ?)';
     params.push(search, search, search);

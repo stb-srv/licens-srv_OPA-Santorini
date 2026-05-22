@@ -238,6 +238,13 @@
 
 <script>
 (function(){
+  var urlParams = new URLSearchParams(window.location.search);
+  var resetToken = urlParams.get('reset');
+  if (resetToken) {
+    window.location.href = 'portal.html?token=' + encodeURIComponent(resetToken);
+    return;
+  }
+
   var t=localStorage.getItem('theme')||'dark';
   document.documentElement.setAttribute('data-theme',t);
   var btn=document.getElementById('theme-btn');
@@ -310,11 +317,11 @@ function doCustomerLogin() {
     body: JSON.stringify({ email: email, password: pass })
   }).then(function(r){ return r.json().then(function(d){ if(!r.ok) throw d; return d; }); })
     .then(function(d){
-      localStorage.setItem('portal_token', d.token);
+      sessionStorage.setItem('portal_token', d.token);
       window.location.href = 'portal.html';
     }).catch(function(e){
       if(e.must_change_password) {
-        localStorage.setItem('portal_token', e.token || '');
+        sessionStorage.setItem('portal_token', e.token || '');
         window.location.href = 'portal.html';
       } else {
         showAlert('cust-alert', esc(e.message||'Login fehlgeschlagen.'), 'error');

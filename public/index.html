@@ -1966,9 +1966,9 @@ function toggleTheme(){
   }
 }
 
-var TOKEN=localStorage.getItem('admin_token')||'';
-var ROLE=localStorage.getItem('admin_role')||'';
-var USER=localStorage.getItem('admin_user')||'';
+var TOKEN=sessionStorage.getItem('admin_token')||'';
+var ROLE=sessionStorage.getItem('admin_role')||'';
+var USER=sessionStorage.getItem('admin_user')||'';
 var licPage=1,licSearch='',searchTimer;
 var custPage=1,custSearch='';
 var devPage=1,devSearch='';
@@ -2367,9 +2367,9 @@ function API(path,opts){
               throw d;
             }
             TOKEN='';ROLE='';USER='';
-            localStorage.removeItem('admin_token');
-            localStorage.removeItem('admin_role');
-            localStorage.removeItem('admin_user');
+            sessionStorage.removeItem('admin_token');
+            sessionStorage.removeItem('admin_role');
+            sessionStorage.removeItem('admin_user');
             showLogin('Sitzung abgelaufen. Bitte erneut einloggen.');
             throw {message:'Sitzung abgelaufen. Bitte erneut einloggen.'};
           }
@@ -2600,9 +2600,9 @@ function doLogin(){
         return;
       }
       TOKEN=d.token;ROLE=d.role;USER=d.username;
-      localStorage.setItem('admin_token',TOKEN);
-      localStorage.setItem('admin_role',ROLE);
-      localStorage.setItem('admin_user',USER);
+      sessionStorage.setItem('admin_token',TOKEN);
+      sessionStorage.setItem('admin_role',ROLE);
+      sessionStorage.setItem('admin_user',USER);
       document.getElementById('login-pass').value='';
       showDashboard();
     }).catch(function(e){
@@ -2618,9 +2618,9 @@ function doVerify2FA(){
   API('/admin/login/2fa', { method: 'POST', body: JSON.stringify({ code: code, temp_token: TEMP_2FA_TOKEN }) })
     .then(function(d){
       TOKEN=d.token;ROLE=d.role;USER=d.username;
-      localStorage.setItem('admin_token',TOKEN);
-      localStorage.setItem('admin_role',ROLE);
-      localStorage.setItem('admin_user',USER);
+      sessionStorage.setItem('admin_token',TOKEN);
+      sessionStorage.setItem('admin_role',ROLE);
+      sessionStorage.setItem('admin_user',USER);
       resetLogin();
       showDashboard();
     }).catch(function(e){ showAlert('login-alert', esc(e.message||'Ungültiger Code.')); });
@@ -2664,9 +2664,9 @@ function disable2FA(){
 }
 function doLogout(){
   TOKEN='';ROLE='';USER='';
-  localStorage.removeItem('admin_token');
-  localStorage.removeItem('admin_role');
-  localStorage.removeItem('admin_user');
+  sessionStorage.removeItem('admin_token');
+  sessionStorage.removeItem('admin_role');
+  sessionStorage.removeItem('admin_user');
   showLogin();
 }
 document.addEventListener('keydown',function(e){
@@ -2923,17 +2923,24 @@ function openEditCustomer(idx){
   var licBlock = document.getElementById('ec-licenses-block');
   if (licBlock) {
     licBlock.innerHTML = '<div class="spinner" style="width:20px;height:20px;margin-bottom:10px;display:inline-block;vertical-align:middle"></div> <span style="font-size:.85rem;color:var(--text2);vertical-align:middle;margin-left:8px">Lade Lizenzen...</span>';
-    API('/admin/licenses?search=' + encodeURIComponent(c.name)).then(function(d){
-      var html = '<div style="font-weight:600;margin-bottom:.5rem;font-size:.9rem">Lizenzen des Kunden</div>';
-      var customerLics = (d.licenses || []).filter(function(l) { return l.customer_id === c.id; });
-      if(customerLics.length === 0) {
-        html += '<div style="font-size:.85rem;color:var(--text2)">Keine Lizenzen gefunden.</div>';
+    API('/admin/licenses?customer_id=' + encodeURIComponent(c.id)).then(function(d){
+      var myLics = d.licenses || [];
+      var html = '<div style="font-size:.8rem;font-weight:700;letter-spacing:.05em;color:var(--primary);text-transform:uppercase;margin-bottom:.5rem">Lizenzen</div>';
+      if (myLics.length === 0) {
+        html += '<p style="color:var(--text2);font-size:.85rem">Keine Lizenzen vorhanden.</p>';
       } else {
-        html += '<table style="width:100%;font-size:.8rem;border-collapse:collapse;margin-bottom:.5rem"><tbody>';
-        customerLics.forEach(function(l){
-          html += '<tr style="border-bottom:1px solid var(--border)"><td style="padding:.4rem 0;font-family:monospace;color:var(--primary)">' + esc(l.license_key) + '</td><td style="padding:.4rem 0;text-align:right"><span class="badge badge-' + esc(l.status) + '">' + esc(l.status) + '</span></td></tr>';
-        });
-        html += '</tbody></table>';
+        html += '<table class="data-table" style="width:100%;font-size:.8rem;border-collapse:collapse;margin-bottom:.5rem">' +
+          '<thead><tr style="text-align:left;border-bottom:1px solid var(--border)"><th style="padding:.4rem 0">Key</th><th style="padding:.4rem 0">Typ</th><th style="padding:.4rem 0">Status</th><th style="padding:.4rem 0;text-align:right">Ablauf</th></tr></thead>' +
+          '<tbody>' +
+          myLics.map(function(l){
+            return '<tr style="border-bottom:1px solid var(--border)">' +
+              '<td style="padding:.4rem 0;font-family:monospace;color:var(--accent)"><code>'+esc(l.license_key)+'</code></td>' +
+              '<td style="padding:.4rem 0">'+esc(l.type)+'</td>' +
+              '<td style="padding:.4rem 0">'+statusBadge(l.status)+'</td>' +
+              '<td style="padding:.4rem 0;text-align:right">'+fmtDate(l.expires_at)+'</td>' +
+              '</tr>';
+          }).join('') +
+          '</tbody></table>';
       }
       licBlock.innerHTML = html;
     }).catch(function(){
