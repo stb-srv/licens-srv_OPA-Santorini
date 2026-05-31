@@ -1878,18 +1878,24 @@
 <div class="modal-overlay" id="modal-new-invoice"><div class="modal">
   <h3>🧾 Neue Rechnung erstellen</h3>
   <div class="form-group"><label>Kunde *</label>
-    <select id="ni-customer-id">
+    <select id="ni-customer-id" onchange="onInvoiceCustomerChange()">
       <option value="">-- Kunde auswählen --</option>
     </select>
   </div>
-  <div class="form-group"><label>Lizenz-Key (optional)</label>
-    <input type="text" id="ni-license-key" placeholder="OPA-PRO-XXXX-2025">
+  <div class="form-group"><label>Lizenz</label>
+    <select id="ni-license-key">
+      <option value="">-- Kunde zuerst wählen --</option>
+    </select>
   </div>
   <div class="form-group"><label>Betrag in EUR *</label>
     <input type="number" step="0.01" id="ni-amount" placeholder="99.00">
   </div>
-  <div class="form-group"><label>Fälligkeitsdatum</label>
-    <input type="date" id="ni-due-date">
+  <div class="form-group"><label>Fälligkeit</label>
+    <select id="ni-due-days">
+      <option value="31">31 Tage</option>
+      <option value="90">90 Tage</option>
+      <option value="180">180 Tage</option>
+    </select>
   </div>
   <div class="form-group"><label>Status</label>
     <select id="ni-status">
@@ -2087,26 +2093,50 @@ function filterInvoices() {
   renderInvoicesTable(filtered);
 }
 
+var _niCustomerMap = {};
+
 function openNewInvoiceModal() {
   API('/admin/customers?limit=1000').then(function(d) {
-    var select = document.getElementById('ni-customer-id');
     var customers = d.customers || [];
+    _niCustomerMap = {};
     var html = '<option value="">-- Kunde auswählen --</option>';
     customers.forEach(function(c) {
+      _niCustomerMap[c.id] = c;
       var displayName = c.name + (c.company ? ' (' + c.company + ')' : '');
       html += '<option value="' + esc(c.id) + '">' + esc(displayName) + '</option>';
     });
-    select.innerHTML = html;
-    
-    document.getElementById('ni-license-key').value = '';
+    document.getElementById('ni-customer-id').innerHTML = html;
+    document.getElementById('ni-license-key').innerHTML = '<option value="">-- Kunde zuerst wählen --</option>';
     document.getElementById('ni-amount').value = '';
-    document.getElementById('ni-due-date').value = '';
+    document.getElementById('ni-due-days').value = '31';
     document.getElementById('ni-status').value = 'draft';
     document.getElementById('ni-note').value = '';
-    
     openModal('modal-new-invoice');
   }).catch(function(e) {
     showError('Kunden konnten nicht geladen werden: ' + (e.message || String(e)));
+  });
+}
+
+function onInvoiceCustomerChange() {
+  var customerId = document.getElementById('ni-customer-id').value;
+  var licSelect = document.getElementById('ni-license-key');
+  if (!customerId) {
+    licSelect.innerHTML = '<option value="">-- Kunde zuerst wählen --</option>';
+    return;
+  }
+  licSelect.innerHTML = '<option value="">Lädt...</option>';
+  API('/admin/licenses?customer_id=' + encodeURIComponent(customerId) + '&limit=100').then(function(d) {
+    var licenses = d.licenses || d || [];
+    if (!Array.isArray(licenses)) licenses = [];
+    var html = '<option value="">-- Keine Lizenz verknüpfen --</option>';
+    licenses.forEach(function(l) {
+      var label = esc(l.license_key) + (l.associated_domain ? ' – ' + esc(l.associated_domain) : '') + ' [' + esc(l.type) + ']';
+      html += '<option value="' + esc(l.license_key) + '">' + label + '</option>';
+    });
+    licSelect.innerHTML = html;
+    if (licenses.length === 1) licSelect.value = licenses[0].license_key;
+  }).catch(function() {
+    licSelect.innerHTML = '<option value="">-- Keine Lizenz gefunden --</option>';
   });
 }
 
@@ -2114,7 +2144,9 @@ function saveInvoice() {
   var customer_id = document.getElementById('ni-customer-id').value;
   var license_key = document.getElementById('ni-license-key').value || null;
   var amount = parseFloat(document.getElementById('ni-amount').value) || null;
-  var due_date = document.getElementById('ni-due-date').value || null;
+  var dueDays = parseInt(document.getElementById('ni-due-days').value) || 31;
+  var dueDate = new Date(); dueDate.setDate(dueDate.getDate() + dueDays);
+  var due_date = dueDate.toISOString().slice(0, 10);
   var status = document.getElementById('ni-status').value;
   var note = document.getElementById('ni-note').value || null;
 
