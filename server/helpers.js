@@ -13,11 +13,6 @@ export const generateKey = (type) => {
     return `${prefix}-${rand}-${new Date().getFullYear()}`;
 };
 
-/**
- * Normalisiert eine Domain auf ihren Kern-Hostnamen.
- * Entfernt: Protokoll (http/https), www.-Prefix, Port, Pfad.
- * Beispiel: "https://www.restau01.de:443/menu" → "restau01.de"
- */
 export const normalizeDomain = (raw) => {
     if (!raw) return null;
     return raw
@@ -47,32 +42,11 @@ export const getClientIp = (req) =>
     || req.socket?.remoteAddress
     || 'unknown';
 
-// Erkennt beim ersten Aufruf welche Spalten audit_log hat (data vs details, ts vs created_at)
-let _auditCols = null;
-async function detectAuditCols() {
-    if (_auditCols) return _auditCols;
-    try {
-        const [cols] = await db.query(
-            `SELECT COLUMN_NAME FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'audit_log'`
-        );
-        const names = cols.map(c => c.COLUMN_NAME);
-        _auditCols = {
-            dataCol:  names.includes('details') ? 'details' : 'data',
-            tsCol:    names.includes('created_at') ? 'created_at' : 'ts'
-        };
-        console.log(`ℹ️  audit_log Schema erkannt: dataCol=${_auditCols.dataCol}, tsCol=${_auditCols.tsCol}`);
-    } catch {
-        _auditCols = { dataCol: 'data', tsCol: 'ts' };
-    }
-    return _auditCols;
-}
-
+// Schema is fixed in SQLite — always 'details' and 'ts'
 export const addAuditLog = async (action, details, actor = 'system') => {
     try {
-        const { dataCol, tsCol } = await detectAuditCols();
-        await db.query(
-            `INSERT INTO audit_log (id, actor, action, \`${dataCol}\`, \`${tsCol}\`) VALUES (?, ?, ?, ?, NOW())`,
+        db.query(
+            `INSERT INTO audit_log (id, actor, action, details, ts) VALUES (?, ?, ?, ?, datetime('now'))`,
             [crypto.randomUUID(), actor, action, JSON.stringify(details)]
         );
     } catch (e) {
@@ -86,9 +60,5 @@ export const parseJsonField = (value, fallback = {}) => {
     catch { return fallback; }
 };
 
-/**
- * asyncHandler: Wrapper für Express-Routen, um try/catch-Boilerplate zu vermeiden.
- * Leitet Fehler automatisch an den globalen Error-Handler weiter.
- */
 export const asyncHandler = (fn) => (req, res, next) =>
     Promise.resolve(fn(req, res, next)).catch(next);

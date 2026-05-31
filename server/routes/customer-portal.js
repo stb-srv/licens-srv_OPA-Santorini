@@ -1,9 +1,3 @@
-/**
- * server/routes/customer-portal.js
- * Kunden-Portal API — /api/portal/*
- * Kunden können sich einloggen, ihre Lizenzen sehen,
- * eine Domain binden und die Kaufhistorie einsehen.
- */
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -21,109 +15,67 @@ import { generateKey, addAuditLog, asyncHandler, normalizeDomain } from '../help
 const router = Router();
 const PORTAL_SECRET = process.env.PORTAL_SECRET || '';
 
-// ── Rate Limiter ──────────────────────────────────────────────────────────────
-const portalLoginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 10,
-    message: { success: false, message: 'Zu viele Login-Versuche. Bitte 15 Minuten warten.' }
-});
+const portalLoginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { success: false, message: 'Zu viele Login-Versuche. Bitte 15 Minuten warten.' } });
+const inviteLimiter      = rateLimit({ windowMs: 60 * 60 * 1000, max: 5, message: { success: false, message: 'Zu viele Anfragen. Bitte 1 Stunde warten.' } });
+const registerLimiter    = rateLimit({ windowMs: 60 * 60 * 1000, max: 5, message: { success: false, message: 'Zu viele Registrierungs-Versuche. Bitte 1 Stunde warten.' } });
+const verifyLimiter      = rateLimit({ windowMs: 60 * 60 * 1000, max: 5, message: { success: false, message: 'Zu viele Verifizierungs-Versuche. Bitte 1 Stunde warten.' } });
 
-const inviteLimiter = rateLimit({
-    windowMs: 60 * 60 * 1000,
-    max: 5,
-    message: { success: false, message: 'Zu viele Anfragen. Bitte 1 Stunde warten.' }
-});
-
-const registerLimiter = rateLimit({
-    windowMs: 60 * 60 * 1000,
-    max: 5,
-    message: { success: false, message: 'Zu viele Registrierungs-Versuche. Bitte 1 Stunde warten.' }
-});
-
-const verifyLimiter = rateLimit({
-    windowMs: 60 * 60 * 1000,
-    max: 5,
-    message: { success: false, message: 'Zu viele Verifizierungs-Versuche. Bitte 1 Stunde warten.' }
-});
+function toDbDate(d) {
+    return (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 19).replace('T', ' ');
+}
 
 function normalizeSlug(str) {
-  return str
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/ß/gi, 'ss')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '');
+    return str.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ß/gi, 'ss').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
 function buildPortalUsername(name, company = null) {
-  const parts = (name || '').trim().split(/\s+/).filter(Boolean);
-  let slug;
-  if (parts.length >= 2) {
-    slug = `${normalizeSlug(parts[0])}.${normalizeSlug(parts[parts.length - 1])}`;
-  } else if (parts.length === 1) {
-    slug = normalizeSlug(parts[0]);
-  } else {
-    slug = 'kunde';
-  }
-  if (company) {
-    const firmSlug = normalizeSlug(company)
-      .replace(/gmbhcokg|gmbhco|gmbh|gbr|ohg|ug|ag|kg|ev|inc|ltd/g, '')
-      .replace(/^\d+/, '')
-      .slice(0, 12);
-    if (firmSlug) slug = `${slug}.${firmSlug}`;
-  }
-  return slug || 'kunde';
+    const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+    let slug;
+    if (parts.length >= 2) slug = `${normalizeSlug(parts[0])}.${normalizeSlug(parts[parts.length - 1])}`;
+    else if (parts.length === 1) slug = normalizeSlug(parts[0]);
+    else slug = 'kunde';
+    if (company) {
+        const firmSlug = normalizeSlug(company).replace(/gmbhcokg|gmbhco|gmbh|gbr|ohg|ug|ag|kg|ev|inc|ltd/g, '').replace(/^\d+/, '').slice(0, 12);
+        if (firmSlug) slug = `${slug}.${firmSlug}`;
+    }
+    return slug || 'kunde';
 }
 
-async function uniquePortalUsername(name, company = null) {
-  const base = buildPortalUsername(name, company);
-  try {
-    for (let i = 0; i < 100; i++) {
-      const attempt = i === 0 ? base : `${base}${i}`;
-      const [[{ n }]] = await db.query(
-        'SELECT COUNT(*) AS n FROM customers WHERE portal_username = ?', [attempt]
-      );
-      if (n === 0) return attempt;
-    }
-    return `${base}${Date.now()}`;
-  } catch {
-    return base;
-  }
+function uniquePortalUsername(name, company = null) {
+    const base = buildPortalUsername(name, company);
+    try {
+        for (let i = 0; i < 100; i++) {
+            const attempt = i === 0 ? base : `${base}${i}`;
+            const [[{ n }]] = db.query('SELECT COUNT(*) AS n FROM customers WHERE portal_username = ?', [attempt]);
+            if (n === 0) return attempt;
+        }
+        return `${base}${Date.now()}`;
+    } catch { return base; }
 }
 
 // ── Auth Middleware ────────────────────────────────────────────────────────────
 async function requirePortalAuth(req, res, next) {
     const auth = req.headers.authorization;
-    if (!auth?.startsWith('Bearer '))
-        return res.status(401).json({ success: false, message: 'Nicht eingeloggt.' });
+    if (!auth?.startsWith('Bearer ')) return res.status(401).json({ success: false, message: 'Nicht eingeloggt.' });
     const token = auth.slice(7);
     try {
         if (!PORTAL_SECRET) throw new Error('PORTAL_SECRET nicht konfiguriert.');
         const payload = jwt.verify(token, PORTAL_SECRET);
         if (payload.type !== 'portal') throw new Error('Ungültiger Token-Typ.');
-        // Session in DB prüfen
         const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-        const [rows] = await db.query(
-            `SELECT * FROM customer_sessions WHERE token_hash = ? AND revoked = 0 AND expires_at > NOW()`,
+        const [rows] = db.query(
+            `SELECT * FROM customer_sessions WHERE token_hash=? AND revoked=0 AND expires_at > datetime('now')`,
             [tokenHash]
         );
         if (!rows[0]) return res.status(401).json({ success: false, message: 'Session abgelaufen oder ungültig.' });
-        // Kundendaten laden
-        const [custs] = await db.query('SELECT * FROM customers WHERE id = ?', [payload.customer_id]);
+        const [custs] = db.query('SELECT * FROM customers WHERE id = ?', [payload.customer_id]);
         if (!custs[0]) return res.status(401).json({ success: false, message: 'Kunde nicht gefunden.' });
         req.customer = custs[0];
         req.sessionTokenHash = tokenHash;
-        // Fix #2: must_change_password — nur /change-password und /logout darf
-        // mit abgelaufenem Passwort aufgerufen werden
         if (custs[0].must_change_password) {
             const allowedPaths = ['/change-password', '/logout'];
-            const reqPath = req.path.replace(/\/$/, '') || '/';
-            if (!allowedPaths.includes(reqPath)) {
-                return res.status(403).json({
-                    success: false,
-                    must_change_password: true,
-                    message: 'Bitte ändere zuerst dein Passwort, bevor du das Portal nutzen kannst.'
-                });
+            if (!allowedPaths.includes(req.path.replace(/\/$/, '') || '/')) {
+                return res.status(403).json({ success: false, must_change_password: true, message: 'Bitte ändere zuerst dein Passwort, bevor du das Portal nutzen kannst.' });
             }
         }
         next();
@@ -135,63 +87,28 @@ async function requirePortalAuth(req, res, next) {
 // ── POST /login ───────────────────────────────────────────────────────────────
 router.post('/login', portalLoginLimiter, async (req, res) => {
     const { email, password } = req.body;
-    if (!email || !password)
-        return res.status(400).json({ success: false, message: 'Benutzername/E-Mail und Passwort erforderlich.' });
-    if (!PORTAL_SECRET)
-        return res.status(500).json({ success: false, message: 'Portal nicht konfiguriert (PORTAL_SECRET fehlt).' });
+    if (!email || !password) return res.status(400).json({ success: false, message: 'Benutzername/E-Mail und Passwort erforderlich.' });
+    if (!PORTAL_SECRET) return res.status(500).json({ success: false, message: 'Portal nicht konfiguriert (PORTAL_SECRET fehlt).' });
     try {
-        // Login per E-Mail ODER Benutzername
         const login = email.toLowerCase().trim();
-        const [rows] = await db.query(
-            'SELECT * FROM customers WHERE email = ? OR portal_username = ?',
-            [login, login]
-        );
+        const [rows] = db.query('SELECT * FROM customers WHERE email=? OR portal_username=?', [login, login]);
         const customer = rows[0];
-        if (!customer || !customer.password_hash) {
+        if (!customer || !customer.password_hash)
             return res.status(401).json({ success: false, message: 'Benutzername/E-Mail oder Passwort falsch.' });
-        }
-        const valid = await bcrypt.compare(password, customer.password_hash);
-        if (!valid)
+        if (!(await bcrypt.compare(password, customer.password_hash)))
             return res.status(401).json({ success: false, message: 'Benutzername/E-Mail oder Passwort falsch.' });
-
         if (customer.verified === 0) {
-            return res.status(403).json({
-                success: false,
-                message: 'Bitte bestätige zuerst deine E-Mail-Adresse.',
-                email_not_verified: true
-            });
+            return res.status(403).json({ success: false, message: 'Bitte bestätige zuerst deine E-Mail-Adresse.', email_not_verified: true });
         }
 
-        // JWT erstellen (24h)
-        const token = jwt.sign(
-            { customer_id: customer.id, email: customer.email, type: 'portal' },
-            PORTAL_SECRET,
-            { expiresIn: '24h' }
-        );
-        // Session speichern
+        const token = jwt.sign({ customer_id: customer.id, email: customer.email, type: 'portal' }, PORTAL_SECRET, { expiresIn: '24h' });
         const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-        await db.query(
+        db.query(
             `INSERT INTO customer_sessions (id, customer_id, token_hash, ip, user_agent, expires_at)
-             VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 24 HOUR))`,
-            [
-                crypto.randomUUID(),
-                customer.id,
-                tokenHash,
-                req.ip || null,
-                (req.headers['user-agent'] || '').slice(0, 512)
-            ]
+             VALUES (?, ?, ?, ?, ?, datetime('now', '+24 hours'))`,
+            [crypto.randomUUID(), customer.id, tokenHash, req.ip || null, (req.headers['user-agent'] || '').slice(0, 512)]
         );
-        res.json({
-            success: true,
-            token,
-            customer: {
-                id:       customer.id,
-                name:     customer.name,
-                email:    customer.email,
-                username: customer.portal_username || null,
-                company:  customer.company || null
-            }
-        });
+        res.json({ success: true, token, customer: { id: customer.id, name: customer.name, email: customer.email, username: customer.portal_username || null, company: customer.company || null } });
     } catch (e) {
         console.error('[Portal/login]', e.message);
         res.status(500).json({ success: false, message: 'Interner Fehler.' });
@@ -201,7 +118,7 @@ router.post('/login', portalLoginLimiter, async (req, res) => {
 // ── POST /logout ──────────────────────────────────────────────────────────────
 router.post('/logout', requirePortalAuth, async (req, res) => {
     try {
-        await db.query('UPDATE customer_sessions SET revoked = 1 WHERE token_hash = ?', [req.sessionTokenHash]);
+        db.query('UPDATE customer_sessions SET revoked=1 WHERE token_hash=?', [req.sessionTokenHash]);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ success: false, message: 'Fehler beim Logout.' });
@@ -211,93 +128,57 @@ router.post('/logout', requirePortalAuth, async (req, res) => {
 // ── GET /me ───────────────────────────────────────────────────────────────────
 router.get('/me', requirePortalAuth, async (req, res) => {
     const c = req.customer;
-    res.json({
-        success: true,
-        customer: {
-            id: c.id,
-            name: c.name,
-            email: c.email,
-            username: c.portal_username || null,
-            company: c.company || null,
-            phone: c.phone || null,
-            payment_status: c.payment_status || 'unknown',
-            must_change_password: c.must_change_password ? true : false,
-            created_at: c.created_at,
-            billing_street: c.billing_street || null,
-            billing_city: c.billing_city || null,
-            billing_zip: c.billing_zip || null,
-            billing_country: c.billing_country || null,
-            tax_id: c.tax_id || null
-        }
-    });
+    res.json({ success: true, customer: {
+        id: c.id, name: c.name, email: c.email, username: c.portal_username || null,
+        company: c.company || null, phone: c.phone || null, payment_status: c.payment_status || 'unknown',
+        must_change_password: c.must_change_password ? true : false, created_at: c.created_at,
+        billing_street: c.billing_street || null, billing_city: c.billing_city || null,
+        billing_zip: c.billing_zip || null, billing_country: c.billing_country || null, tax_id: c.tax_id || null
+    }});
 });
 
 // ── PATCH /update-profile ─────────────────────────────────────────────────────
-// Kunden können ihren eigenen Namen, Telefonnummer und Firma bearbeiten.
-// E-Mail ist Admin-only und kann hier nicht geändert werden.
 router.patch('/update-profile', requirePortalAuth, async (req, res) => {
     const { name, phone, company, billing_street, billing_city, billing_zip, billing_country, tax_id } = req.body;
-
-    if (name !== undefined) {
-        if (typeof name !== 'string' || name.trim().length < 2)
-            return res.status(400).json({ success: false, message: 'Name muss mindestens 2 Zeichen lang sein.' });
-    }
-
+    if (name !== undefined && (typeof name !== 'string' || name.trim().length < 2))
+        return res.status(400).json({ success: false, message: 'Name muss mindestens 2 Zeichen lang sein.' });
     if (billing_zip !== undefined && billing_zip !== null) {
         const zipStr = String(billing_zip).trim();
-        if (zipStr.length > 10 || (zipStr.length > 0 && !/^[a-zA-Z0-9]+$/.test(zipStr))) {
-            return res.status(400).json({ success: false, message: 'Postleitzahl ist ungültig (max. 10 Zeichen, nur Zahlen/Buchstaben).' });
-        }
+        if (zipStr.length > 10 || (zipStr.length > 0 && !/^[a-zA-Z0-9]+$/.test(zipStr)))
+            return res.status(400).json({ success: false, message: 'Postleitzahl ist ungültig.' });
     }
-
     if (billing_country !== undefined && billing_country !== null) {
-        const countryStr = String(billing_country).trim();
-        if (!/^[a-zA-Z]{2}$/.test(countryStr)) {
-            return res.status(400).json({ success: false, message: 'Ungültiges Land (2-stelliger ISO-Code erforderlich, z.B. DE).' });
-        }
+        if (!/^[a-zA-Z]{2}$/.test(String(billing_country).trim()))
+            return res.status(400).json({ success: false, message: 'Ungültiges Land (2-stelliger ISO-Code erforderlich).' });
     }
 
-    const updates = [];
-    const params  = [];
-
-    if (name            !== undefined) { updates.push('name = ?');            params.push(name.trim()); }
-    if (phone           !== undefined) { updates.push('phone = ?');           params.push(phone || null); }
-    if (company         !== undefined) { updates.push('company = ?');         params.push(company || null); }
-    if (billing_street  !== undefined) { updates.push('billing_street = ?');  params.push(billing_street || null); }
-    if (billing_city    !== undefined) { updates.push('billing_city = ?');    params.push(billing_city || null); }
-    if (billing_zip     !== undefined) { updates.push('billing_zip = ?');     params.push(billing_zip ? String(billing_zip).trim() : null); }
-    if (billing_country !== undefined) { updates.push('billing_country = ?'); params.push(billing_country ? String(billing_country).trim().toUpperCase() : null); }
-    if (tax_id          !== undefined) { updates.push('tax_id = ?');          params.push(tax_id || null); }
+    const updates = [], params = [];
+    if (name !== undefined)            { updates.push('name=?');            params.push(name.trim()); }
+    if (phone !== undefined)           { updates.push('phone=?');           params.push(phone || null); }
+    if (company !== undefined)         { updates.push('company=?');         params.push(company || null); }
+    if (billing_street !== undefined)  { updates.push('billing_street=?');  params.push(billing_street || null); }
+    if (billing_city !== undefined)    { updates.push('billing_city=?');    params.push(billing_city || null); }
+    if (billing_zip !== undefined)     { updates.push('billing_zip=?');     params.push(billing_zip ? String(billing_zip).trim() : null); }
+    if (billing_country !== undefined) { updates.push('billing_country=?'); params.push(billing_country ? String(billing_country).trim().toUpperCase() : null); }
+    if (tax_id !== undefined)          { updates.push('tax_id=?');          params.push(tax_id || null); }
 
     if (updates.length === 0)
-        return res.status(400).json({ success: false, message: 'Keine änderbaren Felder angegeben. Erlaubt: name, phone, company, billing_street, billing_city, billing_zip, billing_country, tax_id.' });
+        return res.status(400).json({ success: false, message: 'Keine änderbaren Felder angegeben.' });
 
     try {
         params.push(req.customer.id);
-        await db.query(`UPDATE customers SET ${updates.join(', ')} WHERE id = ?`, params);
-
-        const [rows] = await db.query(
-            'SELECT id, name, email, phone, company, portal_username, billing_street, billing_city, billing_zip, billing_country, tax_id FROM customers WHERE id = ?',
+        db.query(`UPDATE customers SET ${updates.join(', ')} WHERE id=?`, params);
+        const [rows] = db.query(
+            'SELECT id, name, email, phone, company, portal_username, billing_street, billing_city, billing_zip, billing_country, tax_id FROM customers WHERE id=?',
             [req.customer.id]
         );
         const c = rows[0];
-        res.json({
-            success: true,
-            message: 'Profil erfolgreich aktualisiert.',
-            customer: {
-                id:              c.id,
-                name:            c.name,
-                email:           c.email,
-                username:        c.portal_username || null,
-                phone:           c.phone || null,
-                company:         c.company || null,
-                billing_street:  c.billing_street || null,
-                billing_city:    c.billing_city || null,
-                billing_zip:     c.billing_zip || null,
-                billing_country: c.billing_country || null,
-                tax_id:          c.tax_id || null
-            }
-        });
+        res.json({ success: true, message: 'Profil erfolgreich aktualisiert.', customer: {
+            id: c.id, name: c.name, email: c.email, username: c.portal_username || null,
+            phone: c.phone || null, company: c.company || null, billing_street: c.billing_street || null,
+            billing_city: c.billing_city || null, billing_zip: c.billing_zip || null,
+            billing_country: c.billing_country || null, tax_id: c.tax_id || null
+        }});
     } catch (e) {
         console.error('[Portal/update-profile]', e.message);
         res.status(500).json({ success: false, message: 'Interner Fehler.' });
@@ -307,12 +188,9 @@ router.patch('/update-profile', requirePortalAuth, async (req, res) => {
 // ── GET /licenses ─────────────────────────────────────────────────────────────
 router.get('/licenses', requirePortalAuth, async (req, res) => {
     try {
-        const [licenses] = await db.query(
-            `SELECT license_key, type, status, associated_domain, expires_at,
-                    usage_count, last_validated, max_devices, created_at
-             FROM licenses
-             WHERE customer_id = ?
-             ORDER BY created_at DESC`,
+        const [licenses] = db.query(
+            `SELECT license_key, type, status, associated_domain, expires_at, usage_count, last_validated, max_devices, created_at
+             FROM licenses WHERE customer_id=? ORDER BY created_at DESC`,
             [req.customer.id]
         );
         res.json({ success: true, licenses });
@@ -324,39 +202,17 @@ router.get('/licenses', requirePortalAuth, async (req, res) => {
 // ── PATCH /licenses/:key/domain ───────────────────────────────────────────────
 router.patch('/licenses/:key/domain', requirePortalAuth, async (req, res) => {
     const { domain } = req.body;
-    if (!domain)
-        return res.status(400).json({ success: false, message: 'Domain ist ein Pflichtfeld.' });
-
-    // Domain-Validierung: nur gültige Hostnamen (kein Protokoll, kein Pfad)
+    if (!domain) return res.status(400).json({ success: false, message: 'Domain ist ein Pflichtfeld.' });
     const clean = normalizeDomain(domain);
-    
-    // Maximale Länge begrenzen (verhindert ReDoS durch lange Strings)
-    if (clean.length > 253)
-        return res.status(400).json({ success: false, message: 'Domain zu lang.' });
-
-    // Jeden Label einzeln prüfen – kein verschachteltes Backtracking
+    if (clean.length > 253) return res.status(400).json({ success: false, message: 'Domain zu lang.' });
     const labels = clean.replace(/^\*\./, '').split('.');
-    const labelRegex = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/; // eslint-disable-line security/detect-unsafe-regex
-    const valid = labels.length >= 2 
-        && labels.every(l => labelRegex.test(l))
-        && /^[a-z]{2,}$/.test(labels[labels.length - 1]);
-
-    if (!valid)
-        return res.status(400).json({ success: false, message: 'Ungültige Domain. Bitte nur Hostnamen eingeben (z.B. meinrestaurant.de).' });
-
+    const labelRegex = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
+    const valid = labels.length >= 2 && labels.every(l => labelRegex.test(l)) && /^[a-z]{2,}$/.test(labels[labels.length - 1]);
+    if (!valid) return res.status(400).json({ success: false, message: 'Ungültige Domain. Bitte nur Hostnamen eingeben (z.B. meinrestaurant.de).' });
     try {
-        // Sicherstellen dass die Lizenz dem Kunden gehört
-        const [rows] = await db.query(
-            'SELECT license_key, associated_domain FROM licenses WHERE license_key = ? AND customer_id = ?',
-            [req.params.key, req.customer.id]
-        );
-        if (!rows[0])
-            return res.status(404).json({ success: false, message: 'Lizenz nicht gefunden.' });
-
-        await db.query(
-            'UPDATE licenses SET associated_domain = ? WHERE license_key = ? AND customer_id = ?',
-            [clean, req.params.key, req.customer.id]
-        );
+        const [rows] = db.query('SELECT license_key, associated_domain FROM licenses WHERE license_key=? AND customer_id=?', [req.params.key, req.customer.id]);
+        if (!rows[0]) return res.status(404).json({ success: false, message: 'Lizenz nicht gefunden.' });
+        db.query('UPDATE licenses SET associated_domain=? WHERE license_key=? AND customer_id=?', [clean, req.params.key, req.customer.id]);
         res.json({ success: true, domain: clean, message: `Domain erfolgreich auf ${clean} gesetzt.` });
     } catch (e) {
         res.status(500).json({ success: false, message: 'Fehler beim Setzen der Domain.' });
@@ -366,12 +222,9 @@ router.patch('/licenses/:key/domain', requirePortalAuth, async (req, res) => {
 // ── GET /history ──────────────────────────────────────────────────────────────
 router.get('/history', requirePortalAuth, async (req, res) => {
     try {
-        const [history] = await db.query(
+        const [history] = db.query(
             `SELECT ph.id, ph.license_key, ph.plan, ph.action, ph.amount, ph.note, ph.created_at
-             FROM purchase_history ph
-             WHERE ph.customer_id = ?
-             ORDER BY ph.created_at DESC
-             LIMIT 200`,
+             FROM purchase_history ph WHERE ph.customer_id=? ORDER BY ph.created_at DESC LIMIT 200`,
             [req.customer.id]
         );
         res.json({ success: true, history });
@@ -380,25 +233,17 @@ router.get('/history', requirePortalAuth, async (req, res) => {
     }
 });
 
-// ── POST /change-password (Fix #2) ────────────────────────────────────────────
-// Kunden können ihr Passwort ändern (auch wenn must_change_password gesetzt ist)
+// ── POST /change-password ─────────────────────────────────────────────────────
 router.post('/change-password', requirePortalAuth, async (req, res) => {
     const { current_password, new_password } = req.body;
-    if (!current_password || !new_password)
-        return res.status(400).json({ success: false, message: 'Aktuelles und neues Passwort erforderlich.' });
-    if (new_password.length < 10)
-        return res.status(400).json({ success: false, message: 'Neues Passwort muss mindestens 10 Zeichen haben.' });
-    if (current_password === new_password)
-        return res.status(400).json({ success: false, message: 'Neues Passwort muss sich vom aktuellen unterscheiden.' });
+    if (!current_password || !new_password) return res.status(400).json({ success: false, message: 'Aktuelles und neues Passwort erforderlich.' });
+    if (new_password.length < 10) return res.status(400).json({ success: false, message: 'Neues Passwort muss mindestens 10 Zeichen haben.' });
+    if (current_password === new_password) return res.status(400).json({ success: false, message: 'Neues Passwort muss sich vom aktuellen unterscheiden.' });
     try {
-        const valid = await bcrypt.compare(current_password, req.customer.password_hash);
-        if (!valid)
+        if (!(await bcrypt.compare(current_password, req.customer.password_hash)))
             return res.status(401).json({ success: false, message: 'Aktuelles Passwort ist falsch.' });
         const hash = await bcrypt.hash(new_password, 12);
-        await db.query(
-            'UPDATE customers SET password_hash = ?, must_change_password = 0 WHERE id = ?',
-            [hash, req.customer.id]
-        );
+        db.query('UPDATE customers SET password_hash=?, must_change_password=0 WHERE id=?', [hash, req.customer.id]);
         res.json({ success: true, message: 'Passwort erfolgreich geändert.' });
     } catch (e) {
         console.error('[Portal/change-password]', e.message);
@@ -406,25 +251,19 @@ router.post('/change-password', requirePortalAuth, async (req, res) => {
     }
 });
 
-// ── POST /setup-password (Einmal-Token) ────────────────────────────────────────
-// Wird aufgerufen wenn der Kunde den Link aus der Einladungsmail öffnet
+// ── POST /setup-password ────────────────────────────────────────────────────
 router.post('/setup-password', inviteLimiter, async (req, res) => {
     const { token, password } = req.body;
-    if (!token || !password)
-        return res.status(400).json({ success: false, message: 'Token und Passwort erforderlich.' });
-    if (password.length < 10)
-        return res.status(400).json({ success: false, message: 'Passwort muss mindestens 10 Zeichen haben.' });
+    if (!token || !password) return res.status(400).json({ success: false, message: 'Token und Passwort erforderlich.' });
+    if (password.length < 10) return res.status(400).json({ success: false, message: 'Passwort muss mindestens 10 Zeichen haben.' });
     try {
-        const [rows] = await db.query(
-            `SELECT * FROM customers WHERE portal_token = ? AND portal_token_expires > NOW()`,
-            [token]
+        const [rows] = db.query(
+            `SELECT * FROM customers WHERE portal_token=? AND portal_token_expires > datetime('now')`, [token]
         );
-        if (!rows[0])
-            return res.status(400).json({ success: false, message: 'Link ungültig oder abgelaufen. Bitte einen neuen Link anfordern.' });
+        if (!rows[0]) return res.status(400).json({ success: false, message: 'Link ungültig oder abgelaufen. Bitte einen neuen Link anfordern.' });
         const hash = await bcrypt.hash(password, 12);
-        await db.query(
-            `UPDATE customers SET password_hash = ?, portal_token = NULL, portal_token_expires = NULL,
-             must_change_password = 0 WHERE id = ?`,
+        db.query(
+            `UPDATE customers SET password_hash=?, portal_token=NULL, portal_token_expires=NULL, must_change_password=0 WHERE id=?`,
             [hash, rows[0].id]
         );
         res.json({ success: true, message: 'Passwort erfolgreich gesetzt. Du kannst dich jetzt einloggen.' });
@@ -435,33 +274,27 @@ router.post('/setup-password', inviteLimiter, async (req, res) => {
 });
 
 // ── GET /verify-invite-token ──────────────────────────────────────────────────
-// Prüft ob ein Einladungs-Token noch gültig ist (für das Frontend)
 router.get('/verify-invite-token', async (req, res) => {
     const { token } = req.query;
     if (!token) return res.status(400).json({ success: false, message: 'Token fehlt.' });
     try {
-        const [rows] = await db.query(
-            `SELECT id, name, email FROM customers WHERE portal_token = ? AND portal_token_expires > NOW()`,
-            [token]
+        const [rows] = db.query(
+            `SELECT id, name, email FROM customers WHERE portal_token=? AND portal_token_expires > datetime('now')`, [token]
         );
-        if (!rows[0])
-            return res.status(400).json({ success: false, message: 'Token ungültig oder abgelaufen.' });
+        if (!rows[0]) return res.status(400).json({ success: false, message: 'Token ungültig oder abgelaufen.' });
         res.json({ success: true, name: rows[0].name, email: rows[0].email });
     } catch (e) {
         res.status(500).json({ success: false, message: 'Interner Fehler.' });
     }
 });
 
-
 // ── GET /invoices ─────────────────────────────────────────────────────────────
 router.get('/invoices', requirePortalAuth, async (req, res) => {
     try {
-        const [rows] = await db.query(
+        const [rows] = db.query(
             `SELECT i.*, c.name AS customer_name, c.company AS customer_company
-             FROM invoices i
-             LEFT JOIN customers c ON i.customer_id = c.id
-             WHERE i.customer_id = ?
-             ORDER BY i.created_at DESC`,
+             FROM invoices i LEFT JOIN customers c ON i.customer_id=c.id
+             WHERE i.customer_id=? ORDER BY i.created_at DESC`,
             [req.customer.id]
         );
         res.json({ success: true, invoices: rows });
@@ -473,29 +306,20 @@ router.get('/invoices', requirePortalAuth, async (req, res) => {
 
 // ── GET /invoices/:id/pdf ─────────────────────────────────────────────────────
 router.get('/invoices/:id/pdf', requirePortalAuth, async (req, res) => {
-    const invoiceId = req.params.id;
     try {
-        const invoice = await getInvoiceWithItems(db, invoiceId);
-        if (!invoice) {
-            return res.status(404).json({ success: false, message: 'Rechnung nicht gefunden.' });
-        }
-        // Sicherheitssperre: Nur eigene Rechnungen herunterladen!
-        if (invoice.customer_id !== req.customer.id) {
-            return res.status(403).json({ success: false, message: 'Zugriff verweigert.' });
-        }
+        const invoice = getInvoiceWithItems(req.params.id);
+        if (!invoice) return res.status(404).json({ success: false, message: 'Rechnung nicht gefunden.' });
+        if (invoice.customer_id !== req.customer.id) return res.status(403).json({ success: false, message: 'Zugriff verweigert.' });
 
         const filename = `Rechnung-${invoice.invoice_number}.pdf`;
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
         if (invoice.pdf_path && fs.existsSync(invoice.pdf_path)) {
-            const fileStream = fs.createReadStream(invoice.pdf_path);
-            fileStream.pipe(res);
+            fs.createReadStream(invoice.pdf_path).pipe(res);
         } else {
-            const [[settings]] = await db.query('SELECT * FROM invoice_settings WHERE id = 1');
-            const mergedData = { ...settings, ...invoice };
-            const pdfBuffer = await getInvoicePDFBuffer(mergedData);
-            res.send(pdfBuffer);
+            const [[settings]] = db.query('SELECT * FROM invoice_settings WHERE id = 1');
+            res.send(await getInvoicePDFBuffer({ ...settings, ...invoice }));
         }
     } catch (e) {
         console.error('[Portal/invoices/pdf] Error:', e.message);
@@ -506,234 +330,137 @@ router.get('/invoices/:id/pdf', requirePortalAuth, async (req, res) => {
 // ── POST /register ────────────────────────────────────────────────────────────
 router.post('/register', registerLimiter, asyncHandler(async (req, res) => {
     const { name, email, password, company, phone, billing_street, billing_city, billing_zip, billing_country, tax_id } = req.body;
-
-    if (!name || typeof name !== 'string' || name.trim().length < 2) {
+    if (!name || typeof name !== 'string' || name.trim().length < 2)
         return res.status(400).json({ success: false, message: 'Name muss mindestens 2 Zeichen lang sein.' });
-    }
-    if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
         return res.status(400).json({ success: false, message: 'Ungültige E-Mail-Adresse.' });
-    }
-    if (!password || typeof password !== 'string' || password.length < 10) {
+    if (!password || typeof password !== 'string' || password.length < 10)
         return res.status(400).json({ success: false, message: 'Passwort muss mindestens 10 Zeichen lang sein.' });
-    }
-
     if (billing_zip !== undefined && billing_zip !== null) {
         const zipStr = String(billing_zip).trim();
-        if (zipStr.length > 10 || (zipStr.length > 0 && !/^[a-zA-Z0-9]+$/.test(zipStr))) {
-            return res.status(400).json({ success: false, message: 'Postleitzahl ist ungültig (max. 10 Zeichen, nur Zahlen/Buchstaben).' });
-        }
+        if (zipStr.length > 10 || (zipStr.length > 0 && !/^[a-zA-Z0-9]+$/.test(zipStr)))
+            return res.status(400).json({ success: false, message: 'Postleitzahl ist ungültig.' });
     }
-
     if (billing_country !== undefined && billing_country !== null) {
-        const countryStr = String(billing_country).trim();
-        if (!/^[a-zA-Z]{2}$/.test(countryStr)) {
-            return res.status(400).json({ success: false, message: 'Ungültiges Land (2-stelliger ISO-Code erforderlich, z.B. DE).' });
-        }
+        if (!/^[a-zA-Z]{2}$/.test(String(billing_country).trim()))
+            return res.status(400).json({ success: false, message: 'Ungültiges Land (2-stelliger ISO-Code erforderlich).' });
     }
 
     const emailClean = email.toLowerCase().trim();
-    const [existing] = await db.query('SELECT id FROM customers WHERE email = ?', [emailClean]);
-    if (existing[0]) {
-        return res.status(409).json({ success: false, message: 'Diese E-Mail-Adresse wird bereits verwendet.' });
-    }
+    const [existing] = db.query('SELECT id FROM customers WHERE email=?', [emailClean]);
+    if (existing[0]) return res.status(409).json({ success: false, message: 'Diese E-Mail-Adresse wird bereits verwendet.' });
 
-    const hash = await bcrypt.hash(password, 12);
-    const customerId = crypto.randomUUID();
-    const username = await uniquePortalUsername(name, company);
-    const token = crypto.randomBytes(32).toString('hex');
-    const tokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    const hash        = await bcrypt.hash(password, 12);
+    const customerId  = crypto.randomUUID();
+    const username    = uniquePortalUsername(name, company);
+    const token       = crypto.randomBytes(32).toString('hex');
+    const tokenExpires = toDbDate(new Date(Date.now() + 24 * 60 * 60 * 1000));
 
-    await db.query(`
-        INSERT INTO customers (
-            id, name, email, portal_username, password_hash, must_change_password,
-            verified, email_verify_token, email_verify_expires,
-            company, phone, billing_street, billing_city, billing_zip, billing_country, tax_id,
-            payment_status
-        ) VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unknown')
-    `, [
-        customerId,
-        name.trim(),
-        emailClean,
-        username,
-        hash,
-        token,
-        tokenExpires,
-        company ? company.trim() : null,
-        phone ? String(phone).trim() : null,
-        billing_street ? billing_street.trim() : null,
-        billing_city ? billing_city.trim() : null,
-        billing_zip ? String(billing_zip).trim() : null,
-        billing_country ? String(billing_country).trim().toUpperCase() : null,
-        tax_id ? tax_id.trim() : null
-    ]);
+    db.query(
+        `INSERT INTO customers (id, name, email, portal_username, password_hash, must_change_password,
+          verified, email_verify_token, email_verify_expires,
+          company, phone, billing_street, billing_city, billing_zip, billing_country, tax_id, payment_status)
+         VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unknown')`,
+        [customerId, name.trim(), emailClean, username, hash, token, tokenExpires,
+         company ? company.trim() : null, phone ? String(phone).trim() : null,
+         billing_street ? billing_street.trim() : null, billing_city ? billing_city.trim() : null,
+         billing_zip ? String(billing_zip).trim() : null,
+         billing_country ? String(billing_country).trim().toUpperCase() : null,
+         tax_id ? tax_id.trim() : null]
+    );
 
     const portalUrl = (process.env.PORTAL_URL || 'https://licens-prod.stb-srv.de').replace(/\/$/, '');
-    const verifyUrl = `${portalUrl}/portal.html#verify?token=${token}`;
-
     await sendTemplateMail('emailVerification', emailClean, {
-        name: name.trim(),
-        verify_url: verifyUrl,
-        email: emailClean
+        name: name.trim(), verify_url: `${portalUrl}/portal.html#verify?token=${token}`, email: emailClean
     });
-
     await addAuditLog('customer_self_registered', { email: emailClean, company: company ? company.trim() : null }, name.trim());
-
     res.json({ success: true, message: 'Registrierung erfolgreich. Bitte prüfe deine E-Mails.' });
 }));
 
 // ── POST /verify-email ────────────────────────────────────────────────────────
 router.post('/verify-email', verifyLimiter, asyncHandler(async (req, res) => {
     const { token } = req.body;
-    if (!token) {
-        return res.status(400).json({ success: false, message: 'Token ist erforderlich.' });
-    }
-
-    const [rows] = await db.query(
-        'SELECT id FROM customers WHERE email_verify_token = ? AND email_verify_expires > NOW()',
-        [token]
+    if (!token) return res.status(400).json({ success: false, message: 'Token ist erforderlich.' });
+    const [rows] = db.query(
+        `SELECT id FROM customers WHERE email_verify_token=? AND email_verify_expires > datetime('now')`, [token]
     );
-    const customer = rows[0];
-    if (!customer) {
-        return res.status(400).json({ success: false, message: 'Ungültiger oder abgelaufener Link.' });
-    }
-
-    await db.query(
-        'UPDATE customers SET verified = 1, email_verify_token = NULL, email_verify_expires = NULL WHERE id = ?',
-        [customer.id]
-    );
-
+    if (!rows[0]) return res.status(400).json({ success: false, message: 'Ungültiger oder abgelaufener Link.' });
+    db.query('UPDATE customers SET verified=1, email_verify_token=NULL, email_verify_expires=NULL WHERE id=?', [rows[0].id]);
     res.json({ success: true, message: 'E-Mail bestätigt. Du kannst dich jetzt einloggen.' });
 }));
 
 // ── POST /forgot-password ──────────────────────────────────────────────────
 router.post('/forgot-password', registerLimiter, asyncHandler(async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ success: false, message: 'E-Mail erforderlich.' });
-
-  // Immer gleiche Response — kein User-Enumeration
-  res.json({ success: true, message: 'Falls ein Account existiert, wurde eine Reset-Mail gesendet.' });
-
-  try {
-    const [[customer]] = await db.query(
-      'SELECT id, name, email FROM customers WHERE email = ? AND (archived IS NULL OR archived = 0)', 
-      [email.toLowerCase().trim()]
-    );
-    if (!customer) return; // Stille Fehlerbehandlung
-
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 Stunde
-    await db.query(
-      'UPDATE customers SET portal_token = ?, portal_token_expires = ? WHERE id = ?',
-      [resetToken, expires, customer.id]
-    );
-
-    const portalUrl = (process.env.PORTAL_URL || 'https://licens-prod.stb-srv.de').replace(/\/$/, '');
-    await sendTemplateMail('passwordReset', customer.email, {
-      name: customer.name,
-      reset_url: `${portalUrl}/login.html?reset=${resetToken}`
-    });
-  } catch (e) {
-    console.error('[Portal/forgot-password]', e.message);
-  }
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ success: false, message: 'E-Mail erforderlich.' });
+    res.json({ success: true, message: 'Falls ein Account existiert, wurde eine Reset-Mail gesendet.' });
+    try {
+        const [[customer]] = db.query(
+            'SELECT id, name, email FROM customers WHERE email=? AND (archived IS NULL OR archived=0)',
+            [email.toLowerCase().trim()]
+        );
+        if (!customer) return;
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const expires    = toDbDate(new Date(Date.now() + 60 * 60 * 1000));
+        db.query('UPDATE customers SET portal_token=?, portal_token_expires=? WHERE id=?', [resetToken, expires, customer.id]);
+        const portalUrl = (process.env.PORTAL_URL || 'https://licens-prod.stb-srv.de').replace(/\/$/, '');
+        await sendTemplateMail('passwordReset', customer.email, {
+            name: customer.name, reset_url: `${portalUrl}/login.html?reset=${resetToken}`
+        });
+    } catch (e) {
+        console.error('[Portal/forgot-password]', e.message);
+    }
 }));
 
 // ── GET /plans ────────────────────────────────────────────────────────────────
 router.get('/plans', asyncHandler(async (req, res) => {
-    const plans = [];
     const descriptions = {
-        TRIAL: 'Kostenlose Testlizenz für 30 Tage',
-        FREE: 'Kostenlose Basislizenz',
-        STARTER: 'Ideal für kleinere Gastronomiebetriebe',
-        PRO: 'Voller Funktionsumfang für wachsende Restaurants',
-        PRO_PLUS: 'Erweiterte Kapazitäten und Analytics',
-        ENTERPRISE: 'Unbegrenzte Tische und maximaler Leistungsumfang'
+        TRIAL: 'Kostenlose Testlizenz für 30 Tage', FREE: 'Kostenlose Basislizenz',
+        STARTER: 'Ideal für kleinere Gastronomiebetriebe', PRO: 'Voller Funktionsumfang für wachsende Restaurants',
+        PRO_PLUS: 'Erweiterte Kapazitäten und Analytics', ENTERPRISE: 'Unbegrenzte Tische und maximaler Leistungsumfang'
     };
-    const prices = {
-        TRIAL: 0.00,
-        FREE: 0.00,
-        STARTER: 29.00,
-        PRO: 59.00,
-        PRO_PLUS: 89.00,
-        ENTERPRISE: 199.00
-    };
-
+    const prices = { TRIAL: 0.00, FREE: 0.00, STARTER: 29.00, PRO: 59.00, PRO_PLUS: 89.00, ENTERPRISE: 199.00 };
+    const plans = [];
     for (const [id, plan] of Object.entries(PLAN_DEFINITIONS)) {
-        if (plan.active !== undefined && !plan.active) {
-            continue;
-        }
-
-        plans.push({
-            id,
-            name: plan.label || id,
-            description: plan.description || descriptions[id] || '',
+        if (plan.active !== undefined && !plan.active) continue;
+        plans.push({ id, name: plan.label || id, description: plan.description || descriptions[id] || '',
             price: plan.price !== undefined ? plan.price : (prices[id] !== undefined ? prices[id] : 0.00),
-            currency: plan.currency || 'EUR',
-            interval: plan.interval || (id === 'TRIAL' ? 'monthly' : 'yearly')
-        });
+            currency: plan.currency || 'EUR', interval: plan.interval || (id === 'TRIAL' ? 'monthly' : 'yearly') });
     }
-
     res.json({ success: true, plans });
 }));
 
 // ── POST /licenses/book ───────────────────────────────────────────────────────
 router.post('/licenses/book', requirePortalAuth, asyncHandler(async (req, res) => {
     const { plan_id, domain } = req.body;
-
-    if (req.customer.verified !== 1) {
-        return res.status(403).json({ success: false, message: 'Bitte bestätige zuerst deine E-Mail-Adresse.' });
-    }
-    if (!plan_id || !PLAN_DEFINITIONS[plan_id]) {
-        return res.status(400).json({ success: false, message: 'Ungültiger oder fehlender Lizenzplan.' });
-    }
+    if (req.customer.verified !== 1) return res.status(403).json({ success: false, message: 'Bitte bestätige zuerst deine E-Mail-Adresse.' });
+    if (!plan_id || !PLAN_DEFINITIONS[plan_id]) return res.status(400).json({ success: false, message: 'Ungültiger oder fehlender Lizenzplan.' });
 
     let domainClean = null;
     if (domain) {
         domainClean = normalizeDomain(domain);
-        if (!domainClean || domainClean.length > 253) {
-            return res.status(400).json({ success: false, message: 'Domain zu lang.' });
-        }
+        if (!domainClean || domainClean.length > 253) return res.status(400).json({ success: false, message: 'Domain zu lang.' });
         const labels = domainClean.replace(/^\*\./, '').split('.');
         const labelRegex = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
-        const valid = labels.length >= 2 
-            && labels.every(l => labelRegex.test(l))
-            && /^[a-z]{2,}$/.test(labels[labels.length - 1]);
-        if (!valid) {
-            return res.status(400).json({ success: false, message: 'Ungültige Domain. Bitte nur Hostnamen eingeben (z.B. meinrestaurant.de).' });
-        }
+        if (!(labels.length >= 2 && labels.every(l => labelRegex.test(l)) && /^[a-z]{2,}$/.test(labels[labels.length - 1])))
+            return res.status(400).json({ success: false, message: 'Ungültige Domain.' });
     }
 
     const key = generateKey(plan_id);
     const plan = PLAN_DEFINITIONS[plan_id];
-    const modules = plan.modules;
-    const limits = { max_dishes: plan.menu_items, max_tables: plan.max_tables };
-    const expiresAt = new Date(Date.now() + plan.expires_days * 86400000);
+    const expiresAt = toDbDate(new Date(Date.now() + plan.expires_days * 86400000));
 
-    await db.query(`
-        INSERT INTO licenses
-          (license_key, type, customer_id, customer_name, status, associated_domain,
-           expires_at, allowed_modules, limits, max_devices, analytics_daily, analytics_features, validated_domains, tags)
-        VALUES (?, ?, ?, ?, 'pending_payment', ?, ?, ?, ?, 0, '{}', '{}', '[]', '[]')
-    `, [
-        key,
-        plan_id,
-        req.customer.id,
-        req.customer.name,
-        domainClean,
-        expiresAt,
-        JSON.stringify(modules),
-        JSON.stringify(limits)
-    ]);
+    db.query(
+        `INSERT INTO licenses (license_key, type, customer_id, customer_name, status, associated_domain,
+          expires_at, allowed_modules, limits, max_devices, analytics_daily, analytics_features, validated_domains, tags)
+         VALUES (?, ?, ?, ?, 'pending_payment', ?, ?, ?, ?, 0, '{}', '{}', '[]', '[]')`,
+        [key, plan_id, req.customer.id, req.customer.name, domainClean,
+         expiresAt, JSON.stringify(plan.modules), JSON.stringify({ max_dishes: plan.menu_items, max_tables: plan.max_tables })]
+    );
 
-    const invoiceId = await createInvoice(db, key, 'customer');
-
+    const invoiceId = createInvoice(key, 'customer');
     await addAuditLog('license_booked_by_customer', { license_key: key, plan_id, customer_id: req.customer.id }, req.customer.name);
-
-    res.json({
-        success: true,
-        license_key: key,
-        invoice_id: invoiceId,
-        message: 'Lizenz reserviert. Nach Zahlungseingang wird sie aktiviert.'
-    });
+    res.json({ success: true, license_key: key, invoice_id: invoiceId, message: 'Lizenz reserviert. Nach Zahlungseingang wird sie aktiviert.' });
 }));
 
 export default router;

@@ -24,3 +24,8 @@ debug-admin.js
 
 # Test Coverage
 coverage/
+
+# SQLite Datenbankdateien
+data/*.db
+data/*.db-shm
+data/*.db-wal

@@ -12,6 +12,10 @@ import { validateLimiter, setupLimiter, trialLimiter, offlineTokenLimiter, MIN_P
 const router = Router();
 const SETUP_TOKEN = process.env.SETUP_TOKEN || '';
 
+function toDbDate(d) {
+    return (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 19).replace('T', ' ');
+}
+
 // ── Setup ─────────────────────────────────────────────────────────────────────
 router.post('/setup', setupLimiter, asyncHandler(async (req, res) => {
     if (!SETUP_TOKEN)
@@ -30,13 +34,13 @@ router.post('/setup', setupLimiter, asyncHandler(async (req, res) => {
         return res.status(400).json({ success: false, message: `Passwort muss mindestens ${MIN_PASSWORD_LENGTH} Zeichen haben.` });
 
     try {
-        const [existing] = await db.query('SELECT COUNT(*) as count FROM admins');
-        if (existing[0].count > 0)
+        const [[{ count }]] = db.query('SELECT COUNT(*) as count FROM admins');
+        if (count > 0)
             return res.status(409).json({ success: false, message: 'Setup bereits abgeschlossen. Admin-Account existiert bereits.' });
 
         const { default: bcrypt } = await import('bcryptjs');
         const hash = await bcrypt.hash(password, 12);
-        await db.query('INSERT INTO admins (username, password_hash, role) VALUES (?, ?, ?)', [username, hash, 'superadmin']);
+        db.query('INSERT INTO admins (username, password_hash, role) VALUES (?, ?, ?)', [username, hash, 'superadmin']);
         await addAuditLog('setup_completed', { username, ip: getClientIp(req) });
         console.log(`✅  Setup abgeschlossen: Superadmin '${username}' erstellt.`);
         res.json({ success: true, message: `Superadmin '${username}' erfolgreich erstellt. SETUP_TOKEN kann jetzt aus .env entfernt werden.` });
@@ -54,10 +58,8 @@ router.post('/trial/register', trialLimiter, asyncHandler(async (req, res) => {
     const domain = normalizeDomain(rawDomain) || rawDomain;
     const clientIp = getClientIp(req);
 
-    // Prüfen ob für diese Domain bereits ein Trial existiert (license_key ist PK, kein id)
-    const [existing] = await db.query(
-        "SELECT license_key FROM licenses WHERE associated_domain = ? AND type = 'TRIAL'",
-        [domain]
+    const [existing] = db.query(
+        "SELECT license_key FROM licenses WHERE associated_domain = ? AND type = 'TRIAL'", [domain]
     );
     if (existing.length > 0) {
         return res.status(409).json({
@@ -67,100 +69,64 @@ router.post('/trial/register', trialLimiter, asyncHandler(async (req, res) => {
         });
     }
 
-    // Trial-Key generieren: OPA-TRIAL-XXXXXXXX-XXXXXXXX
     const key = `OPA-TRIAL-${crypto.randomBytes(4).toString('hex').toUpperCase()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 Tage
+    const expiresAt = toDbDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
 
     const notes = JSON.stringify({
-        contact_email: contact_email || null,
-        instance_id:   instance_id   || null,
-        registered_ip: clientIp,
-        registered_at: new Date().toISOString(),
-        source:        'self-registration'
+        contact_email: contact_email || null, instance_id: instance_id || null,
+        registered_ip: clientIp, registered_at: new Date().toISOString(), source: 'self-registration'
     });
 
-    // Fix #2: license_key ist der PRIMARY KEY – kein id-Feld in der licenses-Tabelle
-    await db.query(
-        `INSERT INTO licenses
-            (license_key, type, status, customer_name, associated_domain, expires_at, notes, max_devices)
+    db.query(
+        `INSERT INTO licenses (license_key, type, status, customer_name, associated_domain, expires_at, notes, max_devices)
          VALUES (?, 'TRIAL', 'active', ?, ?, ?, ?, 1)`,
         [key, restaurant_name || domain, domain, expiresAt, notes]
     );
 
     await addAuditLog('trial_registered', {
-        license_key:     key,
-        domain,
-        contact_email:   contact_email || null,
-        restaurant_name: restaurant_name || null,
-        instance_id:     instance_id || null,
-        ip:              clientIp
+        license_key: key, domain, contact_email: contact_email || null,
+        restaurant_name: restaurant_name || null, instance_id: instance_id || null, ip: clientIp
     });
-
-    console.log(`🎉 Neuer Trial registriert: ${restaurant_name || domain} (${domain}) – Key: ${key}`);
 
     const plan = PLAN_DEFINITIONS['TRIAL'];
-
-    // Webhook: trial.registered
     await fireWebhook('trial.registered', {
-        license_key:     key,
-        domain,
-        restaurant_name: restaurant_name || domain,
-        contact_email:   contact_email || null,
-        expires_at:      expiresAt,
-        registered_ip:   clientIp
+        license_key: key, domain, restaurant_name: restaurant_name || domain,
+        contact_email: contact_email || null, expires_at: expiresAt, registered_ip: clientIp
     });
 
-    // Willkommens-Mail an contact_email (falls angegeben)
     if (contact_email) {
         try {
             await sendTemplateMail('trialWelcome', contact_email, {
-                restaurant_name: restaurant_name || domain,
-                license_key:     key,
-                expires_at:      expiresAt,
-                domain,
-                plan_label:      plan.label,
-                modules:         plan.modules,
-                limits: {
-                    max_dishes: plan.menu_items,
-                    max_tables: plan.max_tables
-                }
+                restaurant_name: restaurant_name || domain, license_key: key, expires_at: expiresAt, domain,
+                plan_label: plan.label, modules: plan.modules,
+                limits: { max_dishes: plan.menu_items, max_tables: plan.max_tables }
             });
-            console.log(`📧 Willkommens-Mail gesendet an: ${contact_email}`);
         } catch (mailErr) {
             console.warn(`📧 Willkommens-Mail fehlgeschlagen:`, mailErr.message);
         }
     }
 
     return res.status(201).json({
-        success:     true,
-        license_key: key,
-        plan:        'TRIAL',
-        plan_label:  plan.label,
-        expires_at:  expiresAt,
-        modules:     plan.modules,
-        limits: {
-            max_dishes: plan.menu_items,
-            max_tables: plan.max_tables
-        },
+        success: true, license_key: key, plan: 'TRIAL', plan_label: plan.label,
+        expires_at: expiresAt, modules: plan.modules,
+        limits: { max_dishes: plan.menu_items, max_tables: plan.max_tables },
         message: `Ihr 30-Tage Trial wurde aktiviert. Key: ${key}`
     });
 }));
 
-// ── Heartbeat: CMS meldet sich täglich ────────────────────────────────────────
+// ── Heartbeat ─────────────────────────────────────────────────────────────────
 router.post('/heartbeat', asyncHandler(async (req, res) => {
     const licenseKey = req.headers['x-license-key'] || req.body?.license_key;
     if (!licenseKey) return res.status(400).json({ success: false, message: 'x-license-key Header fehlt.' });
 
-    const [rows] = await db.query(
-        'SELECT license_key, status, type FROM licenses WHERE license_key = ?', [licenseKey]
-    );
+    const [rows] = db.query('SELECT license_key, status, type FROM licenses WHERE license_key = ?', [licenseKey]);
     if (!rows[0]) return res.status(404).json({ success: false, message: 'Lizenz nicht gefunden.' });
     if (rows[0].status !== 'active') return res.status(403).json({ success: false, message: 'Lizenz nicht aktiv.' });
 
-    await db.query(
+    db.query(
         `INSERT INTO license_heartbeats (license_key, ip, user_agent, ts)
-         VALUES (?, ?, ?, NOW())
-         ON DUPLICATE KEY UPDATE ip = VALUES(ip), user_agent = VALUES(user_agent), ts = NOW()`,
+         VALUES (?, ?, ?, datetime('now'))
+         ON CONFLICT(license_key) DO UPDATE SET ip=excluded.ip, user_agent=excluded.user_agent, ts=excluded.ts`,
         [rows[0].license_key, req.ip, req.headers['user-agent']?.slice(0, 200) || null]
     );
 
@@ -174,57 +140,40 @@ router.post('/validate', validateLimiter, asyncHandler(async (req, res) => {
     const clientIp = getClientIp(req);
 
     try {
-        const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [license_key]);
+        const [rows] = db.query('SELECT * FROM licenses WHERE license_key = ?', [license_key]);
         const l = rows[0];
 
-        if (!l) {
-            await addAuditLog('validate_failed', { license_key, reason: 'not_found', ip: clientIp });
-            return res.status(404).json({ status: 'invalid', message: 'Lizenz-Key nicht gefunden.' });
-        }
-        if (new Date(l.expires_at) < new Date()) {
-            await addAuditLog('validate_failed', { license_key, reason: 'expired', ip: clientIp });
-            return res.status(403).json({ status: 'expired', message: 'Lizenz ist abgelaufen.' });
-        }
-        if (l.status !== 'active') {
-            await addAuditLog('validate_failed', { license_key, reason: `status_${l.status}`, ip: clientIp });
-            return res.status(403).json({ status: l.status, message: 'Lizenz ist nicht aktiv.' });
-        }
-        if (!domainMatches(l.associated_domain, domain)) {
-            await addAuditLog('validate_failed', { license_key, reason: 'domain_mismatch', domain, ip: clientIp });
-            return res.status(403).json({ status: 'domain_mismatch', message: `Lizenz ist nicht für Domain "${domain}" gültig.` });
-        }
+        if (!l) { await addAuditLog('validate_failed', { license_key, reason: 'not_found', ip: clientIp }); return res.status(404).json({ status: 'invalid', message: 'Lizenz-Key nicht gefunden.' }); }
+        if (new Date(l.expires_at) < new Date()) { await addAuditLog('validate_failed', { license_key, reason: 'expired', ip: clientIp }); return res.status(403).json({ status: 'expired', message: 'Lizenz ist abgelaufen.' }); }
+        if (l.status !== 'active') { await addAuditLog('validate_failed', { license_key, reason: `status_${l.status}`, ip: clientIp }); return res.status(403).json({ status: l.status, message: 'Lizenz ist nicht aktiv.' }); }
+        if (!domainMatches(l.associated_domain, domain)) { await addAuditLog('validate_failed', { license_key, reason: 'domain_mismatch', domain, ip: clientIp }); return res.status(403).json({ status: 'domain_mismatch', message: `Lizenz ist nicht für Domain "${domain}" gültig.` }); }
 
         if (nonce) {
-            const [nonceRows] = await db.query('SELECT val FROM used_nonces WHERE val = ?', [nonce]);
-            if (nonceRows.length > 0) {
-                await addAuditLog('replay_attack', { license_key, nonce, ip: clientIp });
-                return res.status(400).json({ status: 'replay', message: 'Nonce already used.' });
-            }
-            await db.query('INSERT INTO used_nonces (val, ts) VALUES (?, ?)', [nonce, Date.now()]);
+            const [nonceRows] = db.query('SELECT val FROM used_nonces WHERE val = ?', [nonce]);
+            if (nonceRows.length > 0) { await addAuditLog('replay_attack', { license_key, nonce, ip: clientIp }); return res.status(400).json({ status: 'replay', message: 'Nonce already used.' }); }
+            db.query('INSERT INTO used_nonces (val, ts) VALUES (?, ?)', [nonce, Date.now()]);
         }
 
         if (device_id) {
             const maxDevices = l.max_devices || 0;
-            const [licDevices] = await db.query('SELECT * FROM devices WHERE license_key = ? AND active = 1', [license_key]);
+            const [licDevices] = db.query('SELECT * FROM devices WHERE license_key = ? AND active = 1', [license_key]);
             const existing = licDevices.find(d => d.device_id === device_id);
             if (!existing) {
                 if (maxDevices > 0 && licDevices.length >= maxDevices) {
                     await addAuditLog('validate_failed', { license_key, reason: 'device_limit', device_id, ip: clientIp });
                     return res.status(403).json({ status: 'device_limit', message: `Maximale Geräteanzahl (${maxDevices}) erreicht.` });
                 }
-                await db.query(
-                    'INSERT INTO devices (id, license_key, device_id, device_type, ip) VALUES (?, ?, ?, ?, ?)',
-                    [crypto.randomUUID(), license_key, device_id, device_type || 'unknown', clientIp]
-                );
+                db.query('INSERT INTO devices (id, license_key, device_id, device_type, ip) VALUES (?, ?, ?, ?, ?)',
+                    [crypto.randomUUID(), license_key, device_id, device_type || 'unknown', clientIp]);
                 await addAuditLog('device_registered', { license_key, device_id, device_type, ip: clientIp });
             } else {
-                await db.query('UPDATE devices SET last_seen = NOW(), ip = ?, device_type = ? WHERE id = ?',
+                db.query(`UPDATE devices SET last_seen=datetime('now'), ip=?, device_type=? WHERE id=?`,
                     [clientIp, device_type || existing.device_type, existing.id]);
             }
         }
 
         const today = new Date().toISOString().slice(0, 10);
-        const dailyAnalytics = parseJsonField(l.analytics_daily, {});
+        const dailyAnalytics   = parseJsonField(l.analytics_daily, {});
         const featuresAnalytics = parseJsonField(l.analytics_features, {});
         dailyAnalytics[today] = (dailyAnalytics[today] || 0) + 1;
         const cutoff = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
@@ -236,18 +185,17 @@ router.post('/validate', validateLimiter, asyncHandler(async (req, res) => {
         const validatedDomains = parseJsonField(l.validated_domains, []);
         if (domain && !validatedDomains.includes(domain)) validatedDomains.push(domain);
 
-        await db.query(`UPDATE licenses SET last_validated = NOW(), usage_count = usage_count + 1,
-            validated_domain = ?, validated_domains = ?, analytics_daily = ?, analytics_features = ?
-            WHERE license_key = ?`,
+        db.query(
+            `UPDATE licenses SET last_validated=datetime('now'), usage_count=usage_count+1,
+              validated_domain=?, validated_domains=?, analytics_daily=?, analytics_features=?
+             WHERE license_key=?`,
             [domain || null, JSON.stringify(validatedDomains), JSON.stringify(dailyAnalytics), JSON.stringify(featuresAnalytics), license_key]
         );
 
         await addAuditLog('validate_success', { license_key, domain, device_id: device_id || null, ip: clientIp });
 
         const plan = PLAN_DEFINITIONS[l.type] || PLAN_DEFINITIONS['FREE'];
-        const [custRows] = l.customer_id
-            ? await db.query('SELECT email, company FROM customers WHERE id = ?', [l.customer_id])
-            : [[]];
+        const [custRows] = l.customer_id ? db.query('SELECT email, company FROM customers WHERE id = ?', [l.customer_id]) : [[]];
         const customer = custRows[0] || null;
 
         const allowedModules = l.allowed_modules ? parseJsonField(l.allowed_modules, plan.modules) : plan.modules;
@@ -256,13 +204,8 @@ router.post('/validate', validateLimiter, asyncHandler(async (req, res) => {
             : { max_dishes: plan.menu_items, max_tables: plan.max_tables };
 
         const responsePayload = {
-            status: 'active',
-            customer_name: l.customer_name,
-            type: l.type,
-            plan_label: plan.label,
-            expires_at: l.expires_at,
-            allowed_modules: allowedModules,
-            limits,
+            status: 'active', customer_name: l.customer_name, type: l.type, plan_label: plan.label,
+            expires_at: l.expires_at, allowed_modules: allowedModules, limits,
             ...(customer ? { account_email: customer.email, company: customer.company } : {})
         };
 
@@ -273,10 +216,7 @@ router.post('/validate', validateLimiter, asyncHandler(async (req, res) => {
         }, '73h');
 
         const finalResponse = { ...responsePayload };
-        if (signedToken) {
-            finalResponse.license_token = signedToken;
-            finalResponse.token = signedToken;
-        }
+        if (signedToken) { finalResponse.license_token = signedToken; finalResponse.token = signedToken; }
 
         return res.json(isHmacActive() ? signResponse(finalResponse) : finalResponse);
     } catch (e) {
@@ -286,9 +226,7 @@ router.post('/validate', validateLimiter, asyncHandler(async (req, res) => {
 }));
 
 // ── Public Key ───────────────────────────────────────────────────────────────────
-router.get('/public-key', (req, res) => {
-    res.json({ public_key: RSA_PUBLIC_KEY, algorithm: 'RS256' });
-});
+router.get('/public-key', (req, res) => res.json({ public_key: RSA_PUBLIC_KEY, algorithm: 'RS256' }));
 
 // ── Refresh ──────────────────────────────────────────────────────────────────────
 router.post('/refresh', validateLimiter, asyncHandler(async (req, res) => {
@@ -297,28 +235,15 @@ router.post('/refresh', validateLimiter, asyncHandler(async (req, res) => {
     const clientIp = getClientIp(req);
 
     try {
-        const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [license_key]);
+        const [rows] = db.query('SELECT * FROM licenses WHERE license_key = ?', [license_key]);
         const l = rows[0];
 
-        if (!l) {
-            await addAuditLog('refresh_failed', { license_key, reason: 'not_found', ip: clientIp });
-            return res.status(404).json({ status: 'invalid', message: 'Lizenz-Key nicht gefunden.' });
-        }
-        // Fix #5: 'cancelled' ist jetzt im ENUM – Prüfung bleibt korrekt
-        if (l.status === 'revoked' || l.status === 'cancelled') {
-            await addAuditLog('refresh_failed', { license_key, reason: l.status, ip: clientIp });
-            return res.status(403).json({ status: l.status, message: `Lizenz wurde widerrufen (${l.status}).` });
-        }
-        if (l.status !== 'active' || new Date(l.expires_at) < new Date()) {
-            await addAuditLog('refresh_failed', { license_key, reason: 'expired_or_inactive', ip: clientIp });
-            return res.status(403).json({ status: 'expired', message: 'Lizenz ist abgelaufen oder inaktiv.' });
-        }
-        if (domain && !domainMatches(l.associated_domain, domain)) {
-            await addAuditLog('refresh_failed', { license_key, reason: 'domain_mismatch', domain, ip: clientIp });
-            return res.status(403).json({ status: 'domain_mismatch', message: 'Domain stimmt nicht überein.' });
-        }
+        if (!l) { await addAuditLog('refresh_failed', { license_key, reason: 'not_found', ip: clientIp }); return res.status(404).json({ status: 'invalid', message: 'Lizenz-Key nicht gefunden.' }); }
+        if (l.status === 'revoked' || l.status === 'cancelled') { await addAuditLog('refresh_failed', { license_key, reason: l.status, ip: clientIp }); return res.status(403).json({ status: l.status, message: `Lizenz wurde widerrufen (${l.status}).` }); }
+        if (l.status !== 'active' || new Date(l.expires_at) < new Date()) { await addAuditLog('refresh_failed', { license_key, reason: 'expired_or_inactive', ip: clientIp }); return res.status(403).json({ status: 'expired', message: 'Lizenz ist abgelaufen oder inaktiv.' }); }
+        if (domain && !domainMatches(l.associated_domain, domain)) { await addAuditLog('refresh_failed', { license_key, reason: 'domain_mismatch', domain, ip: clientIp }); return res.status(403).json({ status: 'domain_mismatch', message: 'Domain stimmt nicht überein.' }); }
 
-        await db.query('UPDATE licenses SET last_heartbeat = NOW() WHERE license_key = ?', [license_key]);
+        db.query(`UPDATE licenses SET last_heartbeat=datetime('now') WHERE license_key=?`, [license_key]);
         await addAuditLog('refresh_ok', { license_key, domain, ip: clientIp });
 
         const plan = PLAN_DEFINITIONS[l.type] || PLAN_DEFINITIONS['FREE'];
@@ -330,19 +255,10 @@ router.post('/refresh', validateLimiter, asyncHandler(async (req, res) => {
         const signedToken = createSignedLicenseToken({
             license_key, type: l.type, plan_label: plan.label, expires_at: l.expires_at,
             allowed_modules: allowedModules, limits, domain: domain || l.associated_domain,
-            customer_name: l.customer_name || null,
-            issued_at: Math.floor(Date.now() / 1000)
+            customer_name: l.customer_name || null, issued_at: Math.floor(Date.now() / 1000)
         }, '73h');
 
-        res.json({
-            status: 'active',
-            token: signedToken,
-            type: l.type,
-            plan_label: plan.label,
-            expires_at: l.expires_at,
-            allowed_modules: allowedModules,
-            limits
-        });
+        res.json({ status: 'active', token: signedToken, type: l.type, plan_label: plan.label, expires_at: l.expires_at, allowed_modules: allowedModules, limits });
     } catch (e) {
         console.error(e);
         res.status(500).json({ status: 'error', message: 'Internal server error' });
@@ -366,11 +282,10 @@ router.post('/offline-token', offlineTokenLimiter, asyncHandler(async (req, res)
     const { license_key, domain, device_id, duration_hours } = req.body;
     if (!license_key) return res.status(400).json({ success: false, message: 'No key provided' });
     try {
-        const [rows] = await db.query('SELECT * FROM licenses WHERE license_key = ?', [license_key]);
+        const [rows] = db.query('SELECT * FROM licenses WHERE license_key = ?', [license_key]);
         const l = rows[0];
         if (!l || l.status !== 'active' || new Date(l.expires_at) < new Date())
             return res.status(403).json({ success: false, message: 'License invalid or expired' });
-
         if (domain && !domainMatches(l.associated_domain, domain))
             return res.status(403).json({ success: false, message: `Offline-Token: Lizenz ist nicht für Domain "${domain}" gültig.` });
 
@@ -383,8 +298,7 @@ router.post('/offline-token', offlineTokenLimiter, asyncHandler(async (req, res)
 
         const token = jwt.sign(
             { license_key, domain, device_id, type: l.type, plan_label: plan.label, allowed_modules: allowedModules, limits, offline: true },
-            HMAC_SECRET,
-            { expiresIn: `${hours}h` }
+            HMAC_SECRET, { expiresIn: `${hours}h` }
         );
 
         await addAuditLog('offline_token_issued', { license_key, domain, device_id: device_id || null, duration_hours: hours, ip: getClientIp(req) });
@@ -407,9 +321,9 @@ router.post('/verify-offline-token', asyncHandler(async (req, res) => {
 }));
 
 // ── Health Check ──────────────────────────────────────────────────────────────
-router.get('/health', async (req, res) => {
+router.get('/health', (req, res) => {
     try {
-        await db.query('SELECT 1');
+        db.query('SELECT 1');
         res.json({ status: 'ok', database: 'connected', timestamp: new Date().toISOString() });
     } catch (e) {
         res.status(503).json({ status: 'degraded', database: 'disconnected', error: e.message });

@@ -4,7 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import { testConnection } from './server/db.js';
+import { testConnection, database } from './server/db.js';
 import db from './server/db.js';
 import { RSA_PRIVATE_KEY, RSA_PUBLIC_KEY, isHmacActive } from './server/crypto.js';
 import { startCron } from './server/cron.js';
@@ -32,10 +32,7 @@ const SETUP_TOKEN   = process.env.SETUP_TOKEN   || '';
 // ── Environment-Validierung ───────────────────────────────────────────────────
 const FATAL_ERRORS = [];
 
-if (!process.env.DB_HOST) FATAL_ERRORS.push('DB_HOST fehlt in .env');
-if (!process.env.DB_USER) FATAL_ERRORS.push('DB_USER fehlt in .env');
-if (!process.env.DB_PASS) FATAL_ERRORS.push('DB_PASS fehlt in .env');
-if (!process.env.DB_NAME) FATAL_ERRORS.push('DB_NAME fehlt in .env');
+// DB_PATH is optional — defaults to ./data/licens.db
 
 if (ADMIN_SECRET === 'change-me-in-production')
     FATAL_ERRORS.push('ADMIN_SECRET ist der unsichere Default-Wert oder fehlt!');
@@ -60,15 +57,15 @@ console.log(`🔐  Admin-JWT Algorithmus: ${adminTokenAlgorithm}${adminTokenAlgo
 
 // ── DB ───────────────────────────────────────────────────────────────────────
 if (process.env.NODE_ENV !== 'test') {
-    try { await testConnection(); }
-    catch (e) { console.error('❌  MySQL Verbindungsfehler:', e.message); process.exit(1); }
+    try { testConnection(); }
+    catch (e) { console.error('❌  SQLite Verbindungsfehler:', e.message); process.exit(1); }
 }
 
 // ── Auto-Migration ─────────────────────────────────────────────────────────
 if (process.env.NODE_ENV !== 'test') {
     try {
         const { runMigrations } = await import('./server/migrate.js');
-        await runMigrations();
+        await runMigrations(database);
         console.log('✅  Datenbank-Migrationen erfolgreich abgeschlossen.');
     } catch (e) {
         console.error('❌  Migration fehlgeschlagen:', e.message);
@@ -99,9 +96,9 @@ app.use(helmet({
 const rawCorsOrigins = process.env.CORS_ORIGINS || '';
 const staticAllowedOrigins = rawCorsOrigins ? rawCorsOrigins.split(',').map(o => o.trim()).filter(Boolean) : [];
 
-async function getDynamicAllowedOrigins() {
+function getDynamicAllowedOrigins() {
     try {
-        const [rows] = await db.query(
+        const [rows] = db.query(
             "SELECT DISTINCT associated_domain FROM licenses WHERE status = 'active' AND associated_domain IS NOT NULL AND associated_domain != '*'"
         );
         const dynamic = [];
@@ -123,13 +120,13 @@ app.use(cors({
     origin: async (origin, callback) => {
         if (!origin) return callback(null, true);
         if (staticAllowedOrigins.length === 0) {
-            const dynamic = await getDynamicAllowedOrigins();
+            const dynamic = getDynamicAllowedOrigins();
             if (dynamic.includes(origin)) return callback(null, true);
             console.error(`❌ CORS: Origin '${origin}' nicht erlaubt (kein CORS_ORIGINS konfiguriert).`);
             return callback(new Error(`CORS: Origin '${origin}' nicht erlaubt.`), false);
         }
         if (staticAllowedOrigins.includes(origin)) return callback(null, true);
-        const dynamic = await getDynamicAllowedOrigins();
+        const dynamic = getDynamicAllowedOrigins();
         if (dynamic.includes(origin)) return callback(null, true);
         console.error(`❌ CORS: Origin '${origin}' nicht erlaubt.`);
         callback(new Error(`CORS: Origin '${origin}' nicht erlaubt.`), false);

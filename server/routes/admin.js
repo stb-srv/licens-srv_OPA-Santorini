@@ -19,7 +19,6 @@ import invoicesRouter from './admin-invoices.js';
 
 const router = Router();
 
-// Mount modular sub-routers
 router.use(licensesRouter);
 router.use(customersRouter);
 router.use(settingsRouter);
@@ -32,8 +31,9 @@ router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
   if (!username || !password)
     return res.status(400).json({ success: false, message: 'Username and password required' });
 
-  const [rows] = await db.query(
-    'SELECT id, username, password_hash, role, two_factor_enabled, two_factor_secret FROM admins WHERE username = ?', [username]
+  const [rows] = db.query(
+    'SELECT id, username, password_hash, role, two_factor_enabled, two_factor_secret FROM admins WHERE username = ?',
+    [username]
   );
   const admin = rows[0];
   if (!admin || !(await bcrypt.compare(password, admin.password_hash))) {
@@ -41,7 +41,6 @@ router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
     return res.status(401).json({ success: false, message: 'Invalid credentials' });
   }
 
-  // Check 2FA
   if (admin.two_factor_enabled) {
     const tempToken = signTempToken({ username: admin.username, id: admin.id });
     return res.json({ success: true, two_factor_required: true, temp_token: tempToken });
@@ -49,13 +48,10 @@ router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
 
   const token = signAdminToken({ username: admin.username, role: admin.role });
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-  await db.query(
+  db.query(
     `INSERT INTO admin_sessions (id, admin_username, token_hash, ip, user_agent, expires_at)
-     VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 8 HOUR))`,
-    [
-      crypto.randomUUID(), admin.username, tokenHash,
-      getClientIp(req), (req.headers['user-agent'] || '').slice(0, 512)
-    ]
+     VALUES (?, ?, ?, ?, ?, datetime('now', '+8 hours'))`,
+    [crypto.randomUUID(), admin.username, tokenHash, getClientIp(req), (req.headers['user-agent'] || '').slice(0, 512)]
   );
 
   await addAuditLog('admin_login', { username, ip: getClientIp(req) }, username);
@@ -63,10 +59,7 @@ router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
 }));
 
 router.post('/logout', requireAuth, asyncHandler(async (req, res) => {
-  await db.query(
-    'UPDATE admin_sessions SET revoked = 1 WHERE token_hash = ?',
-    [req.adminTokenHash]
-  );
+  db.query('UPDATE admin_sessions SET revoked = 1 WHERE token_hash = ?', [req.adminTokenHash]);
   await addAuditLog('admin_logout', { username: req.admin.username, ip: getClientIp(req) }, req.admin.username);
   res.json({ success: true, message: 'Erfolgreich ausgeloggt.' });
 }));
@@ -81,7 +74,7 @@ router.post('/login/2fa', loginLimiter, asyncHandler(async (req, res) => {
     const payload = (await import('jsonwebtoken')).default.verify(temp_token, ADMIN_SECRET);
     if (!payload.temp) throw new Error('Invalid token');
 
-    const [rows] = await db.query('SELECT username, role, two_factor_secret FROM admins WHERE id = ?', [payload.id]);
+    const [rows] = db.query('SELECT username, role, two_factor_secret FROM admins WHERE id = ?', [payload.id]);
     const admin = rows[0];
     if (!admin) return res.status(401).json({ success: false, message: 'Admin not found' });
 
@@ -90,9 +83,9 @@ router.post('/login/2fa', loginLimiter, asyncHandler(async (req, res) => {
 
     const token = signAdminToken({ username: admin.username, role: admin.role });
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    await db.query(
+    db.query(
       `INSERT INTO admin_sessions (id, admin_username, token_hash, ip, user_agent, expires_at)
-       VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 8 HOUR))`,
+       VALUES (?, ?, ?, ?, ?, datetime('now', '+8 hours'))`,
       [crypto.randomUUID(), admin.username, tokenHash, getClientIp(req), (req.headers['user-agent'] || '').slice(0, 512)]
     );
 
@@ -104,13 +97,13 @@ router.post('/login/2fa', loginLimiter, asyncHandler(async (req, res) => {
 
 // ── 2FA Setup ────────────────────────────────────────────────────────────────
 router.post('/2fa/setup', requireAuth, asyncHandler(async (req, res) => {
-  const [rows] = await db.query('SELECT two_factor_enabled, two_factor_secret FROM admins WHERE username = ?', [req.admin.username]);
+  const [rows] = db.query('SELECT two_factor_enabled, two_factor_secret FROM admins WHERE username = ?', [req.admin.username]);
   const admin = rows[0];
 
   let secret = admin.two_factor_secret;
   if (!secret) {
     secret = authenticator.generateSecret();
-    await db.query('UPDATE admins SET two_factor_secret = ? WHERE username = ?', [secret, req.admin.username]);
+    db.query('UPDATE admins SET two_factor_secret = ? WHERE username = ?', [secret, req.admin.username]);
   }
 
   const otpauth = authenticator.keyuri(req.admin.username, 'OPA Santorini License', secret);
@@ -121,7 +114,7 @@ router.post('/2fa/setup', requireAuth, asyncHandler(async (req, res) => {
 
 router.post('/2fa/verify', requireAuth, asyncHandler(async (req, res) => {
   const { code } = req.body;
-  const [rows] = await db.query('SELECT two_factor_secret FROM admins WHERE username = ?', [req.admin.username]);
+  const [rows] = db.query('SELECT two_factor_secret FROM admins WHERE username = ?', [req.admin.username]);
   const secret = rows[0]?.two_factor_secret;
 
   if (!secret) return res.status(400).json({ success: false, message: '2FA not set up' });
@@ -129,7 +122,7 @@ router.post('/2fa/verify', requireAuth, asyncHandler(async (req, res) => {
   const isValid = authenticator.verify({ token: code, secret });
   if (!isValid) return res.status(400).json({ success: false, message: 'Ungültiger Code' });
 
-  await db.query('UPDATE admins SET two_factor_enabled = 1 WHERE username = ?', [req.admin.username]);
+  db.query('UPDATE admins SET two_factor_enabled = 1 WHERE username = ?', [req.admin.username]);
   await addAuditLog('2fa_enabled', { username: req.admin.username }, req.admin.username);
 
   res.json({ success: true, message: '2FA erfolgreich aktiviert' });
@@ -138,29 +131,24 @@ router.post('/2fa/verify', requireAuth, asyncHandler(async (req, res) => {
 router.post('/2fa/disable', requireAuth, asyncHandler(async (req, res) => {
   const { password, code } = req.body;
 
-  const [rows] = await db.query(
-    'SELECT password_hash, two_factor_secret FROM admins WHERE username = ?',
-    [req.admin.username]
-  );
+  const [rows] = db.query('SELECT password_hash, two_factor_secret FROM admins WHERE username = ?', [req.admin.username]);
   const admin = rows[0];
   if (!admin) return res.status(404).json({ success: false, message: 'Admin nicht gefunden.' });
 
   let verified = false;
-  if (password) {
-    verified = await bcrypt.compare(password, admin.password_hash);
-  }
+  if (password) verified = await bcrypt.compare(password, admin.password_hash);
   if (!verified && code && admin.two_factor_secret) {
     verified = authenticator.verify({ token: code, secret: admin.two_factor_secret });
   }
 
   if (!verified) {
-    return res.status(403).json({ 
-      success: false, 
-      message: 'Bestätigung erforderlich: Passwort oder TOTP-Code ungültig.' 
+    return res.status(403).json({
+      success: false,
+      message: 'Bestätigung erforderlich: Passwort oder TOTP-Code ungültig.'
     });
   }
 
-  await db.query('UPDATE admins SET two_factor_enabled = 0, two_factor_secret = NULL WHERE username = ?', [req.admin.username]);
+  db.query('UPDATE admins SET two_factor_enabled = 0, two_factor_secret = NULL WHERE username = ?', [req.admin.username]);
   await addAuditLog('2fa_disabled', { username: req.admin.username }, req.admin.username);
   res.json({ success: true, message: '2FA erfolgreich deaktiviert.' });
 }));

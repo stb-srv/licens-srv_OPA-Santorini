@@ -1,97 +1,79 @@
-import mysql from 'mysql2/promise';
-import fs from 'fs/promises';
+import { readdir } from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import Database from 'better-sqlite3';
 
 dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = path.join(__dirname, 'migrations');
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'licens.db');
 
-export async function runMigrations() {
-    const connection = await mysql.createConnection({
-        host: process.env.DB_HOST || '127.0.0.1',
-        port: parseInt(process.env.DB_PORT) || 3306,
-        user: process.env.DB_USER || 'root',
-        password: process.env.DB_PASS || '',
-        database: process.env.DB_NAME || 'opa_licenses',
-        multipleStatements: true
-    });
+// Opens or reuses an existing better-sqlite3 Database instance.
+// When called from server.js, pass the already-open db instance to avoid
+// two connections writing to the same WAL file simultaneously.
+export async function runMigrations(existingDb = null) {
+    const db = existingDb || new Database(DB_PATH);
+    if (!existingDb) {
+        db.pragma('journal_mode = WAL');
+        db.pragma('foreign_keys = ON');
+    }
 
     console.log('\n🚀 Starting Database Migrations...');
 
-    try {
-        // 1. Ensure migrations table exists
-        await connection.query(`
-            CREATE TABLE IF NOT EXISTS schema_migrations (
-                id         INT          NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                version    VARCHAR(255) NOT NULL UNIQUE,
-                name       VARCHAR(255) NOT NULL,
-                applied_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-        `);
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            version    TEXT NOT NULL PRIMARY KEY,
+            name       TEXT NOT NULL,
+            applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    `);
 
-        // 2. Get applied migrations
-        const [appliedRows] = await connection.query('SELECT version FROM schema_migrations');
-        const appliedVersions = new Set(appliedRows.map(r => r.version));
+    const appliedVersions = new Set(
+        db.prepare('SELECT version FROM schema_migrations').all().map(r => r.version)
+    );
 
-        // 3. Read migration files
-        const files = await fs.readdir(MIGRATIONS_DIR);
-        const migrationFiles = files
-            .filter(f => f.endsWith('.sql') || f.endsWith('.js'))
-            .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+    const files = await readdir(MIGRATIONS_DIR);
+    const migrationFiles = files
+        .filter(f => f.endsWith('.js'))
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 
-        let count = 0;
-        for (const file of migrationFiles) {
-            const version = file; // Use filename as version key
-            if (appliedVersions.has(version)) {
-                continue;
+    let count = 0;
+    for (const file of migrationFiles) {
+        if (appliedVersions.has(file)) continue;
+
+        console.log(`  ⏳ Applying ${file}...`);
+        try {
+            const mod = await import(`file://${path.join(MIGRATIONS_DIR, file)}`);
+            const fn = mod.default || mod.up;
+            if (typeof fn === 'function') {
+                fn(db);
+            } else {
+                console.warn(`  ⚠️  Migration ${file} hat keine default oder up Funktion.`);
             }
-
-            console.log(`  ⏳ Applying ${file}...`);
-            
-            if (file.endsWith('.sql')) {
-                const sql = await fs.readFile(path.join(MIGRATIONS_DIR, file), 'utf8');
-                await connection.query(sql);
-            } else if (file.endsWith('.js')) {
-                const migrationModule = await import(`file://${path.join(MIGRATIONS_DIR, file)}`);
-                if (typeof migrationModule.default === 'function') {
-                    await migrationModule.default(connection);
-                } else if (typeof migrationModule.up === 'function') {
-                    await migrationModule.up(connection);
-                } else {
-                    console.warn(`  ⚠️  Migration ${file} has no default or up export function.`);
-                }
-            }
-
-            // Record migration
-            await connection.query(
-                'INSERT INTO schema_migrations (version, name) VALUES (?, ?)',
-                [version, file]
-            );
+            db.prepare('INSERT INTO schema_migrations (version, name) VALUES (?, ?)').run(file, file);
             console.log(`  ✅ ${file} applied.`);
             count++;
+        } catch (e) {
+            console.error(`\n❌ Migration ${file} fehlgeschlagen:`, e.message);
+            if (!existingDb) db.close();
+            throw e;
         }
-
-        const alreadyAppliedCount = migrationFiles.filter(f => appliedVersions.has(f)).length;
-
-        if (count === 0) {
-            console.log('✨ Database is already up to date.');
-        } else {
-            console.log(`\n🎉 Successfully applied ${count} migration(s).`);
-        }
-
-        console.log(`🗄️  Migrationen: ${count} neu ausgeführt, ${alreadyAppliedCount} bereits vorhanden (gesamt ${migrationFiles.length})`);
-    } catch (e) {
-        console.error('\n❌ Error during migration:', e.stack);
-        throw e;
-    } finally {
-        await connection.end();
     }
+
+    const alreadyApplied = migrationFiles.filter(f => appliedVersions.has(f)).length;
+    if (count === 0) {
+        console.log('✨ Database is already up to date.');
+    } else {
+        console.log(`\n🎉 Successfully applied ${count} migration(s).`);
+    }
+    console.log(`🗄️  Migrationen: ${count} neu ausgeführt, ${alreadyApplied} bereits vorhanden (gesamt ${migrationFiles.length})`);
+
+    if (!existingDb) db.close();
 }
 
-// Support direct standalone execution from command line
+// Support direct standalone execution
 const isMain = process.argv[1] && (
     path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url)) ||
     process.argv[1].endsWith('migrate.js')
