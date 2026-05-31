@@ -396,7 +396,7 @@ function doAdminLogin() {
         switchAdminPanel('2fa');
       } else {
         sessionStorage.setItem('admin_token', d.token);
-        window.location.href = 'index.html';
+        window.location.href = 'index.html#admin';
       }
     }).catch(function(e){
       showAlert('admin-alert', esc(e.message||'Login fehlgeschlagen.'), 'error');
@@ -414,7 +414,7 @@ function doAdmin2FA() {
   }).then(function(r){ return r.json().then(function(d){ if(!r.ok) throw d; return d; }); })
     .then(function(d){
       sessionStorage.setItem('admin_token', d.token);
-      window.location.href = 'index.html';
+      window.location.href = 'index.html#admin';
     }).catch(function(e){
       showAlert('admin-alert-2fa', esc(e.message||'Login fehlgeschlagen.'), 'error');
     });

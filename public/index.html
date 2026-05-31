@@ -1059,6 +1059,27 @@
       nav {
         padding: 0 1rem;
       }
+      .nav-logo {
+        white-space: nowrap;
+      }
+    }
+    @media(max-width:600px) {
+      .nav-links a {
+        display: none;
+      }
+      .hero {
+        padding-bottom: 200px;
+      }
+      .table-wrap {
+        overflow-x: auto;
+      }
+      #cookie-banner {
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        max-width: 100% !important;
+        border-radius: var(--radius) var(--radius) 0 0 !important;
+      }
     }
     
     /* ── Advanced Cookie Banner ── */
@@ -2548,6 +2569,7 @@ function openAdmin(){
   document.getElementById('public-pages').style.display='none';
   document.getElementById('main-footer').style.display='none';
   document.getElementById('main-nav').style.display='none';
+  document.getElementById('cookie-banner').style.display='none';
   document.getElementById('page-admin').classList.add('active');
   if(TOKEN){
     // Token kurz gegen den Server prüfen – bei 401 wird API() auto-logout
@@ -2566,6 +2588,9 @@ function closeAdmin(){
   document.getElementById('main-footer').style.display='';
   document.getElementById('main-nav').style.display='';
   document.getElementById('page-admin').classList.remove('active');
+  if(!localStorage.getItem('cookie_consent')){
+    document.getElementById('cookie-banner').style.display='flex';
+  }
 }
 function showLogin(msg){
   document.getElementById('admin-login').style.display='flex';
@@ -3445,6 +3470,7 @@ function showConfirm(msg, callback, title) {
 (function(){
   var consent = localStorage.getItem('cookie_consent');
   if(!consent){
+    if(document.getElementById('page-admin').classList.contains('active')) return;
     document.getElementById('cookie-banner').style.display='flex';
   } else {
     applyConsent(JSON.parse(consent));
