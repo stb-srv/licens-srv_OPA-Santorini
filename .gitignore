@@ -1,6 +1,9 @@
 .env
 node_modules/
 db.json
+CLAUDE.md
+AGENTS.md
+TODO.md
 
 # RSA Private/Public Keys – niemals ins Repo!
 *.pem
