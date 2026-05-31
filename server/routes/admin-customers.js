@@ -93,18 +93,16 @@ router.post('/customers', requireAuth, asyncHandler(async (req, res) => {
     const portalUsername = uniquePortalUsername(name, company || null);
 
     try {
-        db.runTransaction(() => {
-            db.query(
-                `INSERT INTO customers
-                   (id, name, email, phone, contact_person, company, payment_status, notes,
-                    password_hash, must_change_password, billing_street, billing_city, billing_zip, billing_country, tax_id)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
-                [id, name, email, phone || null, contact_person || null,
-                 company || null, payment_status || 'unknown', notes || '', passwordHash,
-                 billing_street || null, billing_city || null, billing_zip || null, billing_country || 'DE', tax_id || null]
-            );
-            db.query('UPDATE customers SET portal_username = ? WHERE id = ?', [portalUsername, id]);
-        });
+        db.query(
+            `INSERT INTO customers
+               (id, name, email, phone, contact_person, company, payment_status, notes,
+                password_hash, portal_username, must_change_password, verified,
+                billing_street, billing_city, billing_zip, billing_country, tax_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, ?, ?)`,
+            [id, name, email, phone || null, contact_person || null,
+             company || null, payment_status || 'unknown', notes || '', passwordHash, portalUsername,
+             billing_street || null, billing_city || null, billing_zip || null, billing_country || 'DE', tax_id || null]
+        );
     } catch (e) {
         console.error('[customers/create]', e);
         return res.status(500).json({ success: false, message: `Fehler beim Anlegen: ${e.message}` });
