@@ -1179,7 +1179,7 @@
 <body>
 
 <nav id="main-nav">
-  <span class="nav-logo">
+  <span class="nav-logo" onclick="showPublicPage('home')" style="cursor:pointer;" title="Zur Startseite">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="logo-icon">
       <path d="M21 2 12 11"></path>
       <path d="m15 16-3-3"></path>
@@ -1256,49 +1256,9 @@
       </div>
     </section>
     
-    <section style="max-width:1100px;margin:0 auto;padding:3rem 2rem">
-      <div class="section-label">Lizenztypen</div>
-      <div class="section-title">Unterstützte Lizenzmodelle</div>
-      <div class="plans-grid">
-        <div class="plan-card">
-          <div class="plan-name">FREE</div>
-          <ul class="plan-features">
-            <li>1 Gerät</li>
-            <li>Online-Validierung</li>
-            <li>30 Tage</li>
-            <li>Offline-Token</li>
-          </ul>
-        </div>
-        <div class="plan-card featured">
-          <div class="plan-badge">Beliebt</div>
-          <div class="plan-name">BASIC</div>
-          <ul class="plan-features">
-            <li>Bis zu 5 Geräte</li>
-            <li>Online + Offline</li>
-            <li>365 Tage</li>
-            <li>Priority Validierung</li>
-          </ul>
-        </div>
-        <div class="plan-card">
-          <div class="plan-name">PRO</div>
-          <ul class="plan-features">
-            <li>Unbegrenzte Devices</li>
-            <li>Online + Offline</li>
-            <li>365 Tage</li>
-            <li>Custom-Feature-Flags</li>
-          </ul>
-        </div>
-        <div class="plan-card">
-          <div class="plan-name">ENTERPRISE</div>
-          <ul class="plan-features">
-            <li>Unbegrenzte Geräte</li>
-            <li>730 Tage</li>
-            <li>Ablaufdatum + Erneuerung</li>
-            <li>Dedizierter Support</li>
-          </ul>
-        </div>
-      </div>
-    </section>
+    <div style="text-align:center;padding:2rem 0 3rem">
+      <button class="btn btn-primary" onclick="showPublicPage('pricing')" style="width:auto;padding:.7rem 2rem;">Unsere Pläne &amp; Preise ansehen &rarr;</button>
+    </div>
   </div>
 
   <div id="pub-api" class="page">
@@ -3633,7 +3593,7 @@ document.addEventListener('DOMContentLoaded',function(){if(TOKEN)openAdmin();});
 function loadAdminPlans() {
   var el = document.getElementById('admin-plans-content');
   el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-  API('/plan-pricing').then(function(d) {
+  API('/admin/plan-pricing').then(function(d) {
     var plans = d.plans || [];
     if (!plans.length) { el.innerHTML = '<p style="color:var(--text2)">Keine Pläne gefunden.</p>'; return; }
     el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem;">' +
@@ -3685,7 +3645,7 @@ function savePlan() {
     sort_order:  parseInt(document.getElementById('ep-sort').value) || 0,
     currency:    'EUR'
   };
-  API('/plan-pricing/' + encodeURIComponent(planId), { method: 'PUT', body: JSON.stringify(body) })
+  API('/admin/plan-pricing/' + encodeURIComponent(planId), { method: 'PUT', body: JSON.stringify(body) })
     .then(function() { closeModal('modal-edit-plan'); loadAdminPlans(); })
     .catch(function(e) { showError(e.message || 'Fehler beim Speichern.'); });
 }
@@ -3694,7 +3654,7 @@ function savePlan() {
 function loadAdminFaq() {
   var el = document.getElementById('admin-faq-content');
   el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-  API('/faq').then(function(d) {
+  API('/admin/faq').then(function(d) {
     var faqs = d.faq || [];
     if (!faqs.length) { el.innerHTML = '<p style="color:var(--text2)">Noch keine FAQ-Einträge. Klicke "+ Neue Frage".</p>'; return; }
     var byCategory = {};
@@ -3755,7 +3715,7 @@ function saveFaq() {
   };
   if (!body.question || !body.answer) { showError('Frage und Antwort sind Pflichtfelder.'); return; }
   var method = id ? 'PUT' : 'POST';
-  var path   = id ? '/faq/' + encodeURIComponent(id) : '/faq';
+  var path   = id ? '/admin/faq/' + encodeURIComponent(id) : '/admin/faq';
   API(path, { method: method, body: JSON.stringify(body) })
     .then(function() { closeModal('modal-edit-faq'); loadAdminFaq(); })
     .catch(function(e) { showError(e.message || 'Fehler beim Speichern.'); });
@@ -3763,7 +3723,7 @@ function saveFaq() {
 
 function deleteFaq(id) {
   showConfirm('FAQ-Eintrag löschen?', function() {
-    API('/faq/' + encodeURIComponent(id), { method: 'DELETE' })
+    API('/admin/faq/' + encodeURIComponent(id), { method: 'DELETE' })
       .then(function() { loadAdminFaq(); })
       .catch(function(e) { showError(e.message || String(e)); });
   });

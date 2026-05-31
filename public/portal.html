@@ -545,39 +545,31 @@ function saveDomain(key){
 
 // ── Shop ──────────────────────────────────────────────────────────────────────
 var _selectedPlan = null;
-
-var PLAN_FEATURES = {
-  TRIAL:      ['30 Tage kostenlos testen','50 Speisekarten-Einträge','8 Tische','Küchen-Bestellsystem','Telefonische Reservierungen'],
-  FREE:       ['Dauerhaft kostenlos','30 Speisekarten-Einträge','5 Tische','Telefonische Reservierungen'],
-  STARTER:    ['60 Speisekarten-Einträge','10 Tische','Mehrsprachig','Küchen-Bestellsystem','Telefonische Reservierungen'],
-  PRO:        ['150 Speisekarten-Einträge','25 Tische','Online-Reservierungen','Mehrsprachig','QR-Pay','Eigenes Branding'],
-  PRO_PLUS:   ['300 Speisekarten-Einträge','50 Tische','Analytics-Dashboard','Alle PRO-Features'],
-  ENTERPRISE: ['Unbegrenzte Einträge','Unbegrenzte Tische','Voller Funktionsumfang','Priority Support']
-};
-var PLAN_POPULAR = 'PRO';
-var PLAN_ORDER   = ['TRIAL','STARTER','PRO','PRO_PLUS','ENTERPRISE'];
+var _shopPlansMap = {};   // plan_id → plan object, sicherer als JSON.stringify im onclick
 
 function loadShop(){
   var el=document.getElementById('shop-content');
   el.innerHTML='<div class="loading"><div class="spinner"></div></div>';
   API('/plans').then(function(d){
-    var plans=(d.plans||[]).filter(function(p){return PLAN_ORDER.includes(p.id);});
-    plans.sort(function(a,b){return PLAN_ORDER.indexOf(a.id)-PLAN_ORDER.indexOf(b.id);});
+    var plans=(d.plans||[]);
     if(!plans.length){el.innerHTML='<p style="color:var(--text2)">Keine Pläne verfügbar.</p>';return;}
+    _shopPlansMap={};
+    plans.forEach(function(p){ _shopPlansMap[p.plan_id]=p; });
     el.innerHTML='<div class="plan-grid">'+plans.map(function(p){
-      var feats=(PLAN_FEATURES[p.id]||[]);
-      var isPopular=p.id===PLAN_POPULAR;
+      var feats=p.features||[];
+      if(typeof feats==='string'){try{feats=JSON.parse(feats);}catch(e){feats=[];}}
+      var isPopular=p.plan_id==='PRO';
       var price=parseFloat(p.price)||0;
       var priceHtml=price===0
         ?'<div class="plan-price">Kostenlos</div>'
         :'<div class="plan-price">'+price.toFixed(0)+' €<span> / Jahr</span></div>';
       return '<div class="plan-card'+(isPopular?' popular':'')+'">'+
         (isPopular?'<div class="plan-popular-badge">&#11088; Beliebt</div>':'')+
-        '<div class="plan-name">'+esc(p.name)+'</div>'+
+        '<div class="plan-name">'+esc(p.label)+'</div>'+
         '<div class="plan-desc">'+esc(p.description||'')+'</div>'+
         priceHtml+
         '<ul class="plan-features">'+feats.map(function(f){return '<li>'+esc(f)+'</li>';}).join('')+'</ul>'+
-        '<button class="btn btn-primary" style="margin-top:auto" onclick="openOrderModal('+JSON.stringify(p)+')">'+
+        '<button class="btn btn-primary" style="margin-top:auto" onclick="openOrderModalById(\''+esc(p.plan_id)+'\')">'+
           (price===0?'Kostenlos starten':'Jetzt bestellen')+
         '</button>'+
       '</div>';
@@ -587,11 +579,16 @@ function loadShop(){
   });
 }
 
+function openOrderModalById(planId){
+  openOrderModal(_shopPlansMap[planId]);
+}
+
 function openOrderModal(plan){
+  if(!plan)return;
   _selectedPlan=plan;
   var price=parseFloat(plan.price)||0;
   document.getElementById('order-plan-info').innerHTML=
-    '<strong>'+esc(plan.name)+'</strong> &mdash; '+
+    '<strong>'+esc(plan.label)+'</strong> &mdash; '+
     (price===0?'<span style="color:var(--accent3)">Kostenlos</span>':
      '<span style="color:var(--accent);font-weight:700">'+price.toFixed(2)+' € / Jahr</span>')+
     '<br><span style="color:var(--text2)">'+esc(plan.description||'')+'</span>';
@@ -617,7 +614,7 @@ function confirmOrder(){
   }
   var btn=document.getElementById('order-confirm-btn');
   btn.disabled=true;btn.textContent='Wird übermittelt…';
-  API('/licenses/book',{method:'POST',body:JSON.stringify({plan_id:_selectedPlan.id,domain:domain})})
+  API('/licenses/book',{method:'POST',body:JSON.stringify({plan_id:_selectedPlan.plan_id,domain:domain})})
     .then(function(d){
       closeOrderModal();
       document.getElementById('shop-content').innerHTML=
