@@ -84,7 +84,7 @@ app.use(helmet({
             styleSrc:       ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://api.fontshare.com"],
             styleSrcElem:   ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://api.fontshare.com"],
             imgSrc:         ["'self'", "data:", "https:"],
-            connectSrc:     ["'self'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com"],
+            connectSrc:     ["'self'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com", "https://unpkg.com"],
             fontSrc:        ["'self'", "https:", "data:", "https://fonts.gstatic.com"],
             objectSrc:      ["'none'"],
             // upgradeInsecureRequests nur bei echtem HTTPS aktiv – sonst bricht Login über HTTP/LAN

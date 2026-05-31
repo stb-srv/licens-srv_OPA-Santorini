@@ -2706,10 +2706,11 @@ function showLegalTab(name){
   if(t)t.classList.add('active');
 }
 function openAdmin(){
-  document.getElementById('public-pages').style.display='none';
-  document.getElementById('main-footer').style.display='none';
-  document.getElementById('main-nav').style.display='none';
-  document.getElementById('cookie-banner').style.display='none';
+  function hide(id){var el=document.getElementById(id);if(el)el.style.display='none';}
+  hide('public-pages');
+  hide('main-footer');
+  hide('main-nav');
+  hide('cookie-banner');
   document.getElementById('page-admin').classList.add('active');
   if(TOKEN){
     // Token kurz gegen den Server prüfen – bei 401 wird API() auto-logout
@@ -3528,7 +3529,7 @@ function deleteWebhook(id){
   });
 }
 
-if(TOKEN)openAdmin();
+document.addEventListener('DOMContentLoaded',function(){if(TOKEN)openAdmin();});
 
 function showError(msg, title) {
   document.getElementById('modal-error-title').textContent = title || 'Fehler';
