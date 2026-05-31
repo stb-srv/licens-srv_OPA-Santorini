@@ -8,135 +8,73 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700&f[]=cabinet-grotesk@700,800&display=swap" rel="stylesheet">
   <style>
-    :root, [data-theme="dark"] {
-      --bg: #171614;
-      --bg2: #1c1b19;
-      --bg3: #22211f;
-      --border: rgba(255,255,255,0.07);
-      --text: #cdccca;
-      --text2: #797876;
-      --accent: #4f98a3;
-      --accent-hover: #227f8b;
-      --accent2: #dd6974;
-      --accent3: #6daa45;
-      --gold: #e8af34;
-      --card: #1c1b19;
-      --radius: 10px;
-      --shadow: 0 4px 24px rgba(0,0,0,.4);
-      --nav-bg: rgba(23,22,20,0.92);
-      --font-body: 'Satoshi', 'Segoe UI', system-ui, sans-serif;
-      --font-display: 'Cabinet Grotesk', 'Outfit', sans-serif;
+    :root,[data-theme="dark"]{
+      --bg:#171614;--bg2:#1c1b19;--bg3:#22211f;
+      --border:rgba(255,255,255,0.07);
+      --text:#cdccca;--text2:#797876;
+      --accent:#4f98a3;--accent-hover:#227f8b;
+      --accent2:#dd6974;--accent3:#6daa45;
+      --card:#1c1b19;--radius:12px;
+      --shadow:0 8px 32px rgba(0,0,0,.5);
+      --nav-bg:rgba(23,22,20,0.92);
+      --font-body:'Satoshi','Segoe UI',system-ui,sans-serif;
+      --font-display:'Cabinet Grotesk','Outfit',sans-serif;
     }
-    [data-theme="light"] {
-      --bg: #f7f6f2;
-      --bg2: #f9f8f5;
-      --bg3: #f3f0ec;
-      --border: rgba(0,0,0,0.08);
-      --text: #28251d;
-      --text2: #7a7974;
-      --accent: #01696f;
-      --accent-hover: #0c4e54;
-      --accent2: #a12c7b;
-      --accent3: #437a22;
-      --gold: #d19900;
-      --card: #ffffff;
-      --radius: 10px;
-      --shadow: 0 4px 24px rgba(0,0,0,.08);
-      --nav-bg: rgba(247,246,242,0.92);
+    [data-theme="light"]{
+      --bg:#f7f6f2;--bg2:#f9f8f5;--bg3:#f3f0ec;
+      --border:rgba(0,0,0,0.08);
+      --text:#28251d;--text2:#7a7974;
+      --accent:#01696f;--accent-hover:#0c4e54;
+      --accent2:#a12c7b;--accent3:#437a22;
+      --card:#ffffff;
+      --shadow:0 8px 32px rgba(0,0,0,.1);
+      --nav-bg:rgba(247,246,242,0.92);
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--font-body);
-      line-height: 1.6;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      transition: background .3s, color .3s;
-    }
-    h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.02em; }
-    nav {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: var(--nav-bg);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
-      padding: 0 2rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      height: 60px;
-    }
-    .nav-logo { font-size: 1.15rem; font-weight: 800; color: var(--accent); font-family: var(--font-display); }
-    .theme-toggle { background: transparent; border: 1px solid var(--border); color: var(--text2); border-radius: 8px; padding: .3rem .6rem; font-size: .95rem; cursor: pointer; transition: all .2s; }
-    .theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
-    
-    .center-wrap {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 2rem;
-      background: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(79,152,163,.1), transparent);
-    }
-    
-    .auth-container {
-      width: 100%;
-      max-width: 800px;
-      display: flex;
-      gap: 2rem;
-      align-items: flex-start;
-    }
-    
-    .auth-card {
-      flex: 1;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 2.5rem 2rem;
-      box-shadow: var(--shadow);
-      display: flex;
-      flex-direction: column;
-    }
-    
-    .auth-card h2 { text-align: center; margin-bottom: .4rem; font-size: 1.3rem; }
-    .auth-card .sub { text-align: center; color: var(--text2); font-size: .85rem; margin-bottom: 1.5rem; }
-    
-    .form-group { margin-bottom: 1rem; }
-    .form-group label { display: block; font-size: .85rem; color: var(--text2); margin-bottom: .4rem; }
-    .form-group input { width: 100%; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: .6rem .9rem; color: var(--text); font-size: .9rem; outline: none; transition: border-color .2s; font-family: var(--font-body); }
-    .form-group input:focus { border-color: var(--accent); }
-    
-    .btn { display: inline-flex; justify-content: center; align-items: center; gap: .4rem; padding: .6rem 1.1rem; border-radius: 8px; border: none; cursor: pointer; font-size: .9rem; font-weight: 600; transition: all 180ms cubic-bezier(0.16,1,0.3,1); text-decoration: none; width: 100%; font-family: var(--font-body); }
-    .btn-primary { background: var(--accent); color: #fff; }
-    .btn-primary:hover { background: var(--accent-hover); }
-    .btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border); }
-    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
-    
-    .alert { padding: .7rem 1rem; border-radius: 8px; font-size: .88rem; margin-bottom: 1rem; display: none; }
-    .alert-error { background: rgba(221,105,116,.1); border: 1px solid rgba(221,105,116,.25); color: var(--accent2); display: block; }
-    .alert-success { background: rgba(109,170,69,.1); border: 1px solid rgba(109,170,69,.25); color: var(--accent3); display: block; }
-    .alert-info { background: rgba(79,152,163,.1); border: 1px solid rgba(79,152,163,.25); color: var(--accent); display: block; }
-    
-    .link { color: var(--accent); text-decoration: none; cursor: pointer; }
-    .link:hover { text-decoration: underline; }
-    
-    .panel { display: none; }
-    .panel.active { display: block; }
-    
-    .mobile-tabs { display: none; margin-bottom: 1rem; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px; }
-    .mobile-tab { flex: 1; text-align: center; padding: .6rem; border-radius: 8px; cursor: pointer; font-size: .9rem; font-weight: 600; color: var(--text2); font-family: var(--font-body); }
-    .mobile-tab.active { background: var(--accent); color: #fff; }
-    
-    @media (max-width: 768px) {
-      .auth-container { flex-direction: column; max-width: 400px; gap: 0; }
-      .mobile-tabs { display: flex; }
-      .auth-card { display: none; margin-top: 0; }
-      .auth-card.active-mobile { display: flex; }
-    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--bg);color:var(--text);font-family:var(--font-body);line-height:1.6;min-height:100vh;display:flex;flex-direction:column;transition:background .3s,color .3s;}
+    h1,h2,h3{font-family:var(--font-display);letter-spacing:-.02em;}
+
+    nav{position:sticky;top:0;z-index:100;background:var(--nav-bg);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-items:center;justify-content:space-between;height:60px;}
+    .nav-logo{font-size:1.1rem;font-weight:800;color:var(--accent);font-family:var(--font-display);}
+    .theme-toggle{background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.3rem .6rem;font-size:.95rem;cursor:pointer;transition:all .2s;}
+    .theme-toggle:hover{border-color:var(--accent);color:var(--accent);}
+
+    .center-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:2rem;background:radial-gradient(ellipse 80% 60% at 50% -10%,rgba(79,152,163,.1),transparent);}
+
+    .auth-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:0;width:100%;max-width:400px;box-shadow:var(--shadow);overflow:hidden;}
+
+    /* Tab bar */
+    .login-tabs{display:flex;border-bottom:1px solid var(--border);}
+    .login-tab{flex:1;padding:.75rem 1rem;background:transparent;border:none;cursor:pointer;font-size:.88rem;font-weight:600;color:var(--text2);font-family:var(--font-body);transition:all .2s;border-bottom:2px solid transparent;margin-bottom:-1px;}
+    .login-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+    .login-tab:hover:not(.active){color:var(--text);background:var(--bg3);}
+
+    .card-body{padding:2rem;}
+
+    .panel{display:none;}.panel.active{display:block;}
+    .panel-title{font-size:1.2rem;font-weight:800;margin-bottom:.25rem;}
+    .panel-sub{color:var(--text2);font-size:.83rem;margin-bottom:1.5rem;}
+
+    .form-group{margin-bottom:.9rem;}
+    .form-group label{display:block;font-size:.82rem;color:var(--text2);margin-bottom:.35rem;font-weight:500;}
+    .form-group input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:.6rem .9rem;color:var(--text);font-size:.9rem;outline:none;transition:border-color .2s;font-family:var(--font-body);}
+    .form-group input:focus{border-color:var(--accent);}
+
+    .btn{display:inline-flex;justify-content:center;align-items:center;gap:.4rem;padding:.65rem 1.2rem;border-radius:8px;border:none;cursor:pointer;font-size:.9rem;font-weight:600;transition:all 180ms;text-decoration:none;width:100%;font-family:var(--font-body);margin-top:.25rem;}
+    .btn-primary{background:var(--accent);color:#fff;}.btn-primary:hover{background:var(--accent-hover);}
+    .btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border);width:auto;font-size:.82rem;}
+    .btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
+
+    .alert{padding:.65rem .9rem;border-radius:8px;font-size:.85rem;margin-bottom:.9rem;}
+    .alert-error{background:rgba(221,105,116,.1);border:1px solid rgba(221,105,116,.25);color:var(--accent2);}
+    .alert-success{background:rgba(109,170,69,.1);border:1px solid rgba(109,170,69,.25);color:var(--accent3);}
+    .alert-info{background:rgba(79,152,163,.1);border:1px solid rgba(79,152,163,.25);color:var(--accent);}
+
+    .link{color:var(--accent);text-decoration:none;cursor:pointer;font-size:.83rem;}
+    .link:hover{text-decoration:underline;}
+    .links-row{text-align:center;margin-top:1.1rem;display:flex;flex-direction:column;gap:.35rem;color:var(--text2);font-size:.83rem;}
+
+    .otp-input{text-align:center;font-size:1.6rem;letter-spacing:8px;font-family:monospace;}
   </style>
 </head>
 <body>
@@ -147,285 +85,222 @@
 </nav>
 
 <div class="center-wrap">
-  <div style="width: 100%; max-width: 800px; margin: 0 auto;">
-    <div class="mobile-tabs" id="mobile-tabs">
-      <div class="mobile-tab active" onclick="switchMobileTab('customer')">Kunden-Portal</div>
-      <div class="mobile-tab" onclick="switchMobileTab('admin')">Admin</div>
+  <div class="auth-card">
+
+    <!-- Tab-Leiste -->
+    <div class="login-tabs">
+      <button class="login-tab active" id="tab-customer" onclick="setMode('customer')">Kunden-Portal</button>
+      <button class="login-tab" id="tab-admin" onclick="setMode('admin')">Admin</button>
     </div>
-    
-    <div class="auth-container">
-      <!-- CUSTOMER BLOCK -->
-      <div class="auth-card active-mobile" id="card-customer">
-        
-        <!-- Login Panel -->
-        <div id="panel-customer-login" class="panel active">
-          <h2>&#128100; Kunden-Portal</h2>
-          <p class="sub">Logge dich ein, um deine Lizenzen zu verwalten</p>
-          <div id="cust-alert"></div>
-          <div class="form-group"><label>E-Mail-Adresse</label><input type="email" id="cust-email" autocomplete="email"></div>
-          <div class="form-group"><label>Passwort</label><input type="password" id="cust-pass" autocomplete="current-password"></div>
-          <button class="btn btn-primary" onclick="doCustomerLogin()">Einloggen</button>
-          
-          <div style="text-align:center;margin-top:1.5rem;font-size:.85rem;color:var(--text2)">
-            Noch kein Account? <a class="link" onclick="switchCustomerPanel('register')">Jetzt registrieren</a>
-          </div>
-          <div style="text-align:center;margin-top:.5rem;font-size:.82rem">
-            <a class="link" onclick="switchCustomerPanel('forgot')">Passwort vergessen?</a>
-          </div>
-        </div>
-        
-        <!-- Register Panel -->
-        <div id="panel-customer-register" class="panel">
-          <h2>&#128221; Registrieren</h2>
-          <p class="sub">Erstelle ein neues Konto</p>
-          <div id="reg-alert"></div>
-          <div class="form-group"><label>Name *</label><input type="text" id="reg-name"></div>
-          <div class="form-group"><label>E-Mail *</label><input type="email" id="reg-email"></div>
-          <div class="form-group"><label>Passwort * (min. 10 Zeichen)</label><input type="password" id="reg-pass"></div>
-          <div class="form-group"><label>Passwort wiederholen *</label><input type="password" id="reg-pass2"></div>
-          <div class="form-group"><label>Firma (optional)</label><input type="text" id="reg-company"></div>
-          <div class="form-group"><label>Telefon (optional)</label><input type="text" id="reg-phone"></div>
-          <div class="form-group" style="display:flex;gap:.5rem;align-items:flex-start;margin-top:1rem;margin-bottom:1.5rem;">
-            <input type="checkbox" id="reg-agb" style="width:auto;margin-top:3px">
-            <label for="reg-agb" style="margin:0;line-height:1.4">Ich akzeptiere die AGB und Datenschutzbestimmungen *</label>
-          </div>
-          <button class="btn btn-primary" onclick="doRegister()">Konto erstellen</button>
-          <div style="text-align:center;margin-top:1.5rem;font-size:.85rem;color:var(--text2)">
-            Bereits ein Konto? <a class="link" onclick="switchCustomerPanel('login')">Zurück zum Login</a>
-          </div>
-        </div>
-        
-        <!-- Forgot Password Panel -->
-        <div id="panel-customer-forgot" class="panel">
-          <h2>&#128274; Passwort vergessen</h2>
-          <p class="sub">Gib deine E-Mail-Adresse ein</p>
-          <div id="forgot-alert"></div>
-          <div class="form-group"><label>E-Mail-Adresse</label><input type="email" id="forgot-email"></div>
-          <button class="btn btn-primary" onclick="doForgotPassword()">Reset-Link senden</button>
-          <div style="text-align:center;margin-top:1.5rem;font-size:.85rem;color:var(--text2)">
-            <a class="link" onclick="switchCustomerPanel('login')">Zurück zum Login</a>
-          </div>
-        </div>
-        
-      </div>
-      
-      <!-- ADMIN BLOCK -->
-      <div class="auth-card" id="card-admin">
-        <!-- Admin Login -->
-        <div id="panel-admin-login" class="panel active">
-          <h2>&#128273; Admin-Verwaltung</h2>
-          <p class="sub">OPA! Santorini Administration</p>
-          <div id="admin-alert"></div>
-          <div class="form-group"><label>Benutzername</label><input type="text" id="admin-user" autocomplete="username"></div>
-          <div class="form-group"><label>Passwort</label><input type="password" id="admin-pass" autocomplete="current-password"></div>
-          <button class="btn btn-primary" onclick="doAdminLogin()">Admin Login</button>
-        </div>
-        
-        <!-- Admin 2FA -->
-        <div id="panel-admin-2fa" class="panel">
-          <h2>&#128272; 2FA Code</h2>
-          <p class="sub">Bitte Authenticator-Code eingeben</p>
-          <div id="admin-alert-2fa"></div>
-          <div class="form-group"><label>6-stelliger Code</label><input type="text" id="admin-code" autocomplete="one-time-code" maxlength="6" style="text-align:center;font-size:1.5rem;letter-spacing:5px"></div>
-          <button class="btn btn-primary" onclick="doAdmin2FA()">Verifizieren</button>
-          <div style="text-align:center;margin-top:1rem"><a class="link" onclick="switchAdminPanel('login')">Abbrechen</a></div>
+
+    <div class="card-body">
+
+      <!-- ── Kunden: Login ─────────────────────────────────────── -->
+      <div id="panel-cust-login" class="panel active">
+        <div class="panel-title">&#128272; Anmelden</div>
+        <div class="panel-sub">Melde dich mit deiner E-Mail oder deinem Benutzernamen an.</div>
+        <div id="cust-login-alert"></div>
+        <div class="form-group"><label>E-Mail / Benutzername</label><input type="text" id="cust-email" autocomplete="username"></div>
+        <div class="form-group"><label>Passwort</label><input type="password" id="cust-pass" autocomplete="current-password"></div>
+        <button class="btn btn-primary" onclick="doCustomerLogin()">Einloggen</button>
+        <div class="links-row">
+          <span>Noch kein Konto? <a class="link" onclick="showPanel('cust','register')">Jetzt registrieren</a></span>
+          <a class="link" onclick="showPanel('cust','forgot')">Passwort vergessen?</a>
         </div>
       </div>
-      
-    </div>
-  </div>
+
+      <!-- ── Kunden: Registrieren ─────────────────────────────── -->
+      <div id="panel-cust-register" class="panel">
+        <div class="panel-title">&#128221; Registrieren</div>
+        <div class="panel-sub">Erstelle ein neues Kunden-Konto.</div>
+        <div id="cust-reg-alert"></div>
+        <div class="form-group"><label>Name *</label><input type="text" id="reg-name"></div>
+        <div class="form-group"><label>E-Mail *</label><input type="email" id="reg-email"></div>
+        <div class="form-group"><label>Passwort * <span style="font-weight:400">(min. 10 Zeichen)</span></label><input type="password" id="reg-pass"></div>
+        <div class="form-group"><label>Passwort wiederholen *</label><input type="password" id="reg-pass2"></div>
+        <div class="form-group"><label>Firma <span style="font-weight:400">(optional)</span></label><input type="text" id="reg-company"></div>
+        <div class="form-group" style="display:flex;gap:.5rem;align-items:flex-start;">
+          <input type="checkbox" id="reg-agb" style="width:auto;margin-top:3px;flex-shrink:0;">
+          <label for="reg-agb" style="margin:0;font-size:.82rem;line-height:1.4;">Ich akzeptiere die AGB und Datenschutzbestimmungen *</label>
+        </div>
+        <button class="btn btn-primary" style="margin-top:.5rem" onclick="doRegister()">Konto erstellen</button>
+        <div class="links-row"><a class="link" onclick="showPanel('cust','login')">&#8592; Zurück zum Login</a></div>
+      </div>
+
+      <!-- ── Kunden: Passwort vergessen ──────────────────────── -->
+      <div id="panel-cust-forgot" class="panel">
+        <div class="panel-title">&#128274; Passwort vergessen</div>
+        <div class="panel-sub">Gib deine E-Mail-Adresse ein – du erhältst einen Reset-Link.</div>
+        <div id="cust-forgot-alert"></div>
+        <div class="form-group"><label>E-Mail-Adresse</label><input type="email" id="forgot-email"></div>
+        <button class="btn btn-primary" onclick="doForgotPassword()">Reset-Link senden</button>
+        <div class="links-row"><a class="link" onclick="showPanel('cust','login')">&#8592; Zurück zum Login</a></div>
+      </div>
+
+      <!-- ── Admin: Login ─────────────────────────────────────── -->
+      <div id="panel-admin-login" class="panel">
+        <div class="panel-title">&#128273; Anmelden</div>
+        <div class="panel-sub">Administration des Lizenzservers.</div>
+        <div id="admin-login-alert"></div>
+        <div class="form-group"><label>Benutzername</label><input type="text" id="admin-user" autocomplete="username"></div>
+        <div class="form-group"><label>Passwort</label><input type="password" id="admin-pass" autocomplete="current-password"></div>
+        <button class="btn btn-primary" onclick="doAdminLogin()">Einloggen</button>
+      </div>
+
+      <!-- ── Admin: 2FA ───────────────────────────────────────── -->
+      <div id="panel-admin-2fa" class="panel">
+        <div class="panel-title">&#128272; Zwei-Faktor</div>
+        <div class="panel-sub">Bitte den 6-stelligen Authenticator-Code eingeben.</div>
+        <div id="admin-2fa-alert"></div>
+        <div class="form-group"><label>Code</label><input type="text" id="admin-code" class="otp-input" autocomplete="one-time-code" maxlength="6" inputmode="numeric"></div>
+        <button class="btn btn-primary" onclick="doAdmin2FA()">Verifizieren</button>
+        <div class="links-row"><a class="link" onclick="showPanel('admin','login')">Abbrechen</a></div>
+      </div>
+
+    </div><!-- /card-body -->
+  </div><!-- /auth-card -->
 </div>
 
 <script>
 (function(){
-  var urlParams = new URLSearchParams(window.location.search);
-  var resetToken = urlParams.get('reset');
-  if (resetToken) {
-    window.location.href = 'portal.html?token=' + encodeURIComponent(resetToken);
-    return;
-  }
+  // Passwort-Reset Token weiterleiten
+  var p = new URLSearchParams(window.location.search);
+  if(p.get('reset')) { window.location.href='portal.html?token='+encodeURIComponent(p.get('reset')); return; }
+  if(p.get('verify')){ window.location.href='portal.html?verify='+encodeURIComponent(p.get('verify')); return; }
 
+  // Theme
   var t=localStorage.getItem('theme')||'dark';
   document.documentElement.setAttribute('data-theme',t);
-  var btn=document.getElementById('theme-btn');
-  if(btn)btn.textContent=t==='dark'?'\u2600\uFE0F':'\uD83C\uDF19';
-  
-  if(window.location.hash==='#register') {
-    switchMobileTab('customer');
-    switchCustomerPanel('register');
-  }
-  if(window.location.hash==='#forgot') {
-    switchMobileTab('customer');
-    switchCustomerPanel('forgot');
-  }
+  document.getElementById('theme-btn').textContent=t==='dark'?'☀️':'🌙';
+
+  // Hash-Routing
+  if(window.location.hash==='#register') { setMode('customer'); showPanel('cust','register'); }
+  if(window.location.hash==='#forgot')   { setMode('customer'); showPanel('cust','forgot'); }
+  if(window.location.hash==='#admin')    { setMode('admin'); }
 })();
 
 function toggleTheme(){
-  var cur=document.documentElement.getAttribute('data-theme')||'dark';
-  var next=cur==='dark'?'light':'dark';
-  document.documentElement.setAttribute('data-theme',next);
-  localStorage.setItem('theme',next);
-  var btn=document.getElementById('theme-btn');
-  if(btn)btn.textContent=next==='dark'?'\u2600\uFE0F':'\uD83C\uDF19';
+  var n=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+  document.documentElement.setAttribute('data-theme',n);
+  localStorage.setItem('theme',n);
+  document.getElementById('theme-btn').textContent=n==='dark'?'☀️':'🌙';
+}
+
+// Aktueller Modus
+var _mode='customer';
+
+function setMode(m){
+  _mode=m;
+  document.getElementById('tab-customer').classList.toggle('active',m==='customer');
+  document.getElementById('tab-admin').classList.toggle('active',m==='admin');
+  // Aktives Panel im neuen Modus anzeigen
+  if(m==='customer') showPanel('cust','login');
+  else               showPanel('admin','login');
+}
+
+function showPanel(prefix,name){
+  // Alle Panels verstecken
+  document.querySelectorAll('.panel').forEach(function(el){ el.classList.remove('active'); });
+  document.getElementById('panel-'+prefix+'-'+name).classList.add('active');
 }
 
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
-function showAlert(elId, msg, type) {
-  var el = document.getElementById(elId);
-  if(el) {
-    el.innerHTML = '<div class="alert alert-'+(type||'error')+'">'+msg+'</div>';
-    el.style.display = 'block';
-  }
+function showAlert(id,msg,type){
+  var el=document.getElementById(id);
+  if(!el)return;
+  el.innerHTML='<div class="alert alert-'+(type||'error')+'">'+msg+'</div>';
+}
+function clearAlerts(){
+  document.querySelectorAll('.alert').forEach(function(el){el.innerHTML='';});
 }
 
-function switchCustomerPanel(p) {
-  document.getElementById('panel-customer-login').classList.remove('active');
-  document.getElementById('panel-customer-register').classList.remove('active');
-  document.getElementById('panel-customer-forgot').classList.remove('active');
-  document.getElementById('panel-customer-'+p).classList.add('active');
-  document.getElementById('cust-alert').style.display = 'none';
-  document.getElementById('reg-alert').style.display = 'none';
-  document.getElementById('forgot-alert').style.display = 'none';
-}
-
-function switchAdminPanel(p) {
-  document.getElementById('panel-admin-login').classList.remove('active');
-  document.getElementById('panel-admin-2fa').classList.remove('active');
-  document.getElementById('panel-admin-'+p).classList.add('active');
-  document.getElementById('admin-alert').style.display = 'none';
-  document.getElementById('admin-alert-2fa').style.display = 'none';
-}
-
-function switchMobileTab(t) {
-  var tabs = document.querySelectorAll('.mobile-tab');
-  tabs[0].classList.toggle('active', t==='customer');
-  tabs[1].classList.toggle('active', t==='admin');
-  document.getElementById('card-customer').classList.toggle('active-mobile', t==='customer');
-  document.getElementById('card-admin').classList.toggle('active-mobile', t==='admin');
-}
-
-// -- Customer API --
-function doCustomerLogin() {
-  var email = document.getElementById('cust-email').value.trim();
-  var pass = document.getElementById('cust-pass').value;
-  if(!email || !pass) return showAlert('cust-alert', 'E-Mail und Passwort eingeben.', 'error');
-  
-  fetch('/api/portal/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: email, password: pass })
-  }).then(function(r){ return r.json().then(function(d){ if(!r.ok) throw d; return d; }); })
+// ── Kunden Login ────────────────────────────────────────────────────
+function doCustomerLogin(){
+  var email=document.getElementById('cust-email').value.trim();
+  var pass=document.getElementById('cust-pass').value;
+  if(!email||!pass)return showAlert('cust-login-alert','E-Mail/Benutzername und Passwort eingeben.');
+  fetch('/api/portal/login',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({email:email,password:pass})})
+    .then(function(r){return r.json().then(function(d){if(!r.ok)throw d;return d;});})
     .then(function(d){
-      sessionStorage.setItem('portal_token', d.token);
-      window.location.href = 'portal.html';
+      sessionStorage.setItem('portal_token',d.token);
+      window.location.href='portal.html';
     }).catch(function(e){
-      if(e.must_change_password) {
-        sessionStorage.setItem('portal_token', e.token || '');
-        window.location.href = 'portal.html';
-      } else {
-        showAlert('cust-alert', esc(e.message||'Login fehlgeschlagen.'), 'error');
-      }
+      if(e.must_change_password){sessionStorage.setItem('portal_token',e.token||'');window.location.href='portal.html';return;}
+      showAlert('cust-login-alert',esc(e.message||'Login fehlgeschlagen.'));
     });
 }
 
-function doRegister() {
-  var name = document.getElementById('reg-name').value.trim();
-  var email = document.getElementById('reg-email').value.trim();
-  var pass = document.getElementById('reg-pass').value;
-  var pass2 = document.getElementById('reg-pass2').value;
-  var company = document.getElementById('reg-company').value.trim();
-  var phone = document.getElementById('reg-phone').value.trim();
-  var agb = document.getElementById('reg-agb').checked;
-  
-  if(!name || !email || !pass) return showAlert('reg-alert', 'Bitte alle Pflichtfelder ausfüllen.', 'error');
-  if(pass !== pass2) return showAlert('reg-alert', 'Passwörter stimmen nicht überein.', 'error');
-  if(pass.length < 10) return showAlert('reg-alert', 'Passwort muss mindestens 10 Zeichen lang sein.', 'error');
-  if(!agb) return showAlert('reg-alert', 'Bitte akzeptiere die AGB.', 'error');
-  
-  fetch('/api/portal/register', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: name, email: email, password: pass, company: company, phone: phone })
-  }).then(function(r){ return r.json().then(function(d){ if(!r.ok) throw d; return d; }); })
+// ── Registrieren ────────────────────────────────────────────────────
+function doRegister(){
+  var name=document.getElementById('reg-name').value.trim();
+  var email=document.getElementById('reg-email').value.trim();
+  var pass=document.getElementById('reg-pass').value;
+  var pass2=document.getElementById('reg-pass2').value;
+  var company=document.getElementById('reg-company').value.trim();
+  var agb=document.getElementById('reg-agb').checked;
+  if(!name||!email||!pass)return showAlert('cust-reg-alert','Bitte alle Pflichtfelder ausfüllen.');
+  if(pass!==pass2)return showAlert('cust-reg-alert','Passwörter stimmen nicht überein.');
+  if(pass.length<10)return showAlert('cust-reg-alert','Passwort muss mindestens 10 Zeichen lang sein.');
+  if(!agb)return showAlert('cust-reg-alert','Bitte akzeptiere die AGB.');
+  fetch('/api/portal/register',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name:name,email:email,password:pass,company:company})})
+    .then(function(r){return r.json().then(function(d){if(!r.ok)throw d;return d;});})
     .then(function(d){
-      showAlert('reg-alert', '&#9989; ' + esc(d.message), 'success');
-      document.getElementById('reg-name').value = '';
-      document.getElementById('reg-email').value = '';
-      document.getElementById('reg-pass').value = '';
-      document.getElementById('reg-pass2').value = '';
-      document.getElementById('reg-company').value = '';
-      document.getElementById('reg-phone').value = '';
-      document.getElementById('reg-agb').checked = false;
-    }).catch(function(e){
-      showAlert('reg-alert', esc(e.message||'Registrierung fehlgeschlagen.'), 'error');
-    });
+      showAlert('cust-reg-alert','&#9989; '+esc(d.message),'success');
+      ['reg-name','reg-email','reg-pass','reg-pass2','reg-company'].forEach(function(id){document.getElementById(id).value='';});
+      document.getElementById('reg-agb').checked=false;
+    }).catch(function(e){showAlert('cust-reg-alert',esc(e.message||'Registrierung fehlgeschlagen.'));});
 }
 
-function doForgotPassword() {
-  var email = document.getElementById('forgot-email').value.trim();
-  if(!email) return showAlert('forgot-alert', 'Bitte E-Mail eingeben.', 'error');
-  
-  fetch('/api/portal/forgot-password', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: email })
-  }).then(function(r){ return r.json().then(function(d){ if(!r.ok) throw d; return d; }); })
-    .then(function(d){
-      showAlert('forgot-alert', '&#9989; ' + esc(d.message), 'success');
-    }).catch(function(e){
-      showAlert('forgot-alert', esc(e.message||'Fehler.'), 'error');
-    });
+// ── Passwort vergessen ──────────────────────────────────────────────
+function doForgotPassword(){
+  var email=document.getElementById('forgot-email').value.trim();
+  if(!email)return showAlert('cust-forgot-alert','Bitte E-Mail eingeben.');
+  fetch('/api/portal/forgot-password',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({email:email})})
+    .then(function(r){return r.json().then(function(d){if(!r.ok)throw d;return d;});})
+    .then(function(d){showAlert('cust-forgot-alert','&#9989; '+esc(d.message),'success');})
+    .catch(function(e){showAlert('cust-forgot-alert',esc(e.message||'Fehler.'));});
 }
 
-// -- Admin API --
-var adminTempToken = '';
-function doAdminLogin() {
-  var user = document.getElementById('admin-user').value.trim();
-  var pass = document.getElementById('admin-pass').value;
-  if(!user || !pass) return showAlert('admin-alert', 'Benutzername und Passwort eingeben.', 'error');
-  
-  fetch('/api/admin/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: user, password: pass })
-  }).then(function(r){ return r.json().then(function(d){ if(!r.ok) throw d; return d; }); })
+// ── Admin Login ─────────────────────────────────────────────────────
+var _adminTempToken='';
+function doAdminLogin(){
+  var user=document.getElementById('admin-user').value.trim();
+  var pass=document.getElementById('admin-pass').value;
+  if(!user||!pass)return showAlert('admin-login-alert','Benutzername und Passwort eingeben.');
+  fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({username:user,password:pass})})
+    .then(function(r){return r.json().then(function(d){if(!r.ok)throw d;return d;});})
     .then(function(d){
-      if(d.two_factor_required) {
-        adminTempToken = d.temp_token;
-        switchAdminPanel('2fa');
-      } else {
-        sessionStorage.setItem('admin_token', d.token);
-        window.location.href = 'index.html#admin';
-      }
-    }).catch(function(e){
-      showAlert('admin-alert', esc(e.message||'Login fehlgeschlagen.'), 'error');
-    });
+      if(d.two_factor_required){_adminTempToken=d.temp_token;showPanel('admin','2fa');}
+      else{sessionStorage.setItem('admin_token',d.token);window.location.href='index.html#admin';}
+    }).catch(function(e){showAlert('admin-login-alert',esc(e.message||'Login fehlgeschlagen.'));});
 }
 
-function doAdmin2FA() {
-  var code = document.getElementById('admin-code').value.trim();
-  if(!code) return showAlert('admin-alert-2fa', 'Code eingeben.', 'error');
-  
-  fetch('/api/admin/login/2fa', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ temp_token: adminTempToken, code: code })
-  }).then(function(r){ return r.json().then(function(d){ if(!r.ok) throw d; return d; }); })
-    .then(function(d){
-      sessionStorage.setItem('admin_token', d.token);
-      window.location.href = 'index.html#admin';
-    }).catch(function(e){
-      showAlert('admin-alert-2fa', esc(e.message||'Login fehlgeschlagen.'), 'error');
-    });
+function doAdmin2FA(){
+  var code=document.getElementById('admin-code').value.trim();
+  if(!code)return showAlert('admin-2fa-alert','Code eingeben.');
+  fetch('/api/admin/login/2fa',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({temp_token:_adminTempToken,code:code})})
+    .then(function(r){return r.json().then(function(d){if(!r.ok)throw d;return d;});})
+    .then(function(d){sessionStorage.setItem('admin_token',d.token);window.location.href='index.html#admin';})
+    .catch(function(e){showAlert('admin-2fa-alert',esc(e.message||'Code ungültig.'));});
 }
 
-document.addEventListener('keydown', function(e) {
-  if(e.key === 'Enter') {
-    if(document.getElementById('panel-customer-login').classList.contains('active') && document.activeElement.id.startsWith('cust-')) doCustomerLogin();
-    if(document.getElementById('panel-admin-login').classList.contains('active') && document.activeElement.id.startsWith('admin-')) doAdminLogin();
-    if(document.getElementById('panel-admin-2fa').classList.contains('active') && document.activeElement.id === 'admin-code') doAdmin2FA();
-  }
+// ── Enter-Taste ─────────────────────────────────────────────────────
+document.addEventListener('keydown',function(e){
+  if(e.key!=='Enter')return;
+  var active=document.querySelector('.panel.active');
+  if(!active)return;
+  var id=active.id;
+  if(id==='panel-cust-login')    doCustomerLogin();
+  else if(id==='panel-cust-register') doRegister();
+  else if(id==='panel-cust-forgot')   doForgotPassword();
+  else if(id==='panel-admin-login')   doAdminLogin();
+  else if(id==='panel-admin-2fa')     doAdmin2FA();
 });
 </script>
 </body>
