@@ -6,40 +6,48 @@
   <title>Meraki &ndash; Login</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700&f[]=cabinet-grotesk@700,800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
   <style>
     :root,[data-theme="dark"]{
-      --bg:#171614;--bg2:#1c1b19;--bg3:#22211f;
+      --bg:#0d0f12;--bg2:#131619;--bg3:#181c20;
       --border:rgba(255,255,255,0.07);
-      --text:#cdccca;--text2:#797876;
-      --accent:#4f98a3;--accent-hover:#227f8b;
-      --accent2:#dd6974;--accent3:#6daa45;
-      --card:#1c1b19;--radius:12px;
+      --text:#e8eaed;--text2:#8b9099;
+      --accent:#00bfa5;--accent-hover:#00a892;
+      --accent2:#ff5d6c;--accent3:#5fbf6a;
+      --card:#131619;--radius:12px;
       --shadow:0 8px 32px rgba(0,0,0,.5);
-      --nav-bg:rgba(23,22,20,0.92);
-      --font-body:'Satoshi','Segoe UI',system-ui,sans-serif;
-      --font-display:'Cabinet Grotesk','Outfit',sans-serif;
+      --nav-bg:rgba(13,15,18,0.92);
+      --accent-dim:rgba(0,191,165,0.12);
+      --grid-line:rgba(255,255,255,0.03);
+      --font-body:'Inter','Segoe UI',system-ui,sans-serif;
+      --font-display:'Inter',sans-serif;
+      --font-mono:'JetBrains Mono',monospace;
     }
     [data-theme="light"]{
-      --bg:#f7f6f2;--bg2:#f9f8f5;--bg3:#f3f0ec;
-      --border:rgba(0,0,0,0.08);
-      --text:#28251d;--text2:#7a7974;
-      --accent:#01696f;--accent-hover:#0c4e54;
-      --accent2:#a12c7b;--accent3:#437a22;
+      --bg:#f5f5f0;--bg2:#ffffff;--bg3:#f0f0eb;
+      --border:rgba(0,0,0,0.09);
+      --text:#1a1c20;--text2:#6b7280;
+      --accent:#00897b;--accent-hover:#00796b;
+      --accent2:#d64550;--accent3:#3a8a3a;
       --card:#ffffff;
       --shadow:0 8px 32px rgba(0,0,0,.1);
-      --nav-bg:rgba(247,246,242,0.92);
+      --nav-bg:rgba(245,245,240,0.92);
+      --accent-dim:rgba(0,137,123,0.10);
+      --grid-line:rgba(0,0,0,0.04);
     }
     *{box-sizing:border-box;margin:0;padding:0;}
     body{background:var(--bg);color:var(--text);font-family:var(--font-body);line-height:1.6;min-height:100vh;display:flex;flex-direction:column;transition:background .3s,color .3s;}
-    h1,h2,h3{font-family:var(--font-display);letter-spacing:-.02em;}
+    h1,h2,h3{font-family:var(--font-display);letter-spacing:-.02em;font-weight:700;}
+    .lucide{width:1.05em;height:1.05em;vertical-align:-0.18em;stroke-width:2;flex-shrink:0;}
 
     nav{position:sticky;top:0;z-index:100;background:var(--nav-bg);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-items:center;justify-content:space-between;height:60px;}
-    .nav-logo{font-size:1.1rem;font-weight:800;color:var(--accent);font-family:var(--font-display);}
-    .theme-toggle{background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.3rem .6rem;font-size:.95rem;cursor:pointer;transition:all .2s;}
+    .nav-logo{display:inline-flex;align-items:center;gap:.45rem;font-size:1.1rem;font-weight:800;color:var(--accent);font-family:var(--font-display);}
+    .nav-logo .lucide{width:1.15em;height:1.15em;}
+    .theme-toggle{display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:8px;width:34px;height:34px;cursor:pointer;transition:all .2s;}
     .theme-toggle:hover{border-color:var(--accent);color:var(--accent);}
 
-    .center-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:2rem;background:radial-gradient(ellipse 80% 60% at 50% -10%,rgba(79,152,163,.1),transparent);}
+    .center-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:2rem;background-color:var(--bg);background-image:radial-gradient(ellipse 80% 60% at 50% -10%,rgba(0,191,165,.1),transparent),linear-gradient(var(--grid-line) 1px,transparent 1px),linear-gradient(90deg,var(--grid-line) 1px,transparent 1px);background-size:100% 100%,40px 40px,40px 40px;}
 
     .auth-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:0;width:100%;max-width:400px;box-shadow:var(--shadow);overflow:hidden;}
 
@@ -52,36 +60,37 @@
     .card-body{padding:2rem;}
 
     .panel{display:none;}.panel.active{display:block;}
-    .panel-title{font-size:1.2rem;font-weight:800;margin-bottom:.25rem;}
+    .panel-title{display:flex;align-items:center;gap:.5rem;font-size:1.2rem;font-weight:800;margin-bottom:.25rem;}
+    .panel-title .lucide{color:var(--accent);width:1.1em;height:1.1em;}
     .panel-sub{color:var(--text2);font-size:.83rem;margin-bottom:1.5rem;}
 
     .form-group{margin-bottom:.9rem;}
     .form-group label{display:block;font-size:.82rem;color:var(--text2);margin-bottom:.35rem;font-weight:500;}
     .form-group input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:.6rem .9rem;color:var(--text);font-size:.9rem;outline:none;transition:border-color .2s;font-family:var(--font-body);}
-    .form-group input:focus{border-color:var(--accent);}
+    .form-group input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim);}
 
-    .btn{display:inline-flex;justify-content:center;align-items:center;gap:.4rem;padding:.65rem 1.2rem;border-radius:8px;border:none;cursor:pointer;font-size:.9rem;font-weight:600;transition:all 180ms;text-decoration:none;width:100%;font-family:var(--font-body);margin-top:.25rem;}
+    .btn{display:inline-flex;justify-content:center;align-items:center;gap:.4rem;padding:.65rem 1.2rem;border-radius:8px;border:none;cursor:pointer;font-size:.9rem;font-weight:600;transition:all 180ms cubic-bezier(0.16,1,0.3,1);text-decoration:none;width:100%;font-family:var(--font-body);margin-top:.25rem;}
     .btn-primary{background:var(--accent);color:#fff;}.btn-primary:hover{background:var(--accent-hover);}
     .btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border);width:auto;font-size:.82rem;}
     .btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
 
-    .alert{padding:.65rem .9rem;border-radius:8px;font-size:.85rem;margin-bottom:.9rem;}
-    .alert-error{background:rgba(221,105,116,.1);border:1px solid rgba(221,105,116,.25);color:var(--accent2);}
-    .alert-success{background:rgba(109,170,69,.1);border:1px solid rgba(109,170,69,.25);color:var(--accent3);}
-    .alert-info{background:rgba(79,152,163,.1);border:1px solid rgba(79,152,163,.25);color:var(--accent);}
+    .alert{display:flex;align-items:center;gap:.45rem;padding:.65rem .9rem;border-radius:8px;font-size:.85rem;margin-bottom:.9rem;}
+    .alert-error{background:rgba(255,93,108,.1);border:1px solid rgba(255,93,108,.25);color:var(--accent2);}
+    .alert-success{background:rgba(95,191,106,.1);border:1px solid rgba(95,191,106,.25);color:var(--accent3);}
+    .alert-info{background:var(--accent-dim);border:1px solid rgba(0,191,165,.25);color:var(--accent);}
 
     .link{color:var(--accent);text-decoration:none;cursor:pointer;font-size:.83rem;}
     .link:hover{text-decoration:underline;}
     .links-row{text-align:center;margin-top:1.1rem;display:flex;flex-direction:column;gap:.35rem;color:var(--text2);font-size:.83rem;}
 
-    .otp-input{text-align:center;font-size:1.6rem;letter-spacing:8px;font-family:monospace;}
+    .otp-input{text-align:center;font-size:1.6rem;letter-spacing:8px;font-family:var(--font-mono);}
   </style>
 </head>
 <body>
 
 <nav>
-  <span class="nav-logo">&#9889; Meraki</span>
-  <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn">&#9728;&#65039;</button>
+  <span class="nav-logo"><i data-lucide="zap"></i> Meraki</span>
+  <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn" title="Theme wechseln"><i data-lucide="sun"></i></button>
 </nav>
 
 <div class="center-wrap">
@@ -97,7 +106,7 @@
 
       <!-- ── Kunden: Login ─────────────────────────────────────── -->
       <div id="panel-cust-login" class="panel active">
-        <div class="panel-title">&#128272; Anmelden</div>
+        <div class="panel-title"><i data-lucide="log-in"></i> Anmelden</div>
         <div class="panel-sub">Melde dich mit deiner E-Mail oder deinem Benutzernamen an.</div>
         <div id="cust-login-alert"></div>
         <div class="form-group"><label>E-Mail / Benutzername</label><input type="text" id="cust-email" autocomplete="username"></div>
@@ -111,7 +120,7 @@
 
       <!-- ── Kunden: Registrieren ─────────────────────────────── -->
       <div id="panel-cust-register" class="panel">
-        <div class="panel-title">&#128221; Registrieren</div>
+        <div class="panel-title"><i data-lucide="user-plus"></i> Registrieren</div>
         <div class="panel-sub">Erstelle ein neues Kunden-Konto.</div>
         <div id="cust-reg-alert"></div>
         <div class="form-group"><label>Name *</label><input type="text" id="reg-name"></div>
@@ -129,7 +138,7 @@
 
       <!-- ── Kunden: Passwort vergessen ──────────────────────── -->
       <div id="panel-cust-forgot" class="panel">
-        <div class="panel-title">&#128274; Passwort vergessen</div>
+        <div class="panel-title"><i data-lucide="key-round"></i> Passwort vergessen</div>
         <div class="panel-sub">Gib deine E-Mail-Adresse ein – du erhältst einen Reset-Link.</div>
         <div id="cust-forgot-alert"></div>
         <div class="form-group"><label>E-Mail-Adresse</label><input type="email" id="forgot-email"></div>
@@ -139,7 +148,7 @@
 
       <!-- ── Admin: Login ─────────────────────────────────────── -->
       <div id="panel-admin-login" class="panel">
-        <div class="panel-title">&#128273; Anmelden</div>
+        <div class="panel-title"><i data-lucide="shield"></i> Anmelden</div>
         <div class="panel-sub">Administration des Lizenzservers.</div>
         <div id="admin-login-alert"></div>
         <div class="form-group"><label>Benutzername</label><input type="text" id="admin-user" autocomplete="username"></div>
@@ -149,7 +158,7 @@
 
       <!-- ── Admin: 2FA ───────────────────────────────────────── -->
       <div id="panel-admin-2fa" class="panel">
-        <div class="panel-title">&#128272; Zwei-Faktor</div>
+        <div class="panel-title"><i data-lucide="shield-check"></i> Zwei-Faktor</div>
         <div class="panel-sub">Bitte den 6-stelligen Authenticator-Code eingeben.</div>
         <div id="admin-2fa-alert"></div>
         <div class="form-group"><label>Code</label><input type="text" id="admin-code" class="otp-input" autocomplete="one-time-code" maxlength="6" inputmode="numeric"></div>
@@ -162,6 +171,28 @@
 </div>
 
 <script>
+// Lucide-Icons in dynamisch erzeugtem Markup automatisch rendern
+(function(){
+  var pending=false;
+  function refresh(){
+    if(pending)return;
+    pending=true;
+    requestAnimationFrame(function(){pending=false;if(window.lucide)window.lucide.createIcons();});
+  }
+  function start(){
+    if(window.lucide)window.lucide.createIcons();
+    new MutationObserver(refresh).observe(document.body,{childList:true,subtree:true});
+  }
+  if(document.readyState!=='loading')start();
+  else document.addEventListener('DOMContentLoaded',start);
+})();
+
+function setThemeIcon(theme){
+  var btn=document.getElementById('theme-btn');
+  if(btn)btn.innerHTML=theme==='dark'?'<i data-lucide="sun"></i>':'<i data-lucide="moon"></i>';
+  if(window.lucide)window.lucide.createIcons();
+}
+
 (function(){
   // Passwort-Reset Token weiterleiten
   var p = new URLSearchParams(window.location.search);
@@ -171,7 +202,7 @@
   // Theme
   var t=localStorage.getItem('theme')||'dark';
   document.documentElement.setAttribute('data-theme',t);
-  document.getElementById('theme-btn').textContent=t==='dark'?'☀️':'🌙';
+  setThemeIcon(t);
 
   // Hash-Routing
   if(window.location.hash==='#register') { setMode('customer'); showPanel('cust','register'); }
@@ -183,7 +214,7 @@ function toggleTheme(){
   var n=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
   document.documentElement.setAttribute('data-theme',n);
   localStorage.setItem('theme',n);
-  document.getElementById('theme-btn').textContent=n==='dark'?'☀️':'🌙';
+  setThemeIcon(n);
 }
 
 // Aktueller Modus
@@ -248,7 +279,7 @@ function doRegister(){
     body:JSON.stringify({name:name,email:email,password:pass,company:company})})
     .then(function(r){return r.json().then(function(d){if(!r.ok)throw d;return d;});})
     .then(function(d){
-      showAlert('cust-reg-alert','&#9989; '+esc(d.message),'success');
+      showAlert('cust-reg-alert','<i data-lucide="check-circle"></i> '+esc(d.message),'success');
       ['reg-name','reg-email','reg-pass','reg-pass2','reg-company'].forEach(function(id){document.getElementById(id).value='';});
       document.getElementById('reg-agb').checked=false;
     }).catch(function(e){showAlert('cust-reg-alert',esc(e.message||'Registrierung fehlgeschlagen.'));});
@@ -261,7 +292,7 @@ function doForgotPassword(){
   fetch('/api/portal/forgot-password',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({email:email})})
     .then(function(r){return r.json().then(function(d){if(!r.ok)throw d;return d;});})
-    .then(function(d){showAlert('cust-forgot-alert','&#9989; '+esc(d.message),'success');})
+    .then(function(d){showAlert('cust-forgot-alert','<i data-lucide="check-circle"></i> '+esc(d.message),'success');})
     .catch(function(e){showAlert('cust-forgot-alert',esc(e.message||'Fehler.'));});
 }
 

@@ -6,15 +6,18 @@
   <title>Meraki &ndash; Kunden-Portal</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700&f[]=cabinet-grotesk@700,800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
   <style>
-    :root,[data-theme="dark"]{--bg:#171614;--bg2:#1c1b19;--bg3:#22211f;--border:rgba(255,255,255,0.07);--text:#cdccca;--text2:#797876;--text3:#5a5957;--accent:#4f98a3;--accent-hover:#227f8b;--accent2:#dd6974;--accent3:#6daa45;--gold:#e8af34;--card:#1c1b19;--radius:10px;--shadow:0 4px 24px rgba(0,0,0,.4);--nav-bg:rgba(23,22,20,0.92);--font-body:'Satoshi','Segoe UI',system-ui,sans-serif;--font-display:'Cabinet Grotesk','Outfit',sans-serif;}
-    [data-theme="light"]{--bg:#f7f6f2;--bg2:#f9f8f5;--bg3:#f3f0ec;--border:rgba(0,0,0,0.08);--text:#28251d;--text2:#7a7974;--text3:#bab9b4;--accent:#01696f;--accent-hover:#0c4e54;--accent2:#a12c7b;--accent3:#437a22;--gold:#d19900;--card:#fff;--radius:10px;--shadow:0 4px 24px rgba(0,0,0,.08);--nav-bg:rgba(247,246,242,0.92);}
+    :root,[data-theme="dark"]{--bg:#0d0f12;--bg2:#131619;--bg3:#181c20;--border:rgba(255,255,255,0.07);--text:#e8eaed;--text2:#8b9099;--text3:#5a5f66;--accent:#00bfa5;--accent-hover:#00a892;--accent2:#ff5d6c;--accent3:#5fbf6a;--gold:#e8af34;--card:#131619;--radius:10px;--shadow:0 4px 24px rgba(0,0,0,.4);--nav-bg:rgba(13,15,18,0.92);--accent-dim:rgba(0,191,165,0.12);--font-body:'Inter','Segoe UI',system-ui,sans-serif;--font-display:'Inter',sans-serif;--font-mono:'JetBrains Mono',monospace;}
+    [data-theme="light"]{--bg:#f5f5f0;--bg2:#ffffff;--bg3:#f0f0eb;--border:rgba(0,0,0,0.09);--text:#1a1c20;--text2:#6b7280;--text3:#9aa0a6;--accent:#00897b;--accent-hover:#00796b;--accent2:#d64550;--accent3:#3a8a3a;--gold:#c79100;--card:#fff;--radius:10px;--shadow:0 4px 24px rgba(0,0,0,.08);--nav-bg:rgba(245,245,240,0.92);--accent-dim:rgba(0,137,123,0.10);}
     *{box-sizing:border-box;margin:0;padding:0;}
     body{background:var(--bg);color:var(--text);font-family:var(--font-body);line-height:1.6;min-height:100vh;transition:background .3s, color .3s;}
-    h1,h2,h3,h4{font-family:var(--font-display);letter-spacing:-0.02em;}
+    h1,h2,h3,h4{font-family:var(--font-display);letter-spacing:-0.02em;font-weight:700;}
+    .lucide{width:1.05em;height:1.05em;vertical-align:-0.18em;stroke-width:2;flex-shrink:0;}
     nav{position:sticky;top:0;z-index:100;background:var(--nav-bg);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-items:center;justify-content:space-between;height:60px;}
-    .nav-logo{font-size:1.15rem;font-weight:800;color:var(--accent);font-family:var(--font-display);}
+    .nav-logo{display:inline-flex;align-items:center;gap:.4rem;font-size:1.15rem;font-weight:800;color:var(--accent);font-family:var(--font-display);}
+    .nav-logo .lucide{width:1.15em;height:1.15em;}
     .nav-right{display:flex;gap:.8rem;align-items:center;}
     .btn{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem 1.1rem;border-radius:8px;border:none;cursor:pointer;font-size:.88rem;font-weight:600;transition:all 180ms cubic-bezier(0.16,1,0.3,1);text-decoration:none;font-family:var(--font-body);}
     .btn-primary{background:var(--accent);color:#fff;}.btn-primary:hover{background:var(--accent-hover);}
@@ -24,39 +27,42 @@
     .btn-success{background:var(--accent3);color:#fff;}.btn-success:hover{opacity:.85;}
     .page{display:none;}.page.active{display:block;}
     /* Login & Setup */
-    .center-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem;background:radial-gradient(ellipse 80% 60% at 50% -10%,rgba(79,152,163,.1),transparent);}
+    .center-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem;background:radial-gradient(ellipse 80% 60% at 50% -10%,rgba(0,191,165,.1),transparent);}
     .auth-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:2.5rem 2rem;width:100%;max-width:400px;box-shadow:var(--shadow);}
-    .auth-card h2{text-align:center;margin-bottom:.4rem;font-size:1.3rem;}
+    .auth-card h2{display:flex;align-items:center;justify-content:center;gap:.45rem;text-align:center;margin-bottom:.4rem;font-size:1.3rem;}
+    .auth-card h2 .lucide{color:var(--accent);}
     .auth-card .sub{text-align:center;color:var(--text2);font-size:.85rem;margin-bottom:1.5rem;}
     .form-group{margin-bottom:1rem;}
     .form-group label{display:block;font-size:.85rem;color:var(--text2);margin-bottom:.4rem;}
     .form-group input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:.6rem .9rem;color:var(--text);font-size:.9rem;outline:none;transition:border-color .2s;font-family:var(--font-body);}
-    .form-group input:focus{border-color:var(--accent);}
+    .form-group input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim);}
     .alert{padding:.7rem 1rem;border-radius:8px;font-size:.88rem;margin-bottom:1rem;}
-    .alert-error{background:rgba(221,105,116,.1);border:1px solid rgba(221,105,116,.25);color:var(--accent2);}
-    .alert-success{background:rgba(109,170,69,.1);border:1px solid rgba(109,170,69,.25);color:var(--accent3);}
-    .alert-info{background:rgba(79,152,163,.1);border:1px solid rgba(79,152,163,.25);color:var(--accent);}
+    .alert .lucide{color:inherit;}
+    .alert-error{background:rgba(255,93,108,.1);border:1px solid rgba(255,93,108,.25);color:var(--accent2);}
+    .alert-success{background:rgba(95,191,106,.1);border:1px solid rgba(95,191,106,.25);color:var(--accent3);}
+    .alert-info{background:var(--accent-dim);border:1px solid rgba(0,191,165,.25);color:var(--accent);}
     /* Dashboard */
     .dashboard{display:flex;min-height:calc(100vh - 60px);}
     .sidebar{width:210px;background:var(--bg2);border-right:1px solid var(--border);padding:1rem 0;flex-shrink:0;}
-    .sidebar-brand{padding:.8rem 1.2rem 1rem;font-size:.9rem;font-weight:700;color:var(--accent);border-bottom:1px solid var(--border);margin-bottom:.5rem;font-family:var(--font-display);}
+    .sidebar-brand{display:flex;align-items:center;gap:.4rem;padding:.8rem 1.2rem 1rem;font-size:.9rem;font-weight:700;color:var(--accent);border-bottom:1px solid var(--border);margin-bottom:.5rem;font-family:var(--font-display);}
     .sidebar-user{padding:.4rem 1.2rem .8rem;font-size:.78rem;color:var(--text2);}
     .sidebar-menu{list-style:none;}
     .sidebar-menu li a{display:flex;align-items:center;gap:.6rem;padding:.6rem 1.2rem;color:var(--text2);text-decoration:none;font-size:.88rem;cursor:pointer;transition:all .15s;}
-    .sidebar-menu li a:hover,.sidebar-menu li a.active{background:rgba(79,152,163,.12);color:var(--text);}
+    .sidebar-menu li a:hover,.sidebar-menu li a.active{background:var(--accent-dim);color:var(--text);}
     .sidebar-menu li a.active{border-left:3px solid var(--accent);}
     .main-area{flex:1;overflow-y:auto;padding:1.8rem 2rem;}
     .tab-panel{display:none;}.tab-panel.active{display:block;}
     .dash-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;}
-    .dash-header h2{font-size:1.15rem;}
+    .dash-header h2{display:inline-flex;align-items:center;gap:.45rem;font-size:1.15rem;}
+    .dash-header h2 .lucide{color:var(--accent);}
     /* Cards */
     .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;margin-bottom:1rem;}
-    .card-title{font-size:.8rem;font-weight:700;letter-spacing:.08em;color:var(--accent);text-transform:uppercase;margin-bottom:.8rem;}
+    .card-title{display:flex;align-items:center;gap:.4rem;font-size:.8rem;font-weight:700;letter-spacing:.08em;color:var(--accent);text-transform:uppercase;margin-bottom:.8rem;}
     /* License cards */
     .lic-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.4rem 1.6rem;margin-bottom:1rem;transition:border-color .2s;}
     .lic-card:hover{border-color:var(--accent);}
     .lic-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.6rem;margin-bottom:1rem;}
-    .lic-key{font-family:monospace;font-size:.88rem;background:var(--bg3);padding:.3rem .7rem;border-radius:6px;color:var(--accent);letter-spacing:.04em;cursor:pointer;user-select:all;position:relative;}
+    .lic-key{font-family:var(--font-mono);font-size:.88rem;background:var(--bg3);padding:.3rem .7rem;border-radius:6px;color:var(--accent);letter-spacing:.04em;cursor:pointer;user-select:all;position:relative;}
     .lic-key:hover::after{content:'Kopiert!';position:absolute;top:-24px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;font-size:.7rem;padding:.1rem .5rem;border-radius:4px;white-space:nowrap;pointer-events:none;}
     .lic-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.8rem;margin-bottom:1rem;}
     .lic-meta-item .lmi-label{font-size:.75rem;color:var(--text2);}
@@ -72,29 +78,30 @@
     table.data-table td{padding:.6rem 1rem;border-bottom:1px solid var(--border);vertical-align:middle;}
     table.data-table tr:last-child td{border:none;}
     table.data-table tr:hover td{background:var(--bg3);}
+    table.data-table code{font-family:var(--font-mono);}
     .badge{display:inline-block;padding:.15rem .55rem;border-radius:999px;font-size:.72rem;font-weight:700;}
-    .badge-active{background:rgba(109,170,69,.15);color:var(--accent3);}
-    .badge-revoked,.badge-cancelled,.badge-suspended,.badge-expired{background:rgba(221,105,116,.15);color:var(--accent2);}
-    .badge-FREE{background:rgba(121,120,118,.15);color:var(--text2);}
-    .badge-BASIC,.badge-STARTER{background:rgba(109,170,69,.2);color:var(--accent3);}
-    .badge-PRO,.badge-PRO_PLUS{background:rgba(79,152,163,.2);color:var(--accent);}
+    .badge-active{background:rgba(95,191,106,.15);color:var(--accent3);}
+    .badge-revoked,.badge-cancelled,.badge-suspended,.badge-expired{background:rgba(255,93,108,.15);color:var(--accent2);}
+    .badge-FREE{background:rgba(139,144,153,.15);color:var(--text2);}
+    .badge-BASIC,.badge-STARTER{background:rgba(95,191,106,.2);color:var(--accent3);}
+    .badge-PRO,.badge-PRO_PLUS{background:rgba(0,191,165,.2);color:var(--accent);}
     .badge-ENTERPRISE{background:rgba(232,175,52,.15);color:var(--gold);}
-    .badge-purchase{background:rgba(109,170,69,.15);color:var(--accent3);}
-    .badge-renewal{background:rgba(79,152,163,.15);color:var(--accent);}
+    .badge-purchase{background:rgba(95,191,106,.15);color:var(--accent3);}
+    .badge-renewal{background:rgba(0,191,165,.15);color:var(--accent);}
     .badge-upgrade{background:rgba(232,175,52,.15);color:var(--gold);}
-    .badge-downgrade,.badge-cancellation{background:rgba(221,105,116,.15);color:var(--accent2);}
+    .badge-downgrade,.badge-cancellation{background:rgba(255,93,108,.15);color:var(--accent2);}
     .loading{text-align:center;padding:3rem;color:var(--text2);}
     .spinner{display:inline-block;width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
     @keyframes spin{to{transform:rotate(360deg);}}
-    .theme-toggle{background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:.3rem .6rem;font-size:.95rem;cursor:pointer;transition:all .2s;}
+    .theme-toggle{display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:8px;width:32px;height:32px;cursor:pointer;transition:all .2s;}
     .theme-toggle:hover{border-color:var(--accent);color:var(--accent);}
-    @media(max-width:650px){.sidebar{width:46px;}.sidebar-brand,.sidebar-user,.sidebar-menu li a span{display:none;}.sidebar-menu li a{justify-content:center;padding:.7rem;}.main-area{padding:1rem;}}
+    @media(max-width:650px){.sidebar{width:46px;}.sidebar-brand span,.sidebar-user,.sidebar-menu li a span{display:none;}.sidebar-menu li a{justify-content:center;padding:.7rem;}.main-area{padding:1rem;}}
     /* Shop / Plan-Cards */
     .plan-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1.2rem;margin-top:1rem;}
     .plan-card{background:var(--card);border:2px solid var(--border);border-radius:var(--radius);padding:1.5rem 1.4rem;display:flex;flex-direction:column;transition:border-color .2s,box-shadow .2s;position:relative;}
-    .plan-card:hover{border-color:var(--accent);box-shadow:0 4px 18px rgba(79,152,163,.15);}
+    .plan-card:hover{border-color:var(--accent);box-shadow:0 4px 18px rgba(0,191,165,.15);}
     .plan-card.popular{border-color:var(--accent);}
-    .plan-popular-badge{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;font-size:.72rem;font-weight:700;padding:.2rem .8rem;border-radius:20px;white-space:nowrap;}
+    .plan-popular-badge{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;font-size:.72rem;font-weight:700;padding:.2rem .8rem;border-radius:20px;white-space:nowrap;display:inline-flex;align-items:center;gap:.25rem;}
     .plan-name{font-family:var(--font-display);font-size:1.1rem;font-weight:800;margin-bottom:.3rem;}
     .plan-desc{color:var(--text2);font-size:.8rem;margin-bottom:1rem;line-height:1.5;flex:1;}
     .plan-price{font-family:var(--font-display);font-size:2rem;font-weight:800;color:var(--accent);line-height:1;}
@@ -104,21 +111,23 @@
     .plan-features li.no::before{content:'✗ ';color:var(--text2);}
     .plan-features li.no{color:var(--text2);}
     /* Order modal */
-    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center;}
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(2px);z-index:200;align-items:center;justify-content:center;}
     .modal-overlay.open{display:flex;}
     .modal-box{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:2rem;width:100%;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.4);}
-    .modal-box h3{font-family:var(--font-display);margin-bottom:1rem;}
+    .modal-box h3{display:flex;align-items:center;gap:.45rem;font-family:var(--font-display);margin-bottom:1rem;}
+    .modal-box h3 .lucide{color:var(--accent);}
     .modal-footer{display:flex;gap:.7rem;justify-content:flex-end;margin-top:1.5rem;}
+    code{font-family:var(--font-mono);}
   </style>
 </head>
 <body>
 
 <nav id="portal-nav" style="display:none">
-  <span class="nav-logo">&#9889; Meraki &mdash; Kunden-Portal</span>
+  <span class="nav-logo"><i data-lucide="zap"></i> Meraki &mdash; Kunden-Portal</span>
   <div class="nav-right">
-    <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn">&#9728;&#65039;</button>
+    <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn" title="Theme wechseln"><i data-lucide="sun"></i></button>
     <span id="nav-customer-name" style="font-size:.85rem;color:var(--text2)"></span>
-    <button class="btn btn-ghost btn-sm" onclick="doLogout()">&#128682; Logout</button>
+    <button class="btn btn-ghost btn-sm" onclick="doLogout()"><i data-lucide="log-out"></i> Logout</button>
   </div>
 </nav>
 
@@ -130,7 +139,7 @@
       <p style="color:var(--text2);font-size:.9rem">Du wirst zum Login weitergeleitet&hellip;</p>
       <p style="margin-top:1rem"><a href="login.html" style="color:var(--accent);font-weight:600">Zur Login-Seite &rarr;</a></p>
       <div style="text-align:center;margin-top:1rem;font-size:.85rem;color:var(--text2)">
-        Noch kein Account? 
+        Noch kein Account?
         <a href="login.html#register" style="color:var(--accent)">Jetzt registrieren</a>
       </div>
       <div style="text-align:center;margin-top:.5rem;font-size:.82rem">
@@ -144,12 +153,12 @@
 <div id="page-setup" class="page">
   <div class="center-wrap">
     <div class="auth-card">
-      <h2>&#128272; Passwort setzen</h2>
+      <h2><i data-lucide="lock"></i> Passwort setzen</h2>
       <p class="sub" id="setup-name-hint">Willkommen! Bitte setze ein Passwort für dein Konto.</p>
       <div id="setup-alert"></div>
       <div class="form-group"><label>Neues Passwort <span style="color:var(--text2);font-size:.78rem">(min. 10 Zeichen)</span></label><input type="password" id="setup-pass" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"></div>
       <div class="form-group"><label>Passwort wiederholen</label><input type="password" id="setup-pass2" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"></div>
-      <button class="btn btn-primary" style="width:100%" onclick="doSetupPassword()">Passwort setzen &amp; einloggen</button>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doSetupPassword()">Passwort setzen &amp; einloggen</button>
       <div style="text-align:center;margin-top:1.5rem;font-size:.85rem;color:var(--text2)">
         <a href="login.html" style="color:var(--text2);text-decoration:none;">&larr; Zurück zum Login</a>
       </div>
@@ -161,13 +170,13 @@
 <div id="page-change-password" class="page">
   <div class="center-wrap">
     <div class="auth-card">
-      <h2>🔑 Passwort ändern</h2>
+      <h2><i data-lucide="key-round"></i> Passwort ändern</h2>
       <p class="sub">Dein Passwort muss aus Sicherheitsgründen geändert werden.</p>
       <div id="change-pass-alert"></div>
       <div class="form-group"><label>Aktuelles Passwort</label><input type="password" id="change-pass-curr"></div>
       <div class="form-group"><label>Neues Passwort <span style="color:var(--text2);font-size:.78rem">(min. 10 Zeichen)</span></label><input type="password" id="change-pass-new"></div>
       <div class="form-group"><label>Neues Passwort wiederholen</label><input type="password" id="change-pass-new2"></div>
-      <button class="btn btn-primary" style="width:100%" onclick="doChangePasswordForced()">Passwort ändern</button>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doChangePasswordForced()">Passwort ändern</button>
       <div style="text-align:center;margin-top:1.5rem;font-size:.85rem;color:var(--text2)">
         <a href="#" onclick="doLogout()" style="color:var(--text2);text-decoration:none;">&larr; Abbrechen &amp; Logout</a>
       </div>
@@ -180,7 +189,7 @@
   <div class="center-wrap">
     <div class="auth-card" style="text-align:center">
       <div id="verify-spinner" class="spinner" style="margin:0 auto 1.5rem"></div>
-      <h2 id="verify-title">&#128231; E-Mail-Bestätigung</h2>
+      <h2 id="verify-title"><i data-lucide="mail"></i> E-Mail-Bestätigung</h2>
       <div id="verify-alert" style="margin-top: 1rem;"></div>
       <p id="verify-text" style="color:var(--text2);font-size:.9rem;margin-top:1rem">Deine E-Mail-Adresse wird verifiziert...</p>
       <div id="verify-login-link" style="text-align:center;margin-top:1.5rem;font-size:.85rem;color:var(--text2);display:none;">
@@ -194,28 +203,28 @@
 <div id="page-dashboard" class="page">
   <div class="dashboard">
     <aside class="sidebar">
-      <div class="sidebar-brand">&#9889; Mein Portal</div>
+      <div class="sidebar-brand"><i data-lucide="zap"></i> <span>Mein Portal</span></div>
       <div class="sidebar-user" id="sb-customer"></div>
       <ul class="sidebar-menu">
-        <li><a onclick="switchTab('licenses')" id="stab-licenses" class="active"><span>&#128273;</span> <span>Meine Lizenzen</span></a></li>
-        <li><a onclick="switchTab('shop')" id="stab-shop"><span>&#128722;</span> <span>Lizenz kaufen</span></a></li>
-        <li><a onclick="switchTab('invoices')" id="stab-invoices"><span>&#129534;</span> <span>Rechnungen</span></a></li>
-        <li><a onclick="switchTab('history')" id="stab-history"><span>&#128717;</span> <span>Kaufhistorie</span></a></li>
-        <li><a onclick="switchTab('account')" id="stab-account"><span>&#128100;</span> <span>Mein Konto</span></a></li>
+        <li><a onclick="switchTab('licenses')" id="stab-licenses" class="active"><i data-lucide="key-round"></i> <span>Meine Lizenzen</span></a></li>
+        <li><a onclick="switchTab('shop')" id="stab-shop"><i data-lucide="shopping-cart"></i> <span>Lizenz kaufen</span></a></li>
+        <li><a onclick="switchTab('invoices')" id="stab-invoices"><i data-lucide="receipt"></i> <span>Rechnungen</span></a></li>
+        <li><a onclick="switchTab('history')" id="stab-history"><i data-lucide="shopping-bag"></i> <span>Kaufhistorie</span></a></li>
+        <li><a onclick="switchTab('account')" id="stab-account"><i data-lucide="user"></i> <span>Mein Konto</span></a></li>
         <hr style="border:none;border-top:1px solid var(--border);margin:.5rem 0">
-        <li><a onclick="doLogout()"><span>&#128682;</span> <span>Logout</span></a></li>
+        <li><a onclick="doLogout()"><i data-lucide="log-out"></i> <span>Logout</span></a></li>
       </ul>
     </aside>
     <main class="main-area">
       <div id="tab-licenses" class="tab-panel active">
-        <div class="dash-header"><h2>&#128273; Meine Lizenzen</h2><button class="btn btn-ghost btn-sm" onclick="loadLicenses()">&#128260; Aktualisieren</button></div>
+        <div class="dash-header"><h2><i data-lucide="key-round"></i> Meine Lizenzen</h2><button class="btn btn-ghost btn-sm" onclick="loadLicenses()"><i data-lucide="refresh-cw"></i> Aktualisieren</button></div>
         <div id="lic-list"><div class="loading"><div class="spinner"></div></div></div>
       </div>
       <!-- ── Shop ─────────────────────────────────────────────────── -->
       <div id="tab-shop" class="tab-panel">
         <div class="dash-header">
-          <h2>&#128722; Lizenz kaufen</h2>
-          <button class="btn btn-ghost btn-sm" onclick="loadShop()">&#128260; Aktualisieren</button>
+          <h2><i data-lucide="shopping-cart"></i> Lizenz kaufen</h2>
+          <button class="btn btn-ghost btn-sm" onclick="loadShop()"><i data-lucide="refresh-cw"></i> Aktualisieren</button>
         </div>
         <p style="color:var(--text2);font-size:.88rem;margin-bottom:1rem;">
           Wähle einen Plan und gib deine Domain an. Nach Bestelleingang erhältst du eine Rechnung &mdash; deine Lizenz wird nach Zahlungseingang aktiviert.
@@ -225,16 +234,16 @@
 
       <!-- ── Rechnungen ────────────────────────────────────────────── -->
       <div id="tab-invoices" class="tab-panel">
-        <div class="dash-header"><h2>&#129534; Meine Rechnungen</h2><button class="btn btn-ghost btn-sm" onclick="loadPortalInvoices()">&#128260; Aktualisieren</button></div>
+        <div class="dash-header"><h2><i data-lucide="receipt"></i> Meine Rechnungen</h2><button class="btn btn-ghost btn-sm" onclick="loadPortalInvoices()"><i data-lucide="refresh-cw"></i> Aktualisieren</button></div>
         <div id="portal-inv-list"><div class="loading"><div class="spinner"></div></div></div>
       </div>
 
       <div id="tab-history" class="tab-panel">
-        <div class="dash-header"><h2>&#128717; Kaufhistorie</h2></div>
+        <div class="dash-header"><h2><i data-lucide="shopping-bag"></i> Kaufhistorie</h2></div>
         <div class="table-wrap" id="hist-table"><div class="loading"><div class="spinner"></div></div></div>
       </div>
       <div id="tab-account" class="tab-panel">
-        <div class="dash-header"><h2>&#128100; Mein Konto</h2></div>
+        <div class="dash-header"><h2><i data-lucide="user"></i> Mein Konto</h2></div>
         <div id="account-content"><div class="loading"><div class="spinner"></div></div></div>
       </div>
     </main>
@@ -244,7 +253,7 @@
 <!-- ── Bestell-Modal ─────────────────────────────────────────────────────── -->
 <div class="modal-overlay" id="order-modal">
   <div class="modal-box">
-    <h3>&#128722; Lizenz bestellen</h3>
+    <h3><i data-lucide="shopping-cart"></i> Lizenz bestellen</h3>
     <div id="order-plan-info" style="background:var(--bg2);border-radius:8px;padding:.9rem 1rem;margin-bottom:1rem;font-size:.88rem;"></div>
     <div class="form-group">
       <label style="font-size:.85rem;color:var(--text2);display:block;margin-bottom:.35rem;">Domain für diese Lizenz *</label>
@@ -254,25 +263,45 @@
     <div id="order-alert" style="margin-top:.5rem;"></div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeOrderModal()">Abbrechen</button>
-      <button class="btn btn-primary" id="order-confirm-btn" onclick="confirmOrder()">&#9989; Verbindlich bestellen</button>
+      <button class="btn btn-primary" id="order-confirm-btn" onclick="confirmOrder()"><i data-lucide="check"></i> Verbindlich bestellen</button>
     </div>
   </div>
 </div>
 
 <script>
+// Lucide-Icons in dynamisch erzeugtem Markup automatisch rendern
+(function(){
+  var pending=false;
+  function refresh(){
+    if(pending)return;
+    pending=true;
+    requestAnimationFrame(function(){pending=false;if(window.lucide)window.lucide.createIcons();});
+  }
+  function start(){
+    if(window.lucide)window.lucide.createIcons();
+    new MutationObserver(refresh).observe(document.body,{childList:true,subtree:true});
+  }
+  if(document.readyState!=='loading')start();
+  else document.addEventListener('DOMContentLoaded',start);
+})();
+
+function setThemeIcon(theme){
+  var btn=document.getElementById('theme-btn');
+  if(btn)btn.innerHTML=theme==='dark'?'<i data-lucide="sun"></i>':'<i data-lucide="moon"></i>';
+  if(window.lucide)window.lucide.createIcons();
+}
+
 (function(){
   var t=localStorage.getItem('theme')||'dark';
   document.documentElement.setAttribute('data-theme',t);
-  var btn=document.getElementById('theme-btn');
-  if(btn)btn.textContent=t==='dark'?'\u2600\uFE0F':'\uD83C\uDF19';
+  setThemeIcon(t);
 })();
 function toggleTheme(){
   var cur=document.documentElement.getAttribute('data-theme')||'dark';
   var next=cur==='dark'?'light':'dark';
   document.documentElement.setAttribute('data-theme',next);
   localStorage.setItem('theme',next);
-  var btn=document.getElementById('theme-btn');
-  if(btn)btn.textContent=next==='dark'?'\u2600\uFE0F':'\uD83C\uDF19';
+  setThemeIcon(next);
 }
 
 var TOKEN=sessionStorage.getItem('portal_token')||'';
@@ -319,7 +348,7 @@ function switchTab(name){
 // ── Startup: invite token prüfen ──────────────────────────────────────────────
 function init(){
   var params=new URLSearchParams(window.location.search);
-  
+
   // E-Mail-Verifizierung über Hash oder Query
   var verifyToken = '';
   if (window.location.hash && window.location.hash.indexOf('#verify') === 0) {
@@ -341,7 +370,7 @@ function init(){
     }).then(function(r) { return r.json().then(function(d) { if(!r.ok) throw d; return d; }); })
       .then(function(d) {
         document.getElementById('verify-spinner').style.display = 'none';
-        showAlert('verify-alert', '&#9989; ' + esc(d.message || 'E-Mail erfolgreich verifiziert!'), 'success');
+        showAlert('verify-alert', '<i data-lucide="check-circle"></i> ' + esc(d.message || 'E-Mail erfolgreich verifiziert!'), 'success');
         document.getElementById('verify-text').innerHTML = 'Du wirst in Kürze zum Login weitergeleitet...';
         document.getElementById('verify-login-link').style.display = 'block';
         setTimeout(function() {
@@ -426,7 +455,7 @@ function doSetupPassword(){
   }).then(function(r){return r.json();})
     .then(function(d){
       if(d.success){
-        showAlert('setup-alert','&#9989; '+esc(d.message)+' Du wirst weitergeleitet&hellip;','success');
+        showAlert('setup-alert','<i data-lucide="check-circle"></i> '+esc(d.message)+' Du wirst weitergeleitet&hellip;','success');
         setTimeout(function(){
           window.location.href = 'login.html';
         },2000);
@@ -445,14 +474,14 @@ function doChangePasswordForced(){
   if(newp.length < 10) { showAlert('change-pass-alert', 'Das neue Passwort muss mindestens 10 Zeichen haben.', 'error'); return; }
   if(newp !== newp2) { showAlert('change-pass-alert', 'Die neuen Passwörter stimmen nicht überein.', 'error'); return; }
   if(curr === newp) { showAlert('change-pass-alert', 'Das neue Passwort muss sich vom aktuellen unterscheiden.', 'error'); return; }
-  
+
   showAlert('change-pass-alert', 'Passwort wird geändert...', 'info');
-  
+
   API('/change-password', {
     method: 'POST',
     body: JSON.stringify({ current_password: curr, new_password: newp })
   }).then(function(d) {
-    showAlert('change-pass-alert', '&#9989; Passwort geändert! Du wirst eingeloggt...', 'success');
+    showAlert('change-pass-alert', '<i data-lucide="check-circle"></i> Passwort geändert! Du wirst eingeloggt...', 'success');
     setTimeout(function() {
       document.getElementById('change-pass-curr').value = '';
       document.getElementById('change-pass-new').value = '';
@@ -490,8 +519,8 @@ function loadLicenses(){
       var statusBadge='<span class="badge badge-'+esc(l.status)+'">'+esc(l.status)+'</span>';
       var typeBadge='<span class="badge badge-'+esc(l.type)+'">'+esc(l.type)+'</span>';
       var warnHtml = (days > 0 && days <= 30)
-        ? '<div style="background:rgba(218,113,1,.12);color:#da7101;border-radius:6px;padding:.4rem .7rem;font-size:.8rem;margin-bottom:1rem">&#9888;&#65039; Läuft in '+days+' Tagen ab</div>'
-        : (days <= 0 ? '<div style="background:rgba(161,44,123,.1);color:#a12c7b;border-radius:6px;padding:.4rem .7rem;font-size:.8rem;margin-bottom:1rem">&#10060; Abgelaufen</div>' : '');
+        ? '<div style="background:var(--accent-dim);color:var(--gold);border-radius:6px;padding:.4rem .7rem;font-size:.8rem;margin-bottom:1rem"><i data-lucide="alert-triangle"></i> Läuft in '+days+' Tagen ab</div>'
+        : (days <= 0 ? '<div style="background:rgba(255,93,108,.1);color:var(--accent2);border-radius:6px;padding:.4rem .7rem;font-size:.8rem;margin-bottom:1rem"><i data-lucide="x-circle"></i> Abgelaufen</div>' : '');
       return '<div class="lic-card">'+
         '<div class="lic-header" style="margin-bottom:'+(warnHtml?'.5rem':'1rem')+'">'+
           '<div>'+
@@ -508,7 +537,7 @@ function loadLicenses(){
           '<div class="lic-meta-item"><div class="lmi-label">Validierungen</div><div class="lmi-value">'+esc(l.usage_count||0)+'</div></div>'+
         '</div>'+
         '<div class="domain-form">'+
-          '<span style="font-size:.82rem;color:var(--text2);white-space:nowrap">&#127758; Domain binden:</span>'+
+          '<span style="font-size:.82rem;color:var(--text2);white-space:nowrap"><i data-lucide="globe"></i> Domain binden:</span>'+
           '<input type="text" placeholder="meinrestaurant.de" id="dom-'+esc(l.license_key)+'" value="'+(l.associated_domain&&l.associated_domain!=='*'?esc(l.associated_domain):'')+'" style="max-width:280px">'+
           '<button class="btn btn-primary btn-sm" onclick="saveDomain(\''+esc(l.license_key)+'\')" >Speichern</button>'+
           '<span class="domain-msg" id="dom-msg-'+esc(l.license_key)+'"></span>'+
@@ -523,7 +552,7 @@ function loadLicenses(){
 function copyKey(el, key){
   navigator.clipboard.writeText(key).then(function(){
     var orig=el.textContent;
-    el.textContent='\u2705 Kopiert!';
+    el.textContent='✓ Kopiert!';
     setTimeout(function(){el.textContent=orig;},1500);
   }).catch(function(){});
 }
@@ -533,13 +562,13 @@ function saveDomain(key){
   var msg=document.getElementById('dom-msg-'+key);
   var domain=input?input.value.trim():'';
   if(!domain){msg.style.color='var(--accent2)';msg.textContent='Bitte Domain eingeben.';return;}
-  msg.style.color='var(--text2)';msg.textContent='Speichert\u2026';
+  msg.style.color='var(--text2)';msg.textContent='Speichert…';
   API('/licenses/'+encodeURIComponent(key)+'/domain',{method:'PATCH',body:JSON.stringify({domain:domain})})
     .then(function(d){
-      msg.style.color='var(--accent3)';msg.textContent='\u2705 '+esc(d.domain)+' gespeichert.';
+      msg.style.color='var(--accent3)';msg.textContent='✓ '+esc(d.domain)+' gespeichert.';
     })
     .catch(function(e){
-      msg.style.color='var(--accent2)';msg.textContent='\u274C '+esc(e.message||'Fehler');
+      msg.style.color='var(--accent2)';msg.textContent='✗ '+esc(e.message||'Fehler');
     });
 }
 
@@ -564,12 +593,12 @@ function loadShop(){
         ?'<div class="plan-price">Kostenlos</div>'
         :'<div class="plan-price">'+price.toFixed(0)+' €<span> / Jahr</span></div>';
       return '<div class="plan-card'+(isPopular?' popular':'')+'">'+
-        (isPopular?'<div class="plan-popular-badge">&#11088; Beliebt</div>':'')+
+        (isPopular?'<div class="plan-popular-badge"><i data-lucide="star"></i> Beliebt</div>':'')+
         '<div class="plan-name">'+esc(p.label)+'</div>'+
         '<div class="plan-desc">'+esc(p.description||'')+'</div>'+
         priceHtml+
         '<ul class="plan-features">'+feats.map(function(f){return '<li>'+esc(f)+'</li>';}).join('')+'</ul>'+
-        '<button class="btn btn-primary" style="margin-top:auto" onclick="openOrderModalById(\''+esc(p.plan_id)+'\')">'+
+        '<button class="btn btn-primary" style="margin-top:auto;justify-content:center" onclick="openOrderModalById(\''+esc(p.plan_id)+'\')">'+
           (price===0?'Kostenlos starten':'Jetzt bestellen')+
         '</button>'+
       '</div>';
@@ -618,16 +647,16 @@ function confirmOrder(){
     .then(function(d){
       closeOrderModal();
       document.getElementById('shop-content').innerHTML=
-        '<div style="background:rgba(109,170,69,.1);border:1px solid rgba(109,170,69,.3);border-radius:10px;padding:1.5rem;max-width:480px;">'+
-        '<h3 style="color:var(--accent3);margin-bottom:.5rem">&#9989; Bestellung eingegangen!</h3>'+
+        '<div style="background:rgba(95,191,106,.1);border:1px solid rgba(95,191,106,.3);border-radius:10px;padding:1.5rem;max-width:480px;">'+
+        '<h3 style="color:var(--accent3);margin-bottom:.5rem;display:flex;align-items:center;gap:.45rem"><i data-lucide="check-circle"></i> Bestellung eingegangen!</h3>'+
         '<p style="color:var(--text);margin-bottom:.7rem;">Deine Lizenz wurde reserviert. Du erhältst in Kürze eine Rechnung per E-Mail.</p>'+
         '<p style="font-size:.85rem;color:var(--text2);">Lizenz-Key: <code style="background:var(--bg3);padding:.1rem .4rem;border-radius:4px;">'+esc(d.license_key)+'</code></p>'+
         '<p style="font-size:.83rem;color:var(--text2);margin-top:.5rem;">Die Lizenz wird nach Zahlungseingang aktiviert.</p>'+
-        '<button class="btn btn-ghost btn-sm" style="margin-top:1rem" onclick="switchTab(\'licenses\')">&#128273; Zu meinen Lizenzen</button>'+
+        '<button class="btn btn-ghost btn-sm" style="margin-top:1rem" onclick="switchTab(\'licenses\')"><i data-lucide="key-round"></i> Zu meinen Lizenzen</button>'+
         '</div>';
     })
     .catch(function(e){
-      btn.disabled=false;btn.textContent='&#9989; Verbindlich bestellen';
+      btn.disabled=false;btn.innerHTML='<i data-lucide="check"></i> Verbindlich bestellen';
       document.getElementById('order-alert').innerHTML='<div style="color:var(--accent2);font-size:.85rem;margin-top:.5rem;">'+esc(e.message||'Fehler beim Bestellen.')+'</div>';
     });
 }
@@ -660,7 +689,7 @@ function loadPortalInvoices(){
           '<td><strong>'+(parseFloat(inv.amount_gross)||0).toFixed(2)+' €</strong></td>'+
           '<td>'+(inv.due_date?fmtDateShort(inv.due_date):'–')+'</td>'+
           '<td><span style="color:'+statusColor+';font-weight:600;font-size:.82rem;">'+esc(statusLabel)+'</span></td>'+
-          '<td>'+(inv.pdf_path||inv.id?'<button class="btn btn-ghost btn-sm" onclick="downloadInv(\''+esc(inv.id)+'\',\''+esc(inv.invoice_number||inv.id)+'\')">&#128196; PDF</button>':'')+'</td>'+
+          '<td>'+(inv.pdf_path||inv.id?'<button class="btn btn-ghost btn-sm" onclick="downloadInv(\''+esc(inv.id)+'\',\''+esc(inv.invoice_number||inv.id)+'\')"><i data-lucide="file-text"></i> PDF</button>':'')+'</td>'+
         '</tr>';
       }).join('')+
     '</tbody></table></div>';
@@ -696,7 +725,7 @@ function loadHistory(){
           '<td style="font-weight:600;color:'+(h.amount?'var(--accent3)':'var(--text2)')+'">'+ fmtEur(h.amount)+'</td>'+
           '<td style="font-size:.82rem;max-width:180px">'+esc(h.note||'—')+'</td>'+
         '</tr>';
-      }).join('')+'</tbody></table>':'<div class="loading" style="padding:2rem">Keine Eintr\u00E4ge.</div>';
+      }).join('')+'</tbody></table>':'<div class="loading" style="padding:2rem">Keine Einträge.</div>';
   }).catch(function(e){
     document.getElementById('hist-table').innerHTML='<div class="alert alert-error" style="margin:1rem">'+esc(e.message||'Fehler')+'</div>';
   });
@@ -708,7 +737,7 @@ function loadAccount(){
     var c=d.customer;
     document.getElementById('account-content').innerHTML=
       '<div class="card">'+
-        '<div class="card-title">&#128100; Kontodaten</div>'+
+        '<div class="card-title"><i data-lucide="user"></i> Kontodaten</div>'+
         '<table style="width:100%;border-collapse:collapse;font-size:.9rem">'+
           '<tr><td style="padding:.5rem 0;color:var(--text2);width:140px">Name</td><td style="padding:.5rem 0;font-weight:600">'+esc(c.name)+'</td></tr>'+
           '<tr><td style="padding:.5rem 0;color:var(--text2)">E-Mail</td><td style="padding:.5rem 0">'+esc(c.email)+'</td></tr>'+
@@ -720,7 +749,7 @@ function loadAccount(){
         '<p style="margin-top:1rem;font-size:.82rem;color:var(--text2)">Möchtest du deine Daten ändern? Bitte kontaktiere uns direkt.</p>'+
       '</div>' +
       '<div class="card" style="margin-top:1rem">'+
-        '<div class="card-title">🔑 Passwort ändern</div>'+
+        '<div class="card-title"><i data-lucide="key-round"></i> Passwort ändern</div>'+
         '<div id="account-pass-alert"></div>'+
         '<div class="form-group"><label>Aktuelles Passwort</label><input type="password" id="acc-pass-curr"></div>'+
         '<div class="form-group"><label>Neues Passwort (min. 10 Zeichen)</label><input type="password" id="acc-pass-new"></div>'+
@@ -740,14 +769,14 @@ function doChangePasswordVoluntary(){
   if(newp.length < 10) { showAlert('account-pass-alert', 'Das neue Passwort muss mindestens 10 Zeichen haben.', 'error'); return; }
   if(newp !== newp2) { showAlert('account-pass-alert', 'Die neuen Passwörter stimmen nicht überein.', 'error'); return; }
   if(curr === newp) { showAlert('account-pass-alert', 'Das neue Passwort muss sich vom aktuellen unterscheiden.', 'error'); return; }
-  
+
   showAlert('account-pass-alert', 'Passwort wird geändert...', 'info');
-  
+
   API('/change-password', {
     method: 'POST',
     body: JSON.stringify({ current_password: curr, new_password: newp })
   }).then(function(d) {
-    showAlert('account-pass-alert', '&#9989; Passwort erfolgreich geändert.', 'success');
+    showAlert('account-pass-alert', '<i data-lucide="check-circle"></i> Passwort erfolgreich geändert.', 'success');
     document.getElementById('acc-pass-curr').value = '';
     document.getElementById('acc-pass-new').value = '';
     document.getElementById('acc-pass-new2').value = '';

@@ -6,62 +6,63 @@
   <title>Meraki &ndash; Lizenzserver</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700&f[]=cabinet-grotesk@700,800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <style>
     :root, [data-theme="light"] {
-      --bg: #f7f6f2;
-      --bg2: #f9f8f5;
-      --bg3: #f3f0ec;
-      --border: rgba(0,0,0,0.08);
-      --text: #28251d;
-      --text2: #7a7974;
-      --text3: #bab9b4;
-      --primary: #01696f;
-      --primary-hover: #0c4e54;
-      --primary-hl: #cedcd8;
-      --success: #437a22;
-      --success-hl: rgba(67,122,34,0.12);
-      --error: #a12c7b;
-      --error-hl: rgba(161,44,123,0.12);
-      --warning: #d19900;
-      --warning-hl: rgba(209,153,0,0.12);
-      --danger: #a13544;
-      --danger-hl: rgba(161,53,68,0.12);
-      --shadow-sm: 0 1px 3px rgba(40,37,29,0.06);
-      --shadow-md: 0 4px 12px rgba(40,37,29,0.08);
-      --shadow-lg: 0 12px 32px rgba(40,37,29,0.12);
-      --radius: 10px;
-      --nav-bg: rgba(247,246,242,0.92);
+      --bg: #f5f5f0;
+      --bg2: #ffffff;
+      --bg3: #f0f0eb;
+      --border: rgba(0,0,0,0.09);
+      --text: #1a1c20;
+      --text2: #6b7280;
+      --text3: #9aa0a6;
+      --primary: #00897b;
+      --primary-hover: #00796b;
+      --primary-hl: rgba(0,137,123,0.10);
+      --success: #3a8a3a;
+      --success-hl: rgba(58,138,58,0.12);
+      --error: #c0398a;
+      --error-hl: rgba(192,57,138,0.12);
+      --warning: #c79100;
+      --warning-hl: rgba(199,145,0,0.12);
+      --danger: #d64550;
+      --danger-hl: rgba(214,69,80,0.12);
+      --shadow-sm: 0 1px 3px rgba(20,22,26,0.06);
+      --shadow-md: 0 4px 12px rgba(20,22,26,0.08);
+      --shadow-lg: 0 12px 32px rgba(20,22,26,0.12);
+      --radius: 12px;
+      --nav-bg: rgba(245,245,240,0.92);
       --card: #ffffff;
-      --font-body: 'Satoshi', 'Inter', sans-serif;
-      --font-display: 'Cabinet Grotesk', 'Outfit', sans-serif;
+      --font-body: 'Inter', system-ui, sans-serif;
+      --font-display: 'Inter', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
     }
     [data-theme="dark"] {
-      --bg: #171614;
-      --bg2: #1c1b19;
-      --bg3: #22211f;
+      --bg: #0d0f12;
+      --bg2: #131619;
+      --bg3: #181c20;
       --border: rgba(255,255,255,0.07);
-      --text: #cdccca;
-      --text2: #797876;
-      --text3: #5a5957;
-      --primary: #4f98a3;
-      --primary-hover: #227f8b;
-      --primary-hl: rgba(79,152,163,0.15);
-      --success: #6daa45;
-      --success-hl: rgba(109,170,69,0.12);
-      --error: #d163a7;
-      --error-hl: rgba(209,99,167,0.12);
+      --text: #e8eaed;
+      --text2: #8b9099;
+      --text3: #5a5f66;
+      --primary: #00bfa5;
+      --primary-hover: #00a892;
+      --primary-hl: rgba(0,191,165,0.12);
+      --success: #5fbf6a;
+      --success-hl: rgba(95,191,106,0.12);
+      --error: #e06aae;
+      --error-hl: rgba(224,106,174,0.12);
       --warning: #e8af34;
       --warning-hl: rgba(232,175,52,0.12);
-      --danger: #dd6974;
-      --danger-hl: rgba(221,105,116,0.12);
+      --danger: #ff5d6c;
+      --danger-hl: rgba(255,93,108,0.12);
       --shadow-sm: 0 1px 3px rgba(0,0,0,0.2);
       --shadow-md: 0 4px 12px rgba(0,0,0,0.3);
       --shadow-lg: 0 12px 32px rgba(0,0,0,0.4);
-      --nav-bg: rgba(23,22,20,0.92);
-      --card: #1c1b19;
+      --nav-bg: rgba(13,15,18,0.92);
+      --card: #131619;
     }
     * {
       box-sizing: border-box;
@@ -439,7 +440,7 @@
       background: var(--bg3);
       padding: 0.15rem 0.35rem;
       border-radius: 4px;
-      font-family: monospace;
+      font-family: var(--font-mono);
       font-size: 0.85em;
       color: var(--primary);
     }
@@ -2239,7 +2240,7 @@ function onInvoiceCustomerChange() {
           'onmouseover="this.style.background=\'var(--hover)\'" onmouseout="this.style.background=\'\'">' +
           '<input type="checkbox" value="' + esc(l.license_key) + '" class="ni-lic-cb"' + autoCheck +
           ' style="accent-color:var(--primary);width:15px;height:15px;flex-shrink:0;">' +
-          '<span style="font-size:.83rem;font-family:monospace;">' + esc(l.license_key) + domain + badge + '</span>' +
+          '<span style="font-size:.83rem;font-family:var(--font-mono);">' + esc(l.license_key) + domain + badge + '</span>' +
           '</label>';
       }).join('');
       licensesList.innerHTML = html;
@@ -2616,11 +2617,11 @@ function renderCharts(ana) {
   if (!window.Chart) return;
   
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  const primaryColor = isDark ? '#4f98a3' : '#01696f';
-  const primaryBg = isDark ? 'rgba(79, 152, 163, 0.15)' : 'rgba(1, 105, 111, 0.1)';
+  const primaryColor = isDark ? '#00bfa5' : '#00897b';
+  const primaryBg = isDark ? 'rgba(0, 191, 165, 0.15)' : 'rgba(0, 137, 123, 0.1)';
   const gridColor = isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.05)';
-  const legendColor = getComputedStyle(document.documentElement).getPropertyValue('--text2').trim() || '#7a7974';
-  const doughnutColors = ['#01696f', '#437a22', '#d19900', '#a13544', '#7a7974'];
+  const legendColor = getComputedStyle(document.documentElement).getPropertyValue('--text2').trim() || '#8b9099';
+  const doughnutColors = ['#00bfa5', '#5fbf6a', '#e8af34', '#ff5d6c', '#8b9099'];
   
   // 1. Validations Chart
   const ctxV = document.getElementById('validationsChart').getContext('2d');
@@ -3158,7 +3159,7 @@ function openEditCustomer(idx){
           '<tbody>' +
           myLics.map(function(l){
             return '<tr style="border-bottom:1px solid var(--border)">' +
-              '<td style="padding:.4rem 0;font-family:monospace;color:var(--accent)"><code>'+esc(l.license_key)+'</code></td>' +
+              '<td style="padding:.4rem 0;font-family:var(--font-mono);color:var(--accent)"><code>'+esc(l.license_key)+'</code></td>' +
               '<td style="padding:.4rem 0">'+esc(l.type)+'</td>' +
               '<td style="padding:.4rem 0">'+statusBadge(l.status)+'</td>' +
               '<td style="padding:.4rem 0;text-align:right">'+fmtDate(l.expires_at)+'</td>' +
