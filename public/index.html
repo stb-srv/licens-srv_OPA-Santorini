@@ -1483,7 +1483,7 @@
 
   <div id="admin-dashboard" class="dashboard" style="display:none">
     <aside class="sidebar">
-      <div class="sidebar-brand">
+      <div class="sidebar-brand" onclick="closeAdmin();showPublicPage('home')" style="cursor:pointer" title="Zur Startseite">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary)">
           <path d="M21 2 12 11"></path>
           <path d="m15 16-3-3"></path>
@@ -1507,6 +1507,7 @@
         <li><a onclick="switchTab('plans')" id="tab-btn-plans"><i data-lucide="tag"></i> <span>Pläne & Preise</span></a></li>
         <li><a onclick="switchTab('faq')" id="tab-btn-faq"><i data-lucide="help-circle"></i> <span>FAQ</span></a></li>
         <hr class="sidebar-sep">
+        <li><a onclick="toggleTheme()"><i data-lucide="sun-moon"></i> <span>Theme wechseln</span></a></li>
         <li><a onclick="closeAdmin()"><i data-lucide="home"></i> <span>Startseite</span></a></li>
         <li><a onclick="doLogout()"><i data-lucide="log-out"></i> <span>Logout</span></a></li>
       </ul>
